@@ -234,6 +234,8 @@ case "channel":
 if f.value != "" {
 cfg.Channel = f.value
 }
+case "version":
+cfg.Version = f.value
 case "ignition_url":
 cfg.IgnitionURL = f.value
 }
@@ -264,6 +266,12 @@ for _, f := range m.fields {
 switch f.key {
 case "hostname":
 cfg.Hostname = f.value
+case "timezone":
+if f.value != "" {
+cfg.Timezone = f.value
+} else {
+cfg.Timezone = "UTC"
+}
 case "username":
 if f.value != "" {
 if len(cfg.Users) == 0 {
@@ -319,6 +327,7 @@ switch m.Wizard.State.CurrentStep {
 case model.StepWelcome:
 m.fields = []field{
 {label: "Channel (stable/beta/alpha/edge)", key: "channel", value: m.Wizard.State.Config.Channel},
+{label: "Version (blank = latest)", key: "version", value: m.Wizard.State.Config.Version},
 {label: "External Ignition URL (skip wizard)", key: "ignition_url", value: m.Wizard.State.Config.IgnitionURL},
 }
 case model.StepNetwork:
@@ -339,6 +348,7 @@ sshKey = m.Wizard.State.Config.SSHKeys[0]
 }
 m.fields = []field{
 {label: "Hostname", key: "hostname", value: m.Wizard.State.Config.Hostname},
+{label: "Timezone (e.g. UTC, America/New_York)", key: "timezone", value: m.Wizard.State.Config.Timezone},
 {label: "Username", key: "username", value: username},
 {label: "Password (optional, leave blank for key-only)", key: "password", value: "", masked: true},
 {label: "GitHub Username (fetches SSH keys)", key: "github_user", value: ""},
@@ -601,7 +611,13 @@ fmt.Fprintf(&b, "  URL:       %s\n", cfg.IgnitionURL)
 fmt.Fprintf(&b, "  Disk:      %s (%s)\n", cfg.Disk.DevPath, cfg.Disk.SizeHuman)
 } else {
 fmt.Fprintf(&b, "  Channel:   %s\n", cfg.Channel)
+if cfg.Version != "" {
+fmt.Fprintf(&b, "  Version:   %s\n", cfg.Version)
+}
 fmt.Fprintf(&b, "  Hostname:  %s\n", cfg.Hostname)
+if cfg.Timezone != "" {
+fmt.Fprintf(&b, "  Timezone:  %s\n", cfg.Timezone)
+}
 fmt.Fprintf(&b, "  Disk:      %s (%s)\n", cfg.Disk.DevPath, cfg.Disk.SizeHuman)
 fmt.Fprintf(&b, "  Network:   %s\n", cfg.Network.Mode.String())
 if cfg.Network.Mode == model.NetworkStatic {

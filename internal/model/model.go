@@ -48,6 +48,7 @@ type InstallConfig struct {
 	Channel        string        // stable, beta, alpha, edge
 	Version        string        // optional: pin to specific Flatcar version (flatcar-install -V)
 	Hostname       string
+	Timezone       string        // e.g. "UTC", "America/New_York"
 	Network        NetworkConfig
 	Disk           DiskInfo
 	Users          []UserConfig

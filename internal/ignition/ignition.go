@@ -48,14 +48,24 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		rebootStrategy = "reboot"
 	}
 
+	hasPassword := false
+	for _, u := range cfg.Users {
+		if u.PasswordHash != "" {
+			hasPassword = true
+			break
+		}
+	}
+
 	data := templateData{
 		Hostname:       cfg.Hostname,
+		Timezone:       cfg.Timezone,
 		Users:          cfg.Users,
 		SSHKeys:        cfg.SSHKeys,
 		Network:        cfg.Network,
 		Sysexts:        filterSelected(cfg.Sysexts),
 		Channel:        cfg.Channel,
 		RebootStrategy: rebootStrategy,
+		HasPassword:    hasPassword,
 	}
 
 	var buf bytes.Buffer
@@ -68,12 +78,14 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 
 type templateData struct {
 	Hostname       string
+	Timezone       string
 	Users          []model.UserConfig
 	SSHKeys        []string
 	Network        model.NetworkConfig
 	Sysexts        []model.SysextEntry
 	Channel        string
 	RebootStrategy string
+	HasPassword    bool
 }
 
 func filterSelected(sysexts []model.SysextEntry) []model.SysextEntry {
@@ -104,9 +116,15 @@ storage:
       mode: 0600
       contents:
         inline: |
-          PasswordAuthentication no
+          PasswordAuthentication {{if .HasPassword}}yes{{else}}no{{end}}
           PermitRootLogin no
           PubkeyAuthentication yes
+{{- if .Timezone}}
+  links:
+    - path: /etc/localtime
+      target: "/usr/share/zoneinfo/{{.Timezone}}"
+      overwrite: true
+{{- end}}
 {{- if isStatic .Network}}
     - path: /etc/systemd/network/10-static.network
       mode: 0644
