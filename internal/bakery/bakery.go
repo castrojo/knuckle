@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/castrojo/knuckle/internal/model"
 )
 
 const (
-	// DefaultCatalogURL is the Flatcar Bakery sysext catalog endpoint
-	DefaultCatalogURL = "https://www.flatcar.org/api/sysext-catalog.json"
+	// DefaultCatalogURL is the GitHub Releases API for the sysext-bakery repo
+	DefaultCatalogURL = "https://api.github.com/repos/flatcar/sysext-bakery/releases?per_page=100"
 	defaultTimeout    = 30 * time.Second
 )
 
@@ -22,7 +24,7 @@ type Client interface {
 	FetchCatalog(ctx context.Context) ([]model.SysextEntry, error)
 }
 
-// HTTPClient fetches the catalog from the Flatcar Bakery API
+// HTTPClient fetches the catalog from the GitHub Releases API
 type HTTPClient struct {
 	CatalogURL string
 	HTTP       *http.Client
@@ -48,12 +50,14 @@ func NewHTTPClientWithURL(url string) *HTTPClient {
 	}
 }
 
-// catalogEntry matches the expected JSON schema from the Flatcar Bakery API
-type catalogEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Version     string `json:"version"`
-	URL         string `json:"url"`
+// githubRelease represents a single release from the GitHub Releases API.
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+	Body    string `json:"body"`
+	Assets  []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
 }
 
 func (c *HTTPClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, error) {
@@ -81,23 +85,83 @@ func (c *HTTPClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, err
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 
-	var entries []catalogEntry
-	if err := json.Unmarshal(body, &entries); err != nil {
+	var releases []githubRelease
+	if err := json.Unmarshal(body, &releases); err != nil {
 		return nil, fmt.Errorf("parsing catalog JSON: %w", err)
 	}
 
-	sysexts := make([]model.SysextEntry, 0, len(entries))
-	for _, e := range entries {
+	seen := make(map[string]bool)
+	sysexts := make([]model.SysextEntry, 0, len(releases))
+
+	for _, rel := range releases {
+		name, version := ParseTagName(rel.TagName)
+		if name == "" {
+			continue
+		}
+
+		// Deduplicate by name — keep first (latest) since API returns newest first
+		if seen[name] {
+			continue
+		}
+
+		// Find the x86-64.raw asset
+		var downloadURL string
+		for _, asset := range rel.Assets {
+			if strings.Contains(asset.Name, "x86-64") && strings.HasSuffix(asset.Name, ".raw") {
+				downloadURL = asset.BrowserDownloadURL
+				break
+			}
+		}
+		if downloadURL == "" {
+			continue
+		}
+
+		seen[name] = true
+
+		desc := truncateDescription(rel.Body, 80)
 		sysexts = append(sysexts, model.SysextEntry{
-			Name:        e.Name,
-			Description: e.Description,
-			Version:     e.Version,
-			URL:         e.URL,
+			Name:        name,
+			Description: desc,
+			Version:     version,
+			URL:         downloadURL,
 			Selected:    false,
 		})
 	}
 
 	return sysexts, nil
+}
+
+// ParseTagName extracts sysext name and version from a release tag.
+// Formats: "<name>-v<version>" or "<name>-<version>"
+func ParseTagName(tag string) (name, version string) {
+	// Try splitting on "-v" followed by a digit (find last occurrence)
+	for i := len(tag) - 1; i >= 1; i-- {
+		if tag[i-1] == '-' && tag[i] == 'v' && i+1 < len(tag) && unicode.IsDigit(rune(tag[i+1])) {
+			return tag[:i-1], tag[i+1:]
+		}
+	}
+
+	// Fallback: find first segment that starts with a digit after a '-'
+	for i := 1; i < len(tag); i++ {
+		if tag[i-1] == '-' && unicode.IsDigit(rune(tag[i])) {
+			return tag[:i-1], tag[i:]
+		}
+	}
+
+	return "", ""
+}
+
+// truncateDescription trims and truncates a description to maxLen characters.
+func truncateDescription(s string, maxLen int) string {
+	// Take only first line
+	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
+		s = s[:idx]
+	}
+	s = strings.TrimSpace(s)
+	if len(s) > maxLen {
+		s = s[:maxLen-3] + "..."
+	}
+	return s
 }
 
 // MockClient is a test double that returns preconfigured results
