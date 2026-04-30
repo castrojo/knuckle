@@ -226,3 +226,98 @@ func TestFilterSelectedEmpty(t *testing.T) {
 		t.Errorf("expected nil for empty input, got %v", result)
 	}
 }
+
+func TestGenerateButaneTimezoneLink(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "tz-node",
+		Timezone: "America/New_York",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}},
+		},
+	}
+
+	output, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "/etc/localtime") {
+		t.Error("expected /etc/localtime link for timezone")
+	}
+	if !strings.Contains(output, "/usr/share/zoneinfo/America/New_York") {
+		t.Error("expected zoneinfo target for timezone")
+	}
+}
+
+func TestGenerateButaneTimezoneAbsentWhenEmpty(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "no-tz-node",
+		Timezone: "",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}},
+		},
+	}
+
+	output, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(output, "/etc/localtime") {
+		t.Error("timezone link should not appear when timezone is empty")
+	}
+}
+
+func TestGenerateButanePasswordAuthYes(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "pw-node",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{
+				Username:     "admin",
+				PasswordHash: "$2a$10$somehash",
+				SSHKeys:      []string{"ssh-ed25519 AAAA test"},
+			},
+		},
+	}
+
+	output, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "PasswordAuthentication yes") {
+		t.Error("expected PasswordAuthentication yes when user has password")
+	}
+}
+
+func TestGenerateButanePasswordAuthNo(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "nopw-node",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{
+				Username: "admin",
+				SSHKeys:  []string{"ssh-ed25519 AAAA test"},
+			},
+		},
+	}
+
+	output, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "PasswordAuthentication no") {
+		t.Error("expected PasswordAuthentication no when no user has password")
+	}
+	if strings.Contains(output, "PasswordAuthentication yes") {
+		t.Error("should not have PasswordAuthentication yes without password")
+	}
+}

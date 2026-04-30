@@ -384,3 +384,184 @@ if count != 9 {
 t.Errorf("expected 9 steps, got %d", count)
 }
 }
+
+func TestValidateConsistency(t *testing.T) {
+tests := []struct {
+name    string
+cfg     model.InstallConfig
+wantErr string
+}{
+{
+name: "no auth returns error",
+cfg: model.InstallConfig{
+Disk: model.DiskInfo{DevPath: "/dev/sda"},
+},
+wantErr: "no authentication configured",
+},
+{
+name: "with SSH keys passes",
+cfg: model.InstallConfig{
+Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+SSHKeys: []string{"ssh-ed25519 AAAA test"},
+},
+wantErr: "",
+},
+{
+name: "with user SSH keys passes",
+cfg: model.InstallConfig{
+Disk: model.DiskInfo{DevPath: "/dev/sda"},
+Users: []model.UserConfig{
+{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}},
+},
+},
+wantErr: "",
+},
+{
+name: "with password passes",
+cfg: model.InstallConfig{
+Disk: model.DiskInfo{DevPath: "/dev/sda"},
+Users: []model.UserConfig{
+{Username: "core", PasswordHash: "$2a$10$hash"},
+},
+},
+wantErr: "",
+},
+{
+name: "static network missing gateway errors",
+cfg: model.InstallConfig{
+Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+SSHKeys: []string{"ssh-ed25519 AAAA test"},
+Network: model.NetworkConfig{
+Mode:    model.NetworkStatic,
+Address: "192.168.1.10/24",
+Gateway: "",
+},
+},
+wantErr: "static network requires a gateway",
+},
+{
+name: "ignition URL bypasses auth check",
+cfg: model.InstallConfig{
+Disk:        model.DiskInfo{DevPath: "/dev/sda"},
+IgnitionURL: "https://example.com/config.ign",
+},
+wantErr: "",
+},
+}
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+w, _, _, _ := newTestWizard()
+w.State.CurrentStep = model.StepReview
+w.State.Confirmed = true
+w.State.Config = tt.cfg
+
+err := w.ValidateCurrentStep()
+if tt.wantErr == "" {
+if err != nil {
+t.Errorf("expected no error, got: %v", err)
+}
+} else {
+if err == nil {
+t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+}
+if !strings.Contains(err.Error(), tt.wantErr) {
+t.Errorf("expected error containing %q, got: %v", tt.wantErr, err)
+}
+}
+})
+}
+}
+
+func TestRunSystemChecks(t *testing.T) {
+tests := []struct {
+name     string
+disks    []model.DiskInfo
+ifaces   []model.NetworkInterface
+wantDisk string
+wantNet  string
+}{
+{
+name:     "disks present and active iface",
+disks:    []model.DiskInfo{{DevPath: "/dev/sda"}},
+ifaces:   []model.NetworkInterface{{Name: "eth0", IPv4Addrs: []string{"192.168.1.10"}}},
+wantDisk: "ok",
+wantNet:  "ok",
+},
+{
+name:     "no disks",
+disks:    nil,
+ifaces:   []model.NetworkInterface{{Name: "eth0", IPv4Addrs: []string{"192.168.1.10"}}},
+wantDisk: "fail",
+wantNet:  "ok",
+},
+{
+name:     "no active ifaces warns",
+disks:    []model.DiskInfo{{DevPath: "/dev/sda"}},
+ifaces:   []model.NetworkInterface{{Name: "eth0", IPv4Addrs: nil}},
+wantDisk: "ok",
+wantNet:  "warn",
+},
+{
+name:     "no interfaces at all fails",
+disks:    []model.DiskInfo{{DevPath: "/dev/sda"}},
+ifaces:   nil,
+wantDisk: "ok",
+wantNet:  "fail",
+},
+}
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+p := &mockProber{disks: tt.disks, ifaces: tt.ifaces}
+w := New(p, &mockBakery{}, &mockInstaller{})
+
+if err := w.ProbeHardware(context.Background()); err != nil {
+t.Fatalf("ProbeHardware: %v", err)
+}
+
+var diskCheck, netCheck *SystemCheck
+for i := range w.State.SystemChecks {
+switch w.State.SystemChecks[i].Name {
+case "Disk":
+diskCheck = &w.State.SystemChecks[i]
+case "Network":
+netCheck = &w.State.SystemChecks[i]
+}
+}
+if diskCheck == nil {
+t.Fatal("missing Disk system check")
+}
+if diskCheck.Status != tt.wantDisk {
+t.Errorf("Disk check: got %q, want %q", diskCheck.Status, tt.wantDisk)
+}
+if netCheck == nil {
+t.Fatal("missing Network system check")
+}
+if netCheck.Status != tt.wantNet {
+t.Errorf("Network check: got %q, want %q", netCheck.Status, tt.wantNet)
+}
+})
+}
+}
+
+func TestGenerateButaneNonEmpty(t *testing.T) {
+w, _, _, _ := newTestWizard()
+w.State.Config.Hostname = "test-node"
+w.State.Config.Channel = "stable"
+w.State.Config.Users = []model.UserConfig{
+{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}},
+}
+
+butane, err := w.GenerateButane()
+if err != nil {
+t.Fatalf("GenerateButane: %v", err)
+}
+if butane == "" {
+t.Error("GenerateButane returned empty string")
+}
+if !strings.Contains(butane, "variant: flatcar") {
+t.Error("expected butane to contain variant header")
+}
+if !strings.Contains(butane, "test-node") {
+t.Error("expected butane to contain hostname")
+}
+}
