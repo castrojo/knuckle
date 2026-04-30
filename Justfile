@@ -21,7 +21,15 @@ vm:
         bunzip2 .vm/flatcar_base.img.bz2
     fi
 
+    # Kill any running VM first
+    if [ -f .vm/qemu.pid ]; then
+        kill "$(cat .vm/qemu.pid)" 2>/dev/null || true
+        rm -f .vm/qemu.pid
+        sleep 1
+    fi
+
     # Fresh disks every boot (Ignition only runs on first boot)
+    rm -f .vm/boot.img .vm/target.qcow2
     cp .vm/flatcar_base.img .vm/boot.img
     qemu-img create -f qcow2 .vm/target.qcow2 20G
 
@@ -36,7 +44,8 @@ vm:
         -drive if=virtio,file=.vm/target.qcow2,format=qcow2 \
         -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/config.ign \
         -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
-        -display none -daemonize -serial file:.vm/serial.log
+        -display none -daemonize -serial file:.vm/serial.log \
+        -pidfile .vm/qemu.pid
 
     # Wait for SSH
     for i in $(seq 1 30); do
@@ -71,4 +80,6 @@ ci:
 
 # Clean everything
 clean:
+    #!/usr/bin/env bash
+    if [ -f .vm/qemu.pid ]; then kill "$(cat .vm/qemu.pid)" 2>/dev/null || true; fi
     rm -rf bin/ .vm/
