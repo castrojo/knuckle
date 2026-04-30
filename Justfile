@@ -4,6 +4,7 @@
 QEMU := if path_exists("/home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64") == "true" { "/home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64" } else { "/usr/bin/qemu-system-x86_64" }
 OVMF := "/usr/share/edk2/ovmf/OVMF_CODE.fd"
 ISO := ".vm/flatcar_production_iso_image.iso"
+QEMU_IMG := ".vm/flatcar_production_qemu_image.img"
 DISK := ".vm/test-disk.qcow2"
 
 default:
@@ -48,7 +49,20 @@ vuln:
 # Full CI pipeline (tidy + lint + test + build)
 ci: tidy lint test-race build
 
-# Download Flatcar stable ISO for VM testing
+# Download Flatcar stable QEMU image for VM testing
+download-image:
+    mkdir -p .vm
+    @if [ ! -f {{QEMU_IMG}} ]; then \
+        echo "Downloading Flatcar stable QEMU image..."; \
+        curl -L -o .vm/flatcar_production_qemu_image.img.bz2 \
+            "https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu_image.img.bz2"; \
+        echo "Decompressing..."; \
+        bunzip2 .vm/flatcar_production_qemu_image.img.bz2; \
+    else \
+        echo "QEMU image already exists: {{QEMU_IMG}}"; \
+    fi
+
+# Download Flatcar stable ISO (for install-to-disk testing)
 download-iso:
     mkdir -p .vm
     @if [ ! -f {{ISO}} ]; then \
@@ -58,41 +72,48 @@ download-iso:
         echo "ISO already exists: {{ISO}}"; \
     fi
 
-# Create a test disk image for VM
-create-disk:
+# Generate Ignition config for VM (SSH key-based login)
+generate-ignition:
     mkdir -p .vm
-    qemu-img create -f qcow2 {{DISK}} 20G
+    @echo '{"ignition":{"version":"3.3.0"},"passwd":{"users":[{"name":"core","sshAuthorizedKeys":["'$(cat ~/.ssh/id_ed25519.pub)'"]}]},"systemd":{"units":[{"name":"sshd.service","enabled":true}]}}' > .vm/config.ign
 
-# Boot Flatcar VM with knuckle binary available via virtio-9p
-vm: build-linux download-iso create-disk
+# Boot Flatcar QEMU VM (daemonized, SSH on port 2222)
+vm: build-linux download-image generate-ignition
     {{QEMU}} \
         -m 2048 \
         -smp 2 \
         -enable-kvm \
-        -drive if=pflash,format=raw,readonly=on,file={{OVMF}} \
-        -cdrom {{ISO}} \
-        -drive file={{DISK}},format=qcow2,if=virtio \
-        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22 \
-        -device virtio-net-pci,netdev=net0 \
-        -virtfs local,path=bin,mount_tag=knuckle,security_model=mapped-xattr,id=knuckle \
+        -drive if=virtio,file={{QEMU_IMG}},format=qcow2 \
+        -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/config.ign \
+        -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
+        -serial file:.vm/serial.log \
+        -display none -daemonize
+    @echo "VM started. Waiting for boot..."
+    @sleep 20
+    @echo "Copying knuckle binary to VM..."
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 2222 \
+        bin/knuckle-linux-amd64 core@127.0.0.1:/tmp/knuckle
+    @echo "VM ready! Run: just ssh"
+
+# Boot Flatcar VM with serial console (interactive, foreground)
+vm-console: build-linux download-image generate-ignition
+    {{QEMU}} \
+        -m 2048 \
+        -smp 2 \
+        -enable-kvm \
+        -drive if=virtio,file={{QEMU_IMG}},format=qcow2 \
+        -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/config.ign \
+        -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
         -nographic
-
-# Boot Flatcar VM with graphical display
-vm-gui: build-linux download-iso create-disk
-    {{QEMU}} \
-        -m 2048 \
-        -smp 2 \
-        -enable-kvm \
-        -drive if=pflash,format=raw,readonly=on,file={{OVMF}} \
-        -cdrom {{ISO}} \
-        -drive file={{DISK}},format=qcow2,if=virtio \
-        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:2222-:22 \
-        -device virtio-net-pci,netdev=net0 \
-        -virtfs local,path=bin,mount_tag=knuckle,security_model=mapped-xattr,id=knuckle
 
 # SSH into running VM (default Flatcar user: core)
 ssh:
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 core@127.0.0.1
+
+# Run knuckle --dry-run inside the VM (requires 'just vm' first)
+vm-test:
+    ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 \
+        core@127.0.0.1 '/tmp/knuckle --dry-run'
 
 # Clean build and VM artifacts
 clean:
