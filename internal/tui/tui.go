@@ -8,6 +8,7 @@ import (
 tea "github.com/charmbracelet/bubbletea"
 "github.com/charmbracelet/lipgloss"
 
+"github.com/castrojo/knuckle/internal/github"
 "github.com/castrojo/knuckle/internal/model"
 "github.com/castrojo/knuckle/internal/wizard"
 )
@@ -172,9 +173,25 @@ Groups:   []string{"sudo", "docker"},
 cfg.Users[0].Username = f.value
 }
 }
+case "github_user":
+if f.value != "" {
+keys, err := github.FetchKeys(f.value)
+if err != nil {
+m.err = err
+return
+}
+cfg.SSHKeys = keys
+// Also attach to user
+if len(cfg.Users) > 0 {
+cfg.Users[0].SSHKeys = keys
+}
+}
 case "ssh_key":
 if f.value != "" {
 cfg.SSHKeys = []string{f.value}
+if len(cfg.Users) > 0 {
+cfg.Users[0].SSHKeys = []string{f.value}
+}
 }
 }
 }
@@ -204,7 +221,8 @@ sshKey = m.Wizard.State.Config.SSHKeys[0]
 m.fields = []field{
 {label: "Hostname", key: "hostname", value: m.Wizard.State.Config.Hostname},
 {label: "Username", key: "username", value: username},
-{label: "SSH Public Key", key: "ssh_key", value: sshKey},
+{label: "GitHub Username (fetches SSH keys)", key: "github_user", value: ""},
+{label: "— OR — SSH Public Key (manual)", key: "ssh_key", value: sshKey},
 }
 }
 }
@@ -321,12 +339,16 @@ return b.String()
 func (m *Model) viewUser() string {
 var b strings.Builder
 b.WriteString("User Configuration\n\n")
+b.WriteString("Enter a GitHub username to auto-fetch your SSH keys,\nor paste a key manually.\n\n")
 for i, f := range m.fields {
 cursor := "  "
 if i == m.fieldIdx {
 cursor = "▸ "
 }
 fmt.Fprintf(&b, "%s%s: %s\n", cursor, f.label, f.value)
+}
+if len(m.Wizard.State.Config.SSHKeys) > 0 {
+fmt.Fprintf(&b, "\n  ✓ %d SSH key(s) configured\n", len(m.Wizard.State.Config.SSHKeys))
 }
 return b.String()
 }
