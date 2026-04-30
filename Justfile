@@ -87,7 +87,7 @@ create-disk:
     fi
 
 # Boot Flatcar QEMU VM (daemonized, SSH on port 2222, blank 20G disk attached as /dev/vdb)
-vm: build-linux download-image generate-ignition create-disk
+vm: build-linux download-image generate-ignition create-disk vm-stop
     {{QEMU}} \
         -m 2048 \
         -smp 2 \
@@ -122,12 +122,16 @@ vm-console: build-linux download-image generate-ignition create-disk
 ssh:
     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 core@127.0.0.1
 
+# Stop the running VM
+vm-stop:
+    @-pkill -f 'qemu-system.*flatcar_production_qemu_image' 2>/dev/null && echo "VM stopped" || echo "No VM running"
+
 # Run knuckle --dry-run inside the VM (requires 'just vm' first)
 vm-test:
     ssh -t -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 \
         core@127.0.0.1 '/tmp/knuckle --dry-run'
 
 # Clean build and VM artifacts
-clean:
+clean: vm-stop
     rm -rf bin/ .vm/
 
