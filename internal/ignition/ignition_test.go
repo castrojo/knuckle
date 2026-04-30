@@ -130,9 +130,9 @@ func TestGenerateButaneWithSysexts(t *testing.T) {
 			{Username: "core"},
 		},
 		Sysexts: []model.SysextEntry{
-			{Name: "docker", Version: "24.0.7", Selected: true},
-			{Name: "vim", Version: "9.0", Selected: false},
-			{Name: "tailscale", Version: "1.56.1", Selected: true},
+			{Name: "docker", Version: "24.0.7", URL: "https://extensions.flatcar.org/docker-24.0.7.raw", Selected: true},
+			{Name: "vim", Version: "9.0", URL: "https://extensions.flatcar.org/vim-9.0.raw", Selected: false},
+			{Name: "tailscale", Version: "1.56.1", URL: "https://extensions.flatcar.org/tailscale-1.56.1.raw", Selected: true},
 		},
 	}
 
@@ -141,17 +141,20 @@ func TestGenerateButaneWithSysexts(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(output, "links:") {
-		t.Error("missing links section")
-	}
 	if !strings.Contains(output, "/etc/extensions/docker.raw") {
-		t.Error("missing docker sysext link")
+		t.Error("missing docker sysext file entry")
 	}
-	if !strings.Contains(output, "docker-24.0.7.raw") {
-		t.Error("missing docker version in target")
+	if !strings.Contains(output, "source: \"https://extensions.flatcar.org/docker-24.0.7.raw\"") {
+		t.Error("missing docker sysext URL source")
 	}
 	if !strings.Contains(output, "/etc/extensions/tailscale.raw") {
-		t.Error("missing tailscale sysext link")
+		t.Error("missing tailscale sysext file entry")
+	}
+	if !strings.Contains(output, "source: \"https://extensions.flatcar.org/tailscale-1.56.1.raw\"") {
+		t.Error("missing tailscale sysext URL source")
+	}
+	if !strings.Contains(output, "systemd-sysext.service") {
+		t.Error("missing systemd-sysext service unit")
 	}
 	// vim should NOT appear (Selected=false)
 	if strings.Contains(output, "vim") {

@@ -6,6 +6,7 @@ package ignition
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/castrojo/knuckle/internal/model"
@@ -30,6 +31,11 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		"isStatic": func(n model.NetworkConfig) bool {
 			return n.Mode == model.NetworkStatic
 		},
+		"yamlEscape": func(s string) string {
+			s = strings.ReplaceAll(s, `\`, `\\`)
+			s = strings.ReplaceAll(s, `"`, `\"`)
+			return s
+		},
 	}
 
 	tmpl, err := template.New("butane").Funcs(funcMap).Parse(butaneTemplate)
@@ -43,6 +49,7 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		SSHKeys:  cfg.SSHKeys,
 		Network:  cfg.Network,
 		Sysexts:  filterSelected(cfg.Sysexts),
+		Channel:  cfg.Channel,
 	}
 
 	var buf bytes.Buffer
@@ -59,6 +66,7 @@ type templateData struct {
 	SSHKeys  []string
 	Network  model.NetworkConfig
 	Sysexts  []model.SysextEntry
+	Channel  string
 }
 
 func filterSelected(sysexts []model.SysextEntry) []model.SysextEntry {
@@ -78,7 +86,20 @@ storage:
     - path: /etc/hostname
       mode: 0644
       contents:
-        inline: "{{.Hostname}}"
+        inline: "{{.Hostname | yamlEscape}}"
+    - path: /etc/flatcar/update.conf
+      mode: 0644
+      contents:
+        inline: |
+          REBOOT_STRATEGY=reboot
+          GROUP={{.Channel}}
+    - path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
+      mode: 0600
+      contents:
+        inline: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          PubkeyAuthentication yes
 {{- if isStatic .Network}}
     - path: /etc/systemd/network/10-static.network
       mode: 0644
@@ -94,32 +115,38 @@ storage:
           DNS={{.}}
 {{- end}}
 {{- end}}
-{{- if .Sysexts}}
-  links:
 {{- range .Sysexts}}
     - path: /etc/extensions/{{.Name}}.raw
-      target: /opt/extensions/{{.Name}}/{{.Name}}-{{.Version}}.raw
+      contents:
+        source: "{{.URL}}"
 {{- end}}
+systemd:
+  units:
+{{- if .Sysexts}}
+    - name: systemd-sysext.service
+      enabled: true
 {{- end}}
+    - name: update-engine.service
+      enabled: true
 passwd:
   users:
 {{- if .Users}}
 {{- range .Users}}
-    - name: "{{.Username}}"
+    - name: "{{.Username | yamlEscape}}"
 {{- if .Groups}}
       groups:
 {{- range .Groups}}
-        - "{{.}}"
+        - "{{. | yamlEscape}}"
 {{- end}}
 {{- end}}
 {{- if .SSHKeys}}
       ssh_authorized_keys:
 {{- range .SSHKeys}}
-        - "{{.}}"
+        - "{{. | yamlEscape}}"
 {{- end}}
 {{- end}}
 {{- if .PasswordHash}}
-      password_hash: "{{.PasswordHash}}"
+      password_hash: "{{.PasswordHash | yamlEscape}}"
 {{- end}}
 {{- end}}
 {{- else}}
@@ -127,7 +154,7 @@ passwd:
 {{- if .SSHKeys}}
       ssh_authorized_keys:
 {{- range .SSHKeys}}
-        - "{{.}}"
+        - "{{. | yamlEscape}}"
 {{- end}}
 {{- end}}
 {{- end}}

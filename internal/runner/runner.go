@@ -125,6 +125,11 @@ func (r *DryRunner) Run(ctx context.Context, name string, args ...string) (*Resu
 func (r *DryRunner) RunWithInput(ctx context.Context, input string, name string, args ...string) (*Result, error) {
 	r.Logger.Info("dry-run with input", "cmd", name, "args", args)
 	result := &Result{Command: name, Args: args, ExitCode: 0}
+	// When butane is invoked in dry-run, return a minimal valid Ignition JSON
+	// so downstream steps can proceed without error.
+	if name == "butane" {
+		result.Stdout = `{"ignition":{"version":"3.4.0"}}`
+	}
 	r.History = append(r.History, *result)
 	return result, nil
 }

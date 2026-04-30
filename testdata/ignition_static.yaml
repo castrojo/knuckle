@@ -6,6 +6,19 @@ storage:
       mode: 0644
       contents:
         inline: "flatcar-static"
+    - path: /etc/flatcar/update.conf
+      mode: 0644
+      contents:
+        inline: |
+          REBOOT_STRATEGY=reboot
+          GROUP=
+    - path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
+      mode: 0600
+      contents:
+        inline: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          PubkeyAuthentication yes
     - path: /etc/systemd/network/10-static.network
       mode: 0644
       contents:
@@ -18,6 +31,10 @@ storage:
           Gateway=192.168.1.1
           DNS=8.8.8.8
           DNS=8.8.4.4
+systemd:
+  units:
+    - name: update-engine.service
+      enabled: true
 passwd:
   users:
     - name: "core"

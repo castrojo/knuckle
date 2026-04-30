@@ -129,6 +129,11 @@ func (w *Wizard) validateStorage() error {
 if w.State.Config.Disk.DevPath == "" {
 return fmt.Errorf("no disk selected")
 }
+for _, p := range w.State.Config.Disk.Partitions {
+if p.MountPoint != "" {
+return fmt.Errorf("disk %s has mounted partition %s at %s — unmount before installing", w.State.Config.Disk.DevPath, p.Path, p.MountPoint)
+}
+}
 return validate.DiskPath(w.State.Config.Disk.DevPath)
 }
 

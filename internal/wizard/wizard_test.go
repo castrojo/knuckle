@@ -3,6 +3,7 @@ package wizard
 import (
 "context"
 "fmt"
+"strings"
 "testing"
 
 "github.com/castrojo/knuckle/internal/model"
@@ -188,6 +189,43 @@ w.State.Config.Disk.DevPath = ""
 err := w.ValidateCurrentStep()
 if err == nil {
 t.Fatal("expected error for empty disk")
+}
+}
+
+func TestValidateStorageMountedPartition(t *testing.T) {
+w, _, _, _ := newTestWizard()
+w.State.CurrentStep = model.StepStorage
+w.State.Config.Disk = model.DiskInfo{
+DevPath: "/dev/sda",
+Partitions: []model.PartitionInfo{
+{Path: "/dev/sda1", MountPoint: "/boot"},
+{Path: "/dev/sda2", MountPoint: ""},
+},
+}
+
+err := w.ValidateCurrentStep()
+if err == nil {
+t.Fatal("expected error for disk with mounted partition")
+}
+if !strings.Contains(err.Error(), "mounted partition") {
+t.Errorf("error should mention mounted partition, got: %v", err)
+}
+}
+
+func TestValidateStorageNoMountedPartitions(t *testing.T) {
+w, _, _, _ := newTestWizard()
+w.State.CurrentStep = model.StepStorage
+w.State.Config.Disk = model.DiskInfo{
+DevPath: "/dev/sda",
+Partitions: []model.PartitionInfo{
+{Path: "/dev/sda1", MountPoint: ""},
+{Path: "/dev/sda2", MountPoint: ""},
+},
+}
+
+err := w.ValidateCurrentStep()
+if err != nil {
+t.Errorf("expected no error for unmounted partitions, got: %v", err)
 }
 }
 

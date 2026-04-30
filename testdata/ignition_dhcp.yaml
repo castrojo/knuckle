@@ -6,6 +6,23 @@ storage:
       mode: 0644
       contents:
         inline: "flatcar-node01"
+    - path: /etc/flatcar/update.conf
+      mode: 0644
+      contents:
+        inline: |
+          REBOOT_STRATEGY=reboot
+          GROUP=
+    - path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
+      mode: 0600
+      contents:
+        inline: |
+          PasswordAuthentication no
+          PermitRootLogin no
+          PubkeyAuthentication yes
+systemd:
+  units:
+    - name: update-engine.service
+      enabled: true
 passwd:
   users:
     - name: "admin"

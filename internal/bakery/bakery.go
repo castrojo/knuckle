@@ -74,7 +74,9 @@ func (c *HTTPClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, err
 		return nil, fmt.Errorf("catalog returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit response body to 5MB to prevent OOM from malicious/broken responses.
+	const maxResponseSize = 5 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
 	}

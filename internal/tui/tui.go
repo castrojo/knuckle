@@ -1,9 +1,10 @@
 package tui
 
 import (
+"context"
 "fmt"
-	"context"
 "strings"
+"time"
 
 tea "github.com/charmbracelet/bubbletea"
 "github.com/charmbracelet/lipgloss"
@@ -150,7 +151,9 @@ if m.cursor < len(m.Wizard.State.Disks) {
 m.Wizard.State.Config.Disk = m.Wizard.State.Disks[m.cursor]
 }
 case model.StepInstall:
-if err := m.Wizard.Execute(context.TODO()); err != nil {
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+defer cancel()
+if err := m.Wizard.Execute(ctx); err != nil {
 m.err = err
 return m, nil
 }
@@ -174,6 +177,12 @@ return m, nil
 func (m *Model) applyFields() {
 cfg := &m.Wizard.State.Config
 switch m.Wizard.State.CurrentStep {
+case model.StepWelcome:
+for _, f := range m.fields {
+if f.key == "channel" && f.value != "" {
+cfg.Channel = f.value
+}
+}
 case model.StepNetwork:
 for _, f := range m.fields {
 switch f.key {
@@ -246,6 +255,10 @@ func (m *Model) initStepFields() {
 m.fields = nil
 m.fieldIdx = 0
 switch m.Wizard.State.CurrentStep {
+case model.StepWelcome:
+m.fields = []field{
+{label: "Channel (stable/beta/alpha/edge)", key: "channel", value: m.Wizard.State.Config.Channel},
+}
 case model.StepNetwork:
 m.fields = []field{
 {label: "Interface", key: "interface", value: m.Wizard.State.Config.Network.Interface},
@@ -320,7 +333,8 @@ return b.String()
 }
 
 func (m *Model) viewWelcome() string {
-return `Welcome to Knuckle!
+var b strings.Builder
+b.WriteString(`Welcome to Knuckle!
 
 This wizard will guide you through installing Flatcar Container Linux
 on your system.
@@ -332,8 +346,16 @@ What this installer will do:
   • Optionally add system extensions
   • Write Flatcar to your selected disk
 
-Press Enter to continue...
-`
+`)
+for i, f := range m.fields {
+cursor := "  "
+if i == m.fieldIdx {
+cursor = "▸ "
+}
+fmt.Fprintf(&b, "%s%s: %s\n", cursor, f.label, f.value)
+}
+b.WriteString("\nPress Enter to continue...")
+return b.String()
 }
 
 func (m *Model) viewNetwork() string {
