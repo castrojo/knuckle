@@ -7,6 +7,7 @@ import (
 "fmt"
 
 "github.com/castrojo/knuckle/internal/bakery"
+"github.com/castrojo/knuckle/internal/ignition"
 "github.com/castrojo/knuckle/internal/install"
 "github.com/castrojo/knuckle/internal/model"
 "github.com/castrojo/knuckle/internal/probe"
@@ -26,6 +27,9 @@ Sysexts    []model.SysextEntry
 // Channel version info (fetched at startup)
 Channels []bakery.ChannelInfo
 
+// System checks (populated at startup)
+SystemChecks []SystemCheck
+
 // User confirmed destructive operation
 Confirmed bool
 
@@ -34,6 +38,13 @@ Err error
 
 // Installation progress messages
 ProgressMessages []string
+}
+
+// SystemCheck represents a pre-flight system check result
+type SystemCheck struct {
+Name   string
+Status string // "ok", "warn", "fail"
+Detail string
 }
 
 // Wizard manages the installer workflow
@@ -90,7 +101,7 @@ w.State.CurrentStep = step
 func (w *Wizard) ValidateCurrentStep() error {
 switch w.State.CurrentStep {
 case model.StepWelcome:
-return nil // no validation needed
+return w.validateWelcome()
 case model.StepNetwork:
 return w.validateNetwork()
 case model.StepStorage:
@@ -105,12 +116,25 @@ case model.StepReview:
 if !w.State.Confirmed {
 return fmt.Errorf("type YES to confirm installation")
 }
-return nil
+return w.validateConsistency()
 case model.StepInstall:
 return nil // install step validates on execute
 default:
 return nil
 }
+}
+
+func (w *Wizard) validateWelcome() error {
+validChannels := map[string]bool{"stable": true, "beta": true, "alpha": true, "edge": true}
+if w.State.Config.Channel != "" && !validChannels[w.State.Config.Channel] {
+return fmt.Errorf("invalid channel %q (must be stable, beta, alpha, or edge)", w.State.Config.Channel)
+}
+if w.State.Config.IgnitionURL != "" {
+if err := validate.URL(w.State.Config.IgnitionURL); err != nil {
+return fmt.Errorf("ignition URL: %w", err)
+}
+}
+return nil
 }
 
 func (w *Wizard) validateNetwork() error {
@@ -172,6 +196,38 @@ return err
 return nil
 }
 
+// validateConsistency checks for contradictions in the final config
+func (w *Wizard) validateConsistency() error {
+cfg := w.State.Config
+
+// Must have a disk selected
+if cfg.Disk.DevPath == "" {
+return fmt.Errorf("no disk selected")
+}
+
+// Must have authentication (SSH key or password)
+hasSSH := len(cfg.SSHKeys) > 0
+hasPassword := false
+for _, u := range cfg.Users {
+if len(u.SSHKeys) > 0 {
+hasSSH = true
+}
+if u.PasswordHash != "" {
+hasPassword = true
+}
+}
+if !hasSSH && !hasPassword && cfg.IgnitionURL == "" {
+return fmt.Errorf("no authentication configured: add SSH keys or a password")
+}
+
+// Warn if static network but no gateway
+if cfg.Network.Mode == model.NetworkStatic && cfg.Network.Gateway == "" {
+return fmt.Errorf("static network requires a gateway")
+}
+
+return nil
+}
+
 // ProbeHardware discovers disks and network interfaces
 func (w *Wizard) ProbeHardware(ctx context.Context) error {
 disks, err := w.Prober.ListDisks(ctx)
@@ -186,7 +242,65 @@ return fmt.Errorf("probing network: %w", err)
 }
 w.State.Interfaces = ifaces
 
+// Run system checks after hardware probe
+w.runSystemChecks()
+
 return nil
+}
+
+// runSystemChecks performs pre-flight verification
+func (w *Wizard) runSystemChecks() {
+w.State.SystemChecks = nil
+
+// Check: at least one eligible disk
+if len(w.State.Disks) > 0 {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Disk", Status: "ok",
+Detail: fmt.Sprintf("%d eligible disk(s) found", len(w.State.Disks)),
+})
+} else {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Disk", Status: "fail",
+Detail: "no eligible disks found (need ≥8GB, non-removable, non-boot)",
+})
+}
+
+// Check: at least one network interface
+activeIfaces := 0
+for _, iface := range w.State.Interfaces {
+if len(iface.IPv4Addrs) > 0 {
+activeIfaces++
+}
+}
+if activeIfaces > 0 {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Network", Status: "ok",
+Detail: fmt.Sprintf("%d interface(s) with IPv4", activeIfaces),
+})
+} else if len(w.State.Interfaces) > 0 {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Network", Status: "warn",
+Detail: "interfaces found but none have IPv4 addresses",
+})
+} else {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Network", Status: "fail",
+Detail: "no network interfaces detected",
+})
+}
+
+// Check: sysext catalog availability
+if len(w.State.Sysexts) > 0 {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Sysext Catalog", Status: "ok",
+Detail: fmt.Sprintf("%d extensions available", len(w.State.Sysexts)),
+})
+} else {
+w.State.SystemChecks = append(w.State.SystemChecks, SystemCheck{
+Name: "Sysext Catalog", Status: "warn",
+Detail: "catalog unavailable — sysext selection will be skipped",
+})
+}
 }
 
 // FetchSysexts loads the sysext catalog
@@ -231,4 +345,10 @@ return w.State.CurrentStep == model.StepDone
 // StepCount returns the total number of steps
 func StepCount() int {
 return int(model.StepDone) + 1
+}
+
+// GenerateButane renders the current config as Butane YAML for preview.
+func (w *Wizard) GenerateButane() (string, error) {
+gen := ignition.NewGenerator()
+return gen.GenerateButane(&w.State.Config)
 }

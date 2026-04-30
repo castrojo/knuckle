@@ -56,10 +56,23 @@ t.Error("review should show hostname")
 func TestHandleQuit(t *testing.T) {
 w := newTestWizard()
 m := New(w)
+// First Ctrl+C triggers confirmation prompt
 newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 tuiModel := newModel.(*Model)
+if tuiModel.quitting {
+t.Error("should not quit on first ctrl+c")
+}
+if tuiModel.confirmQuit == false {
+t.Error("should show quit confirmation after first ctrl+c")
+}
+if cmd != nil {
+t.Error("should not return quit cmd on first press")
+}
+// Second Ctrl+C actually quits
+newModel, cmd = tuiModel.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+tuiModel = newModel.(*Model)
 if !tuiModel.quitting {
-t.Error("should be quitting after ctrl+c")
+t.Error("should be quitting after second ctrl+c")
 }
 if cmd == nil {
 t.Error("should return quit cmd")

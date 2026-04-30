@@ -8,6 +8,7 @@ import (
 
 tea "github.com/charmbracelet/bubbletea"
 "github.com/charmbracelet/lipgloss"
+"golang.org/x/crypto/bcrypt"
 
 "github.com/castrojo/knuckle/internal/github"
 "github.com/castrojo/knuckle/internal/model"
@@ -24,20 +25,23 @@ helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241")).MarginTop(
 
 // Model is the top-level Bubble Tea model
 type Model struct {
-Wizard   *wizard.Wizard
-width    int
-height   int
-err      error
-quitting bool
-cursor   int
-fields   []field
-fieldIdx int
+Wizard       *wizard.Wizard
+width        int
+height       int
+err          error
+quitting     bool
+confirmQuit  bool
+showButane   bool
+cursor       int
+fields       []field
+fieldIdx     int
 }
 
 type field struct {
-label string
-value string
-key   string
+label  string
+value  string
+key    string
+masked bool
 }
 
 // New creates a new TUI model
@@ -65,9 +69,16 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Only allow 'q' to quit when NOT editing text fields
 switch msg.String() {
 case "ctrl+c":
+if m.confirmQuit {
 m.quitting = true
 return m, tea.Quit
+}
+m.confirmQuit = true
+m.err = fmt.Errorf("press Ctrl+C again to quit, or any other key to continue")
+return m, nil
 case "q":
+// Reset quit confirmation on any other key
+m.confirmQuit = false
 // Only quit if we're not in a field-editing step
 if len(m.fields) == 0 {
 m.quitting = true
@@ -77,8 +88,10 @@ return m, tea.Quit
 m.fields[m.fieldIdx].value += "q"
 return m, nil
 case "enter":
+m.confirmQuit = false
 return m.handleEnter()
 case "tab", "down":
+m.confirmQuit = false
 if len(m.fields) > 0 {
 m.fieldIdx = (m.fieldIdx + 1) % len(m.fields)
 } else {
@@ -119,6 +132,15 @@ m.Wizard.State.Sysexts[m.cursor].Selected = !m.Wizard.State.Sysexts[m.cursor].Se
 m.Wizard.State.Config.Sysexts = m.Wizard.State.Sysexts
 } else if len(m.fields) > 0 {
 m.fields[m.fieldIdx].value += " "
+}
+return m, nil
+case "b":
+if m.Wizard.State.CurrentStep == model.StepReview && len(m.fields) > 0 && m.fields[m.fieldIdx].value == "" {
+m.showButane = !m.showButane
+return m, nil
+}
+if len(m.fields) > 0 && len("b") == 1 {
+m.fields[m.fieldIdx].value += "b"
 }
 return m, nil
 default:
@@ -253,6 +275,10 @@ Groups:   []string{"sudo", "docker"},
 cfg.Users[0].Username = f.value
 }
 }
+case "password":
+if f.value != "" && len(cfg.Users) > 0 {
+cfg.Users[0].PasswordHash = hashPassword(f.value)
+}
 case "github_user":
 if f.value != "" {
 keys, err := github.FetchKeys(f.value)
@@ -268,9 +294,11 @@ cfg.Users[0].SSHKeys = keys
 }
 case "ssh_key":
 if f.value != "" {
-cfg.SSHKeys = []string{f.value}
+// Support multiple keys separated by semicolons
+keys := splitSSHKeys(f.value)
+cfg.SSHKeys = keys
 if len(cfg.Users) > 0 {
-cfg.Users[0].SSHKeys = []string{f.value}
+cfg.Users[0].SSHKeys = keys
 }
 }
 }
@@ -312,8 +340,9 @@ sshKey = m.Wizard.State.Config.SSHKeys[0]
 m.fields = []field{
 {label: "Hostname", key: "hostname", value: m.Wizard.State.Config.Hostname},
 {label: "Username", key: "username", value: username},
+{label: "Password (optional, leave blank for key-only)", key: "password", value: "", masked: true},
 {label: "GitHub Username (fetches SSH keys)", key: "github_user", value: ""},
-{label: "— OR — SSH Public Key (manual)", key: "ssh_key", value: sshKey},
+{label: "— OR — SSH Public Key(s) (separate with ;)", key: "ssh_key", value: sshKey},
 }
 case model.StepReview:
 m.fields = []field{
@@ -385,6 +414,20 @@ What this installer will do:
   • Write Flatcar to your selected disk
 
 `)
+// Show system checks
+if len(m.Wizard.State.SystemChecks) > 0 {
+b.WriteString("System checks:\n")
+for _, check := range m.Wizard.State.SystemChecks {
+icon := "✓"
+if check.Status == "warn" {
+icon = "⚠"
+} else if check.Status == "fail" {
+icon = "✗"
+}
+fmt.Fprintf(&b, "  %s %s: %s\n", icon, check.Name, check.Detail)
+}
+b.WriteString("\n")
+}
 // Show channel version info if available
 if len(m.Wizard.State.Channels) > 0 {
 b.WriteString("Available channels:\n")
@@ -463,7 +506,11 @@ cursor := "  "
 if i == m.fieldIdx {
 cursor = "▸ "
 }
-fmt.Fprintf(&b, "%s%s: %s\n", cursor, f.label, f.value)
+displayVal := f.value
+if f.masked && f.value != "" {
+displayVal = strings.Repeat("•", len(f.value))
+}
+fmt.Fprintf(&b, "%s%s: %s\n", cursor, f.label, displayVal)
 }
 if len(m.Wizard.State.Config.SSHKeys) > 0 {
 fmt.Fprintf(&b, "\n  ✓ %d SSH key(s) configured\n", len(m.Wizard.State.Config.SSHKeys))
@@ -563,6 +610,9 @@ fmt.Fprintf(&b, "  Gateway:   %s\n", cfg.Network.Gateway)
 }
 if len(cfg.Users) > 0 {
 fmt.Fprintf(&b, "  User:      %s\n", cfg.Users[0].Username)
+if cfg.Users[0].PasswordHash != "" {
+fmt.Fprintf(&b, "  Password:  ✓ set\n")
+}
 }
 if len(cfg.SSHKeys) > 0 {
 fmt.Fprintf(&b, "  SSH Keys:  %d configured\n", len(cfg.SSHKeys))
@@ -578,6 +628,31 @@ fmt.Fprintf(&b, "  Sysexts:   %d selected\n", selected)
 }
 if cfg.UpdateStrategy.RebootStrategy != "" {
 fmt.Fprintf(&b, "  Update:    %s\n", cfg.UpdateStrategy.RebootStrategy)
+}
+
+// Butane preview
+if m.showButane {
+b.WriteString("\n─── Butane YAML Preview ───\n")
+butane, err := m.Wizard.GenerateButane()
+if err != nil {
+fmt.Fprintf(&b, "  Error: %v\n", err)
+} else {
+// Show first 30 lines
+lines := strings.Split(butane, "\n")
+max := 30
+if len(lines) < max {
+max = len(lines)
+}
+for _, line := range lines[:max] {
+fmt.Fprintf(&b, "  %s\n", line)
+}
+if len(lines) > max {
+fmt.Fprintf(&b, "  ... (%d more lines)\n", len(lines)-max)
+}
+}
+b.WriteString("───────────────────────────\n")
+} else {
+b.WriteString("\n  Press 'b' to preview Butane YAML\n")
 }
 }
 
@@ -595,11 +670,36 @@ return b.String()
 func (m *Model) viewInstall() string {
 var b strings.Builder
 b.WriteString("Installing Flatcar Container Linux...\n\n")
+
+total := 5 // approximate total steps
+done := len(m.Wizard.State.ProgressMessages)
+if done > total {
+total = done
+}
+
+// Progress bar
+barWidth := 30
+filled := 0
+if total > 0 {
+filled = (done * barWidth) / total
+}
+if filled > barWidth {
+filled = barWidth
+}
+bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+pct := 0
+if total > 0 {
+pct = (done * 100) / total
+}
+fmt.Fprintf(&b, "  [%s] %d%%\n\n", bar, pct)
+
 for _, msg := range m.Wizard.State.ProgressMessages {
 fmt.Fprintf(&b, "  ✓ %s\n", msg)
 }
-if m.Wizard.State.CurrentStep == model.StepInstall {
+if m.Wizard.State.CurrentStep == model.StepInstall && done == 0 {
 b.WriteString("\nPress Enter to start installation...")
+} else if done > 0 && done < total {
+b.WriteString("\n  ⣷ Working...")
 }
 return b.String()
 }
@@ -621,4 +721,26 @@ m := New(w)
 p := tea.NewProgram(m, tea.WithAltScreen())
 _, err := p.Run()
 return err
+}
+
+// hashPassword generates a bcrypt hash suitable for Ignition passwd field.
+func hashPassword(plain string) string {
+hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+if err != nil {
+return ""
+}
+return string(hash)
+}
+
+// splitSSHKeys splits SSH keys by semicolons and trims whitespace.
+func splitSSHKeys(input string) []string {
+parts := strings.Split(input, ";")
+var keys []string
+for _, p := range parts {
+p = strings.TrimSpace(p)
+if p != "" {
+keys = append(keys, p)
+}
+}
+return keys
 }

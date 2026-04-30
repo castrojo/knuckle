@@ -99,6 +99,10 @@ func buildInstallArgs(cfg *model.InstallConfig, ignitionJSON string) []string {
 		"-C", cfg.Channel,
 	}
 
+	if cfg.Version != "" {
+		args = append(args, "-V", cfg.Version)
+	}
+
 	if cfg.IgnitionURL != "" {
 		args = append(args, "-I", cfg.IgnitionURL)
 	} else if ignitionJSON != "" {
