@@ -50,7 +50,7 @@ just fmt         # format code
 just run         # go run the TUI
 ```
 
-Requires: Go 1.23+, [just](https://just.systems), [golangci-lint](https://golangci-lint.run)
+Requires: Go 1.26+, [just](https://just.systems), [golangci-lint](https://golangci-lint.run)
 
 ## Architecture
 
