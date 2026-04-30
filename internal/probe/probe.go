@@ -61,7 +61,31 @@ func (p *SystemProber) ListDisks(ctx context.Context) ([]model.DiskInfo, error) 
 			continue
 		}
 
+		// Skip removable devices
+		if dev.RM {
+			continue
+		}
+
 		size, _ := dev.Size.Int64()
+
+		// Skip disks smaller than 8GB (flatcar-install minimum)
+		if uint64(size) < 8*1024*1024*1024 {
+			continue
+		}
+
+		// Skip the boot disk (has mounted partitions like / or /boot)
+		isBootDisk := false
+		for _, child := range dev.Children {
+			mp := deref(child.MountPoint)
+			if mp == "/" || mp == "/boot" || mp == "/usr" || mp == "/sysroot" {
+				isBootDisk = true
+				break
+			}
+		}
+		if isBootDisk {
+			continue
+		}
+
 		disk := model.DiskInfo{
 			DevPath:   dev.Path,
 			Path:      dev.Path,

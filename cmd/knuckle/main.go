@@ -38,6 +38,13 @@ fmt.Printf("knuckle %s\n", version)
 os.Exit(0)
 }
 
+// Validate channel flag
+validChannels := map[string]bool{"stable": true, "beta": true, "alpha": true, "edge": true}
+if !validChannels[channel] {
+fmt.Fprintf(os.Stderr, "Error: invalid channel %q (must be stable, beta, alpha, or edge)\n", channel)
+os.Exit(1)
+}
+
 // Set up logging to file (never stdout — Bubble Tea owns stdout)
 logWriter, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 if err != nil {

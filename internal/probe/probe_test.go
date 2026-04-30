@@ -26,55 +26,14 @@ func TestListDisks(t *testing.T) {
 		t.Fatalf("ListDisks() error: %v", err)
 	}
 
-	// sr0 is type "rom", should be filtered out — expect 2 disks
-	if got := len(disks); got != 2 {
-		t.Fatalf("expected 2 disks, got %d", got)
+	// sr0 is type "rom" (filtered), sda is boot disk with / mounted (filtered)
+	// Only nvme0n1 should remain as an installable target
+	if got := len(disks); got != 1 {
+		t.Fatalf("expected 1 disk (boot disk and rom filtered), got %d", got)
 	}
 
-	// Verify first disk (sda)
-	sda := disks[0]
-	if sda.DevPath != "/dev/sda" {
-		t.Errorf("sda.DevPath = %q, want /dev/sda", sda.DevPath)
-	}
-	if sda.Model != "Samsung SSD 870" {
-		t.Errorf("sda.Model = %q, want Samsung SSD 870", sda.Model)
-	}
-	if sda.Serial != "S5PXNG0R312345" {
-		t.Errorf("sda.Serial = %q, want S5PXNG0R312345", sda.Serial)
-	}
-	if sda.Size != 500107862016 {
-		t.Errorf("sda.Size = %d, want 500107862016", sda.Size)
-	}
-	if sda.SizeHuman != "465.8 GB" {
-		t.Errorf("sda.SizeHuman = %q, want 465.8 GB", sda.SizeHuman)
-	}
-	if sda.Transport != "sata" {
-		t.Errorf("sda.Transport = %q, want sata", sda.Transport)
-	}
-	if sda.Removable {
-		t.Error("sda.Removable = true, want false")
-	}
-
-	// Verify partitions
-	if got := len(sda.Partitions); got != 2 {
-		t.Fatalf("sda partitions: got %d, want 2", got)
-	}
-	p1 := sda.Partitions[0]
-	if p1.Path != "/dev/sda1" {
-		t.Errorf("partition[0].Path = %q, want /dev/sda1", p1.Path)
-	}
-	if p1.Label != "EFI" {
-		t.Errorf("partition[0].Label = %q, want EFI", p1.Label)
-	}
-	if p1.FSType != "vfat" {
-		t.Errorf("partition[0].FSType = %q, want vfat", p1.FSType)
-	}
-	if p1.MountPoint != "/boot/efi" {
-		t.Errorf("partition[0].MountPoint = %q, want /boot/efi", p1.MountPoint)
-	}
-
-	// Verify second disk (nvme)
-	nvme := disks[1]
+	// Verify the only disk is nvme
+	nvme := disks[0]
 	if nvme.DevPath != "/dev/nvme0n1" {
 		t.Errorf("nvme.DevPath = %q, want /dev/nvme0n1", nvme.DevPath)
 	}

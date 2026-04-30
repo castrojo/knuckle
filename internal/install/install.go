@@ -70,6 +70,8 @@ func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig
 		if err := i.WriteIgnitionFile(ctx, ignitionJSON); err != nil {
 			return fmt.Errorf("writing ignition file: %w", err)
 		}
+		// Clean up temp file after install (contains SSH keys)
+		defer i.cleanupIgnitionFile(ctx)
 	}
 
 	// Build flatcar-install command args
@@ -111,4 +113,12 @@ func buildInstallArgs(cfg *model.InstallConfig, ignitionJSON string) []string {
 func (i *FlatcarInstaller) WriteIgnitionFile(ctx context.Context, ignitionJSON string) error {
 	_, err := i.Runner.RunWithInput(ctx, ignitionJSON, "tee", "/tmp/knuckle-ignition.json")
 	return err
+}
+
+// cleanupIgnitionFile removes the temp ignition file (contains SSH keys).
+func (i *FlatcarInstaller) cleanupIgnitionFile(ctx context.Context) {
+	_, err := i.Runner.Run(ctx, "rm", "-f", "/tmp/knuckle-ignition.json")
+	if err != nil {
+		i.Logger.Warn("failed to clean up ignition file", "error", err)
+	}
 }

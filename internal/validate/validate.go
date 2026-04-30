@@ -98,13 +98,16 @@ func Username(s string) error {
 }
 
 // DiskPath validates a disk device path.
-// Must start with /dev/ and have at least one character after the prefix.
+// Must start with /dev/ and contain no path traversal.
 func DiskPath(s string) error {
 	if !strings.HasPrefix(s, "/dev/") {
 		return fmt.Errorf("disk path must start with /dev/")
 	}
 	if len(s) <= 5 {
 		return fmt.Errorf("disk path too short")
+	}
+	if strings.Contains(s, "..") {
+		return fmt.Errorf("disk path must not contain path traversal")
 	}
 	return nil
 }

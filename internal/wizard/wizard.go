@@ -127,6 +127,12 @@ return validate.DiskPath(w.State.Config.Disk.DevPath)
 }
 
 func (w *Wizard) validateUser() error {
+// Validate hostname
+if w.State.Config.Hostname != "" {
+if err := validate.Hostname(w.State.Config.Hostname); err != nil {
+return err
+}
+}
 // Must have at least one user or SSH key
 if len(w.State.Config.Users) == 0 && len(w.State.Config.SSHKeys) == 0 {
 return fmt.Errorf("at least one user or SSH key is required")

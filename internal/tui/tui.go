@@ -61,10 +61,20 @@ return m, nil
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+// Only allow 'q' to quit when NOT editing text fields
 switch msg.String() {
-case "ctrl+c", "q":
+case "ctrl+c":
 m.quitting = true
 return m, tea.Quit
+case "q":
+// Only quit if we're not in a field-editing step
+if len(m.fields) == 0 {
+m.quitting = true
+return m, tea.Quit
+}
+// Otherwise treat as regular character input
+m.fields[m.fieldIdx].value += "q"
+return m, nil
 case "enter":
 return m.handleEnter()
 case "tab", "down":
@@ -72,6 +82,14 @@ if len(m.fields) > 0 {
 m.fieldIdx = (m.fieldIdx + 1) % len(m.fields)
 } else {
 m.cursor++
+// Clamp cursor to list bounds
+maxCursor := m.maxCursor()
+if m.cursor >= maxCursor {
+m.cursor = maxCursor - 1
+}
+if m.cursor < 0 {
+m.cursor = 0
+}
 }
 return m, nil
 case "shift+tab", "up":
@@ -98,6 +116,8 @@ case " ":
 if m.Wizard.State.CurrentStep == model.StepSysext && m.cursor < len(m.Wizard.State.Sysexts) {
 m.Wizard.State.Sysexts[m.cursor].Selected = !m.Wizard.State.Sysexts[m.cursor].Selected
 m.Wizard.State.Config.Sysexts = m.Wizard.State.Sysexts
+} else if len(m.fields) > 0 {
+m.fields[m.fieldIdx].value += " "
 }
 return m, nil
 default:
@@ -105,6 +125,18 @@ if len(m.fields) > 0 && len(msg.String()) == 1 {
 m.fields[m.fieldIdx].value += msg.String()
 }
 return m, nil
+}
+}
+
+// maxCursor returns the number of selectable items in list-based steps
+func (m *Model) maxCursor() int {
+switch m.Wizard.State.CurrentStep {
+case model.StepStorage:
+return len(m.Wizard.State.Disks)
+case model.StepSysext:
+return len(m.Wizard.State.Sysexts)
+default:
+return 1
 }
 }
 
@@ -156,6 +188,12 @@ if f.value != "" {
 cfg.Network.DNS = strings.Split(f.value, ",")
 }
 }
+}
+// Switch to static mode if any static fields are filled in
+if cfg.Network.Address != "" || cfg.Network.Gateway != "" {
+cfg.Network.Mode = model.NetworkStatic
+} else {
+cfg.Network.Mode = model.NetworkDHCP
 }
 case model.StepUser:
 for _, f := range m.fields {
