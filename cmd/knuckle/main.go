@@ -90,6 +90,11 @@ if err := w.FetchSysexts(ctx); err != nil {
 logger.Warn("sysext catalog fetch failed", "error", err)
 }
 
+// Fetch channel version info (non-fatal if it fails)
+if err := w.FetchChannels(ctx); err != nil {
+logger.Warn("channel info fetch failed", "error", err)
+}
+
 // Run the TUI
 if err := tui.Run(w); err != nil {
 logger.Error("TUI error", "error", err)

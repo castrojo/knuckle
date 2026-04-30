@@ -23,6 +23,9 @@ Disks      []model.DiskInfo
 Interfaces []model.NetworkInterface
 Sysexts    []model.SysextEntry
 
+// Channel version info (fetched at startup)
+Channels []bakery.ChannelInfo
+
 // User confirmed destructive operation
 Confirmed bool
 
@@ -193,6 +196,16 @@ if err != nil {
 return fmt.Errorf("fetching sysext catalog: %w", err)
 }
 w.State.Sysexts = sysexts
+return nil
+}
+
+// FetchChannels loads version info for all release channels
+func (w *Wizard) FetchChannels(ctx context.Context) error {
+channels, err := bakery.FetchAllChannels(ctx)
+if err != nil {
+return err
+}
+w.State.Channels = channels
 return nil
 }
 

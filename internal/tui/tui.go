@@ -324,7 +324,6 @@ case model.StepUpdate:
 }
 }
 
-
 func (m *Model) View() string {
 if m.quitting {
 return "Installation cancelled.\n"
@@ -386,6 +385,16 @@ What this installer will do:
   • Write Flatcar to your selected disk
 
 `)
+// Show channel version info if available
+if len(m.Wizard.State.Channels) > 0 {
+b.WriteString("Available channels:\n")
+for _, ch := range m.Wizard.State.Channels {
+fmt.Fprintf(&b, "  %s — Flatcar %s\n", ch.Channel, ch.Version)
+fmt.Fprintf(&b, "    kernel %s · systemd %s · docker %s · containerd %s\n",
+ch.Kernel, ch.Systemd, ch.Docker, ch.Containerd)
+}
+b.WriteString("\n")
+}
 for i, f := range m.fields {
 cursor := "  "
 if i == m.fieldIdx {

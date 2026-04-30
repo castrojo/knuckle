@@ -11,11 +11,15 @@ import (
 
 // ChannelInfo holds version details for a Flatcar release channel.
 type ChannelInfo struct {
-	Channel   string // stable, beta, alpha
-	Version   string // e.g. "4593.2.0"
-	BuildDate string // e.g. "2026-04-14"
-	Kernel    string // e.g. "6.12.81"
-	Systemd   string // e.g. "257.9"
+	Channel    string // stable, beta, alpha
+	Version    string // e.g. "4593.2.0"
+	BuildDate  string // e.g. "2026-04-14"
+	Kernel     string // e.g. "6.12.81"
+	Systemd    string // e.g. "257.9"
+	Docker     string // e.g. "28.0.4"
+	Containerd string // e.g. "2.1.5"
+	Ignition   string // e.g. "2.24.0"
+	Etcd       string // e.g. "3.5.18"
 }
 
 // FetchChannelInfo fetches version info for a given channel from the Flatcar release server.
@@ -37,12 +41,24 @@ func fetchChannelInfoFromURLs(ctx context.Context, channel, versionURL, pkgURL s
 	}
 	parseVersionTxt(versionBody, info)
 
-	// Fetch package list
+	// Fetch base image package list (kernel, systemd, ignition, etcd)
 	pkgBody, err := httpGet(ctx, pkgURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetching package list for %s: %w", channel, err)
 	}
 	parsePackageList(pkgBody, info)
+
+	// Fetch docker sysext package list
+	dockerPkgURL := strings.Replace(pkgURL, "flatcar_production_image_packages.txt", "rootfs-included-sysexts/docker-flatcar_packages.txt", 1)
+	if body, err := httpGet(ctx, dockerPkgURL); err == nil {
+		parseSysextPackageList(body, info)
+	}
+
+	// Fetch containerd sysext package list
+	containerdPkgURL := strings.Replace(pkgURL, "flatcar_production_image_packages.txt", "rootfs-included-sysexts/containerd-flatcar_packages.txt", 1)
+	if body, err := httpGet(ctx, containerdPkgURL); err == nil {
+		parseSysextPackageList(body, info)
+	}
 
 	return info, nil
 }
@@ -136,7 +152,7 @@ func parseVersionTxt(body string, info *ChannelInfo) {
 	}
 }
 
-// parsePackageList extracts kernel and systemd versions from the package list.
+// parsePackageList extracts kernel, systemd, ignition, and etcd versions from the base package list.
 func parsePackageList(body string, info *ChannelInfo) {
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -144,6 +160,26 @@ func parsePackageList(body string, info *ChannelInfo) {
 			info.Kernel = extractVersionBeforeColons(line, "sys-kernel/coreos-kernel-")
 		} else if strings.HasPrefix(line, "sys-apps/systemd-") {
 			info.Systemd = extractVersionBeforeColons(line, "sys-apps/systemd-")
+		} else if strings.HasPrefix(line, "sys-apps/ignition-") {
+			info.Ignition = extractVersionBeforeColons(line, "sys-apps/ignition-")
+			// Strip -rN revision suffix
+			if idx := strings.Index(info.Ignition, "-r"); idx >= 0 {
+				info.Ignition = info.Ignition[:idx]
+			}
+		} else if strings.HasPrefix(line, "dev-db/etcd-") {
+			info.Etcd = extractVersionBeforeColons(line, "dev-db/etcd-")
+		}
+	}
+}
+
+// parseSysextPackageList extracts docker and containerd versions from sysext package lists.
+func parseSysextPackageList(body string, info *ChannelInfo) {
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "app-containers/docker-") && !strings.Contains(line, "docker-cli") && !strings.Contains(line, "docker-buildx") {
+			info.Docker = extractVersionBeforeColons(line, "app-containers/docker-")
+		} else if strings.HasPrefix(line, "app-containers/containerd-") {
+			info.Containerd = extractVersionBeforeColons(line, "app-containers/containerd-")
 		}
 	}
 }
