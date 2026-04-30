@@ -60,8 +60,9 @@ cmdRunner = runner.NewDryRunner(logger)
 cmdRunner = runner.NewRealRunner(logger)
 }
 
-// Set up dependencies
-prober := probe.NewSystemProber(cmdRunner)
+// Prober always uses real runner — it only reads system state
+realRunner := runner.NewRealRunner(logger)
+prober := probe.NewSystemProber(realRunner)
 bakeryClient := bakery.NewHTTPClient()
 installer := install.NewFlatcarInstaller(cmdRunner, logger)
 
