@@ -78,6 +78,56 @@ ci:
     go test -race ./...
     go build -o bin/knuckle ./cmd/knuckle
 
+# Build a self-contained installer disk image (requires virt-customize)
+installer-disk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building knuckle..."
+    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/knuckle-linux-amd64 ./cmd/knuckle
+
+    mkdir -p .vm output
+    if [ ! -f ".vm/flatcar_base.img" ]; then
+        echo "Downloading Flatcar stable QEMU image..."
+        curl -L -o .vm/flatcar_base.img.bz2 \
+            "https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_qemu_image.img.bz2"
+        bunzip2 .vm/flatcar_base.img.bz2
+    fi
+
+    echo "Creating installer disk..."
+    rm -f output/knuckle-installer.qcow2
+    cp .vm/flatcar_base.img output/knuckle-installer.qcow2
+
+    if ! command -v virt-customize &>/dev/null; then
+        echo "❌ virt-customize not found."
+        echo "Install: sudo dnf install libguestfs-tools"
+        exit 1
+    fi
+
+    virt-customize -a output/knuckle-installer.qcow2 \
+        --upload bin/knuckle-linux-amd64:/opt/knuckle \
+        --chmod 0755:/opt/knuckle \
+        --write '/etc/systemd/system/knuckle-installer.service:[Unit]\nDescription=Knuckle Flatcar Installer\nAfter=multi-user.target\nConditionPathExists=/opt/knuckle\n\n[Service]\nType=idle\nExecStart=/opt/knuckle\nStandardInput=tty\nStandardOutput=tty\nTTYPath=/dev/tty1\nTTYReset=yes\nTTYVHangup=yes\nRestart=on-failure\nRestartSec=2\n\n[Install]\nWantedBy=multi-user.target' \
+        --mkdir /etc/systemd/system/multi-user.target.wants \
+        --link '/etc/systemd/system/multi-user.target.wants/knuckle-installer.service:/etc/systemd/system/knuckle-installer.service'
+
+    echo "✅ Installer image: output/knuckle-installer.qcow2 ($(du -h output/knuckle-installer.qcow2 | cut -f1))"
+    echo ""
+    echo "Boot with:"
+    echo "  qemu-system-x86_64 -m 2048 -enable-kvm -drive if=virtio,file=output/knuckle-installer.qcow2"
+
+# Boot the installer disk image (builds if needed, adds a target disk for installation)
+boot-installer: installer-disk
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .vm
+    [ -f .vm/target.qcow2 ] || qemu-img create -f qcow2 .vm/target.qcow2 20G
+    {{QEMU}} \
+        -m 2048 -smp 2 -enable-kvm \
+        -drive if=virtio,file=output/knuckle-installer.qcow2,format=qcow2 \
+        -drive if=virtio,file=.vm/target.qcow2,format=qcow2 \
+        -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
+        -nographic
+
 # Clean everything
 clean:
     #!/usr/bin/env bash
