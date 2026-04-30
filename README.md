@@ -69,10 +69,11 @@ internal/validate/   → input and config validation
 ## Tech Stack
 
 - [Go](https://go.dev)
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) — TUI framework
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) — styling
-- [Huh](https://github.com/charmbracelet/huh) — form inputs
-- [Butane](https://github.com/coreos/butane) — Ignition config compilation
+- [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) — TUI framework (`charm.land/bubbletea/v2`)
+- [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) — styling (`charm.land/lipgloss/v2`)
+- [Huh v2](https://github.com/charmbracelet/huh) — form inputs
+- [Bubbles v2](https://github.com/charmbracelet/bubbles) — reusable components
+- [Butane v0.27](https://github.com/coreos/butane) — Ignition config compilation
 - [flatcar-install](https://www.flatcar.org/docs/latest/installing/bare-metal/installing-to-disk/) — disk provisioning
 
 ## License

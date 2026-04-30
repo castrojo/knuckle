@@ -68,7 +68,7 @@ tui ← cmd/knuckle
 ## Architecture Decisions
 
 1. **Runner abstraction** — All external commands go through `internal/runner`. This enables dry-run mode, test fixtures, and safe CI.
-2. **Flatcar Butane variant** — Use `variant: flatcar` (not generic CoreOS) when generating Butane configs. Import via `github.com/coreos/butane/config`.
+2. **Flatcar Butane variant** — Use `variant: flatcar` (not generic CoreOS) when generating Butane configs. Import via `github.com/coreos/butane` v0.27+ (Flatcar variant, Ignition spec 3.6.0).
 3. **Mutually exclusive config modes** — v1 supports either guided local generation OR external Ignition URL passthrough. No merge logic.
 4. **Disk identity** — Use `/dev/disk/by-id` paths. Never rely on `/dev/sda` ordering.
 5. **TUI ↔ logic separation** — `internal/tui` renders views; `internal/wizard` manages state transitions. No business logic in view models.
