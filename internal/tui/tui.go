@@ -233,6 +233,12 @@ cfg.Users[0].SSHKeys = []string{f.value}
 }
 }
 }
+case model.StepReview:
+for _, f := range m.fields {
+if f.key == "confirm" {
+m.Wizard.State.Confirmed = (strings.ToUpper(strings.TrimSpace(f.value)) == "YES")
+}
+}
 }
 }
 
@@ -261,6 +267,10 @@ m.fields = []field{
 {label: "Username", key: "username", value: username},
 {label: "GitHub Username (fetches SSH keys)", key: "github_user", value: ""},
 {label: "— OR — SSH Public Key (manual)", key: "ssh_key", value: sshKey},
+}
+case model.StepReview:
+m.fields = []field{
+{label: "Type YES to confirm installation", key: "confirm", value: ""},
 }
 }
 }
@@ -445,7 +455,14 @@ selected++
 if selected > 0 {
 fmt.Fprintf(&b, "  Sysexts:   %d selected\n", selected)
 }
-b.WriteString("\nPress Enter to begin installation...")
+b.WriteString("\n⚠ ALL DATA ON " + cfg.Disk.DevPath + " WILL BE DESTROYED!\n\n")
+for i, f := range m.fields {
+cursor := "  "
+if i == m.fieldIdx {
+cursor = "▸ "
+}
+fmt.Fprintf(&b, "%s%s: %s\n", cursor, f.label, f.value)
+}
 return b.String()
 }
 

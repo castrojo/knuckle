@@ -118,7 +118,8 @@ t.Fatalf("Next from User: %v", err)
 if err := w.Next(); err != nil {
 t.Fatalf("Next from Sysext: %v", err)
 }
-// StepReview -> StepInstall
+// StepReview -> StepInstall (need confirmation)
+w.State.Confirmed = true
 if err := w.Next(); err != nil {
 t.Fatalf("Next from Review: %v", err)
 }

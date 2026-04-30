@@ -23,6 +23,9 @@ Disks      []model.DiskInfo
 Interfaces []model.NetworkInterface
 Sysexts    []model.SysextEntry
 
+// User confirmed destructive operation
+Confirmed bool
+
 // Error from the last operation
 Err error
 
@@ -93,7 +96,10 @@ return w.validateUser()
 case model.StepSysext:
 return nil // sysext selection is optional
 case model.StepReview:
-return nil // review is read-only
+if !w.State.Confirmed {
+return fmt.Errorf("type YES to confirm installation")
+}
+return nil
 case model.StepInstall:
 return nil // install step validates on execute
 default:
