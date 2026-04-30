@@ -136,6 +136,8 @@ case model.StepStorage:
 return len(m.Wizard.State.Disks)
 case model.StepSysext:
 return len(m.Wizard.State.Sysexts)
+case model.StepUpdate:
+return 3
 default:
 return 1
 }
@@ -146,9 +148,35 @@ step := m.Wizard.State.CurrentStep
 m.applyFields()
 
 switch step {
+case model.StepWelcome:
+// If IgnitionURL is set, skip directly to Storage
+if m.Wizard.State.Config.IgnitionURL != "" {
+m.Wizard.GoToStep(model.StepStorage)
+m.err = nil
+m.cursor = 0
+m.initStepFields()
+return m, nil
+}
 case model.StepStorage:
 if m.cursor < len(m.Wizard.State.Disks) {
 m.Wizard.State.Config.Disk = m.Wizard.State.Disks[m.cursor]
+}
+// If IgnitionURL is set, skip to Review after Storage
+if m.Wizard.State.Config.IgnitionURL != "" {
+if err := m.Wizard.ValidateCurrentStep(); err != nil {
+m.err = err
+return m, nil
+}
+m.Wizard.GoToStep(model.StepReview)
+m.err = nil
+m.cursor = 0
+m.initStepFields()
+return m, nil
+}
+case model.StepUpdate:
+strategies := []string{"reboot", "off", "etcd-lock"}
+if m.cursor >= 0 && m.cursor < len(strategies) {
+m.Wizard.State.Config.UpdateStrategy.RebootStrategy = strategies[m.cursor]
 }
 case model.StepInstall:
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -179,8 +207,13 @@ cfg := &m.Wizard.State.Config
 switch m.Wizard.State.CurrentStep {
 case model.StepWelcome:
 for _, f := range m.fields {
-if f.key == "channel" && f.value != "" {
+switch f.key {
+case "channel":
+if f.value != "" {
 cfg.Channel = f.value
+}
+case "ignition_url":
+cfg.IgnitionURL = f.value
 }
 }
 case model.StepNetwork:
@@ -258,6 +291,7 @@ switch m.Wizard.State.CurrentStep {
 case model.StepWelcome:
 m.fields = []field{
 {label: "Channel (stable/beta/alpha/edge)", key: "channel", value: m.Wizard.State.Config.Channel},
+{label: "External Ignition URL (skip wizard)", key: "ignition_url", value: m.Wizard.State.Config.IgnitionURL},
 }
 case model.StepNetwork:
 m.fields = []field{
@@ -285,8 +319,11 @@ case model.StepReview:
 m.fields = []field{
 {label: "Type YES to confirm installation", key: "confirm", value: ""},
 }
+case model.StepUpdate:
+// No fields — cursor-select screen
 }
 }
+
 
 func (m *Model) View() string {
 if m.quitting {
@@ -313,6 +350,8 @@ case model.StepUser:
 b.WriteString(m.viewUser())
 case model.StepSysext:
 b.WriteString(m.viewSysext())
+case model.StepUpdate:
+b.WriteString(m.viewUpdate())
 case model.StepReview:
 b.WriteString(m.viewReview())
 case model.StepInstall:
@@ -450,10 +489,61 @@ b.WriteString("\n")
 return b.String()
 }
 
+func (m *Model) viewUpdate() string {
+var b strings.Builder
+b.WriteString("Update Strategy\n\nChoose how Flatcar will handle OS updates:\n\n")
+
+type option struct {
+name string
+desc []string
+}
+options := []option{
+{"reboot (Recommended)", []string{
+"Auto-update and reboot immediately when an update is applied.",
+"Best for: single nodes, dev environments",
+}},
+{"off", []string{
+"Updates are downloaded but never applied automatically.",
+"You must run 'update_engine_client -update' manually.",
+"Best for: manually managed infrastructure",
+}},
+{"etcd-lock", []string{
+"Coordinates reboots with other nodes via etcd distributed lock.",
+"Only one node reboots at a time in the cluster.",
+"Best for: multi-node clusters running etcd",
+}},
+}
+
+for i, opt := range options {
+cursor := "  "
+if i == m.cursor {
+cursor = "▸ "
+}
+line := fmt.Sprintf("%s%s", cursor, opt.name)
+if i == m.cursor {
+b.WriteString(selectedStyle.Render(line))
+} else {
+b.WriteString(line)
+}
+b.WriteString("\n")
+for _, d := range opt.desc {
+b.WriteString(fmt.Sprintf("    %s\n", d))
+}
+b.WriteString("\n")
+}
+return b.String()
+}
+
 func (m *Model) viewReview() string {
 var b strings.Builder
 cfg := m.Wizard.State.Config
 b.WriteString("Review Configuration\n\n")
+
+if cfg.IgnitionURL != "" {
+fmt.Fprintf(&b, "  Mode:      External Ignition\n")
+fmt.Fprintf(&b, "  URL:       %s\n", cfg.IgnitionURL)
+fmt.Fprintf(&b, "  Disk:      %s (%s)\n", cfg.Disk.DevPath, cfg.Disk.SizeHuman)
+} else {
 fmt.Fprintf(&b, "  Channel:   %s\n", cfg.Channel)
 fmt.Fprintf(&b, "  Hostname:  %s\n", cfg.Hostname)
 fmt.Fprintf(&b, "  Disk:      %s (%s)\n", cfg.Disk.DevPath, cfg.Disk.SizeHuman)
@@ -477,6 +567,11 @@ selected++
 if selected > 0 {
 fmt.Fprintf(&b, "  Sysexts:   %d selected\n", selected)
 }
+if cfg.UpdateStrategy.RebootStrategy != "" {
+fmt.Fprintf(&b, "  Update:    %s\n", cfg.UpdateStrategy.RebootStrategy)
+}
+}
+
 b.WriteString("\n⚠ ALL DATA ON " + cfg.Disk.DevPath + " WILL BE DESTROYED!\n\n")
 for i, f := range m.fields {
 cursor := "  "

@@ -47,7 +47,8 @@ return &Wizard{
 State: &State{
 CurrentStep: model.StepWelcome,
 Config: model.InstallConfig{
-Channel: "stable",
+Channel:        "stable",
+UpdateStrategy: model.UpdateStrategy{RebootStrategy: "reboot"},
 },
 },
 Prober:    prober,
@@ -95,6 +96,8 @@ case model.StepUser:
 return w.validateUser()
 case model.StepSysext:
 return nil // sysext selection is optional
+case model.StepUpdate:
+return nil // update strategy selection is optional (defaults to "reboot")
 case model.StepReview:
 if !w.State.Confirmed {
 return fmt.Errorf("type YES to confirm installation")

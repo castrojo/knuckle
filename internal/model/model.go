@@ -11,6 +11,7 @@ const (
 	StepStorage
 	StepUser
 	StepSysext
+	StepUpdate
 	StepReview
 	StepInstall
 	StepDone
@@ -29,6 +30,8 @@ func (s WizardStep) String() string {
 		return "User"
 	case StepSysext:
 		return "Sysext"
+	case StepUpdate:
+		return "Update Strategy"
 	case StepReview:
 		return "Review"
 	case StepInstall:
@@ -42,15 +45,23 @@ func (s WizardStep) String() string {
 
 // InstallConfig is the complete installation configuration built by the wizard.
 type InstallConfig struct {
-	Channel     string        // stable, beta, alpha, edge
-	Hostname    string
-	Network     NetworkConfig
-	Disk        DiskInfo
-	Users       []UserConfig
-	SSHKeys     []string // authorized_keys entries
-	Sysexts     []SysextEntry
-	IgnitionURL string // external ignition URL (mutually exclusive with local gen)
-	DryRun      bool
+	Channel        string        // stable, beta, alpha, edge
+	Hostname       string
+	Network        NetworkConfig
+	Disk           DiskInfo
+	Users          []UserConfig
+	SSHKeys        []string // authorized_keys entries
+	Sysexts        []SysextEntry
+	UpdateStrategy UpdateStrategy
+	IgnitionURL    string // external ignition URL (mutually exclusive with local gen)
+	DryRun         bool
+}
+
+// UpdateStrategy holds OS update and reboot settings for Flatcar.
+type UpdateStrategy struct {
+	RebootStrategy string // "reboot", "off", "etcd-lock"
+	RebootWindow   string // optional: "Mon-Fri 04:00-05:00" format
+	LocksmithGroup string // optional: used with etcd-lock
 }
 
 // NetworkConfig holds network settings.

@@ -43,13 +43,19 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		return "", fmt.Errorf("parsing template: %w", err)
 	}
 
+	rebootStrategy := cfg.UpdateStrategy.RebootStrategy
+	if rebootStrategy == "" {
+		rebootStrategy = "reboot"
+	}
+
 	data := templateData{
-		Hostname: cfg.Hostname,
-		Users:    cfg.Users,
-		SSHKeys:  cfg.SSHKeys,
-		Network:  cfg.Network,
-		Sysexts:  filterSelected(cfg.Sysexts),
-		Channel:  cfg.Channel,
+		Hostname:       cfg.Hostname,
+		Users:          cfg.Users,
+		SSHKeys:        cfg.SSHKeys,
+		Network:        cfg.Network,
+		Sysexts:        filterSelected(cfg.Sysexts),
+		Channel:        cfg.Channel,
+		RebootStrategy: rebootStrategy,
 	}
 
 	var buf bytes.Buffer
@@ -61,12 +67,13 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 }
 
 type templateData struct {
-	Hostname string
-	Users    []model.UserConfig
-	SSHKeys  []string
-	Network  model.NetworkConfig
-	Sysexts  []model.SysextEntry
-	Channel  string
+	Hostname       string
+	Users          []model.UserConfig
+	SSHKeys        []string
+	Network        model.NetworkConfig
+	Sysexts        []model.SysextEntry
+	Channel        string
+	RebootStrategy string
 }
 
 func filterSelected(sysexts []model.SysextEntry) []model.SysextEntry {
@@ -91,7 +98,7 @@ storage:
       mode: 0644
       contents:
         inline: |
-          REBOOT_STRATEGY=reboot
+          REBOOT_STRATEGY={{.RebootStrategy}}
           GROUP={{.Channel}}
     - path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
       mode: 0600

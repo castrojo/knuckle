@@ -115,9 +115,13 @@ w.State.Config.Users = []model.UserConfig{
 if err := w.Next(); err != nil {
 t.Fatalf("Next from User: %v", err)
 }
-// StepSysext -> StepReview
+// StepSysext -> StepUpdate
 if err := w.Next(); err != nil {
 t.Fatalf("Next from Sysext: %v", err)
+}
+// StepUpdate -> StepReview
+if err := w.Next(); err != nil {
+t.Fatalf("Next from Update: %v", err)
 }
 // StepReview -> StepInstall (need confirmation)
 w.State.Confirmed = true
@@ -376,7 +380,7 @@ t.Error("expected IsLastStep=true at Done")
 
 func TestStepCount(t *testing.T) {
 count := StepCount()
-if count != 8 {
-t.Errorf("expected 8 steps, got %d", count)
+if count != 9 {
+t.Errorf("expected 9 steps, got %d", count)
 }
 }

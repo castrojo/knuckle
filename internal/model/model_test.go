@@ -12,6 +12,7 @@ func TestWizardStepString(t *testing.T) {
 		{StepStorage, "Storage"},
 		{StepUser, "User"},
 		{StepSysext, "Sysext"},
+		{StepUpdate, "Update Strategy"},
 		{StepReview, "Review"},
 		{StepInstall, "Install"},
 		{StepDone, "Done"},
