@@ -77,13 +77,23 @@ generate-ignition:
     mkdir -p .vm
     @echo '{"ignition":{"version":"3.3.0"},"passwd":{"users":[{"name":"core","sshAuthorizedKeys":["'$(cat ~/.ssh/id_ed25519.pub)'"]}]},"systemd":{"units":[{"name":"sshd.service","enabled":true}]}}' > .vm/config.ign
 
-# Boot Flatcar QEMU VM (daemonized, SSH on port 2222)
-vm: build-linux download-image generate-ignition
+# Create a blank target disk for install testing
+create-disk:
+    mkdir -p .vm
+    @if [ ! -f {{DISK}} ]; then \
+        qemu-img create -f qcow2 {{DISK}} 20G; \
+    else \
+        echo "Test disk already exists: {{DISK}}"; \
+    fi
+
+# Boot Flatcar QEMU VM (daemonized, SSH on port 2222, blank 20G disk attached as /dev/vdb)
+vm: build-linux download-image generate-ignition create-disk
     {{QEMU}} \
         -m 2048 \
         -smp 2 \
         -enable-kvm \
         -drive if=virtio,file={{QEMU_IMG}},format=qcow2 \
+        -drive if=virtio,file={{DISK}},format=qcow2 \
         -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/config.ign \
         -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
         -serial file:.vm/serial.log \
@@ -94,14 +104,16 @@ vm: build-linux download-image generate-ignition
     scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 2222 \
         bin/knuckle-linux-amd64 core@127.0.0.1:/tmp/knuckle
     @echo "VM ready! Run: just ssh"
+    @echo "Blank 20G disk available as /dev/vdb for install testing"
 
-# Boot Flatcar VM with serial console (interactive, foreground)
-vm-console: build-linux download-image generate-ignition
+# Boot Flatcar VM with serial console (interactive, foreground, blank disk attached)
+vm-console: build-linux download-image generate-ignition create-disk
     {{QEMU}} \
         -m 2048 \
         -smp 2 \
         -enable-kvm \
         -drive if=virtio,file={{QEMU_IMG}},format=qcow2 \
+        -drive if=virtio,file={{DISK}},format=qcow2 \
         -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/config.ign \
         -net nic,model=virtio -net user,hostfwd=tcp::2222-:22 \
         -nographic
