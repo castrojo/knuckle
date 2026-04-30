@@ -1,0 +1,20 @@
+[
+  {
+    "name": "docker",
+    "description": "Docker container runtime",
+    "version": "24.0.7",
+    "url": "https://bakery.flatcar.org/sysext/docker-24.0.7.raw"
+  },
+  {
+    "name": "wasmcloud",
+    "description": "wasmCloud runtime for WebAssembly",
+    "version": "0.82.0",
+    "url": "https://bakery.flatcar.org/sysext/wasmcloud-0.82.0.raw"
+  },
+  {
+    "name": "tailscale",
+    "description": "Tailscale mesh VPN",
+    "version": "1.56.1",
+    "url": "https://bakery.flatcar.org/sysext/tailscale-1.56.1.raw"
+  }
+]

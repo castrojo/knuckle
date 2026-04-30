@@ -1,0 +1,29 @@
+[
+  {
+    "ifname": "lo",
+    "address": "00:00:00:00:00:00",
+    "operstate": "UNKNOWN",
+    "link_type": "loopback",
+    "addr_info": [
+      {"family": "inet", "local": "127.0.0.1", "prefixlen": 8},
+      {"family": "inet6", "local": "::1", "prefixlen": 128}
+    ]
+  },
+  {
+    "ifname": "eth0",
+    "address": "52:54:00:12:34:56",
+    "operstate": "UP",
+    "link_type": "ether",
+    "addr_info": [
+      {"family": "inet", "local": "192.168.1.100", "prefixlen": 24},
+      {"family": "inet6", "local": "fe80::5054:ff:fe12:3456", "prefixlen": 64}
+    ]
+  },
+  {
+    "ifname": "wlan0",
+    "address": "aa:bb:cc:dd:ee:ff",
+    "operstate": "DOWN",
+    "link_type": "ether",
+    "addr_info": []
+  }
+]

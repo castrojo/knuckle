@@ -1,0 +1,72 @@
+{
+  "blockdevices": [
+    {
+      "name": "sda",
+      "path": "/dev/sda",
+      "model": "Samsung SSD 870",
+      "serial": "S5PXNG0R312345",
+      "size": "500107862016",
+      "tran": "sata",
+      "rm": false,
+      "type": "disk",
+      "fstype": null,
+      "label": null,
+      "mountpoint": null,
+      "children": [
+        {
+          "name": "sda1",
+          "path": "/dev/sda1",
+          "model": null,
+          "serial": null,
+          "size": "536870912",
+          "tran": null,
+          "rm": false,
+          "type": "part",
+          "fstype": "vfat",
+          "label": "EFI",
+          "mountpoint": "/boot/efi"
+        },
+        {
+          "name": "sda2",
+          "path": "/dev/sda2",
+          "model": null,
+          "serial": null,
+          "size": "499570991104",
+          "tran": null,
+          "rm": false,
+          "type": "part",
+          "fstype": "ext4",
+          "label": "ROOT",
+          "mountpoint": "/"
+        }
+      ]
+    },
+    {
+      "name": "nvme0n1",
+      "path": "/dev/nvme0n1",
+      "model": "WD Black SN850X",
+      "serial": "WD1234567890",
+      "size": "1000204886016",
+      "tran": "nvme",
+      "rm": false,
+      "type": "disk",
+      "fstype": null,
+      "label": null,
+      "mountpoint": null,
+      "children": []
+    },
+    {
+      "name": "sr0",
+      "path": "/dev/sr0",
+      "model": "Virtual CDROM",
+      "serial": null,
+      "size": "1073741824",
+      "tran": "usb",
+      "rm": true,
+      "type": "rom",
+      "fstype": null,
+      "label": null,
+      "mountpoint": null
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+variant: flatcar
+version: 1.1.0
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: "flatcar-static"
+    - path: /etc/systemd/network/10-static.network
+      mode: 0644
+      contents:
+        inline: |
+          [Match]
+          Name=eth0
+
+          [Network]
+          Address=192.168.1.100/24
+          Gateway=192.168.1.1
+          DNS=8.8.8.8
+          DNS=8.8.4.4
+passwd:
+  users:
+    - name: "core"
+      ssh_authorized_keys:
+        - "ssh-rsa AAAABtest core@host"

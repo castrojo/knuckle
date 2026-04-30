@@ -1,0 +1,16 @@
+variant: flatcar
+version: 1.1.0
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: "flatcar-node01"
+passwd:
+  users:
+    - name: "admin"
+      groups:
+        - "sudo"
+        - "docker"
+      ssh_authorized_keys:
+        - "ssh-ed25519 AAAAC3test admin@host"
