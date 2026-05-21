@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose a new feature, wizard step, or sysext integration.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for new features (e.g. "add Tailscale step", "support LUKS").
+        For bugs use the bug report template.
+
+        **Contributors using AI agents:** read `AGENTS.md` first. This file is
+        the authoritative agent context for the project — it lists package
+        boundaries, the runner abstraction, safety invariants, and the
+        `just ci` gate every change must pass. The hive workflow expects
+        agents to consult it before writing code.
+
+        Small features that already match an existing pattern (NVIDIA, sysexts,
+        update strategy) are great candidates for the `copilot-ready` label.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem does this solve? Who asks for it?
+      placeholder: "Tailscale is the most common first thing people set up on a new Flatcar node..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed design
+      description: How should this look in the wizard / headless config / Ignition output?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope check
+      description: |
+        knuckle v1 supports single-disk, DHCP/static-IPv4, x86_64+arm64. Does this
+        feature stay inside that scope, or does it expand it?

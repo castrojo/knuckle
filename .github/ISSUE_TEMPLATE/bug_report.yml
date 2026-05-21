@@ -1,0 +1,106 @@
+name: Bug report
+description: Something in knuckle is broken — install fails, TUI freezes, ISO won't boot, etc.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in as much as you can — installer
+        bugs are very environment-specific (firmware, disk model, channel), and
+        we cannot reproduce what we cannot see.
+
+        **For contributors using AI agents (Claude Code, Copilot, Cursor, pi):**
+        `AGENTS.md` at the repo root is the authoritative agent context for
+        this project. Point your agent at it before asking it to triage or
+        fix this issue. The hive workflow expects agents to read
+        `AGENTS.md` → run `just ci` → respect the safety invariants
+        documented there.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing what went wrong.
+      placeholder: "Install fails on a SATA SSD with `flatcar-install` returning exit code 1 — stderr lost."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Smallest sequence that reliably reproduces the bug. Include the headless JSON config if you have one.
+      placeholder: |
+        1. Boot installer ISO on bare metal (Lenovo M75q-1)
+        2. Pick `stable` channel
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "Install completes and the system reboots into Flatcar."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Paste TUI output, `flatcar-install` stderr, and any kernel messages. Use code fences.
+    validations:
+      required: true
+
+  - type: input
+    id: knuckle-version
+    attributes:
+      label: knuckle version
+      description: Output of `knuckle --version`, or the ISO filename.
+      placeholder: "v0.6.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x86_64
+        - arm64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: env
+    attributes:
+      label: Where did you run knuckle?
+      options:
+        - Bare metal
+        - QEMU/KVM
+        - Other VM (Proxmox, VMware, Hyper-V, etc.)
+        - Cloud VM
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware / VM details
+      description: CPU, disk model+size, NIC, firmware mode (UEFI/BIOS). For VMs, the launch command if you have it.
+      placeholder: |
+        Lenovo M75q-1, AMD Ryzen 5 PRO 3400GE
+        500GB Samsung 870 EVO (SATA AHCI)
+        Realtek RTL8111H
+        UEFI
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / config / dmesg
+      description: |
+        Attach any of: installer log (`/var/log/knuckle-install.log` if present),
+        rendered Ignition JSON from the Review screen, `dmesg | tail -200`, or a
+        screen capture of the failure. Redact any tokens or passwords.
+      render: shell

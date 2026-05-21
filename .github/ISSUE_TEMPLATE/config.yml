@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Flatcar Discord
+    url: https://flatcar.org/discord
+    about: General Flatcar questions and chat — not knuckle-specific.
+  - name: Flatcar documentation
+    url: https://www.flatcar.org/docs/
+    about: Upstream Flatcar setup, Ignition, and bare-metal install docs.
