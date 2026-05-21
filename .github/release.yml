@@ -1,0 +1,42 @@
+# GitHub auto-generated release notes config.
+# https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+#
+# Groups merged PRs by label into sections in the release body.
+# Keep this list short and aligned with the labels used on issues.
+
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - dependencies
+    authors:
+      - dependabot
+      - renovate-bot
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking-change
+    - title: Security
+      labels:
+        - security
+    - title: Features
+      labels:
+        - enhancement
+        - feature
+    - title: Bug fixes
+      labels:
+        - bug
+        - fix
+    - title: Refactors
+      labels:
+        - refactor
+    - title: Documentation
+      labels:
+        - documentation
+    - title: CI & infrastructure
+      labels:
+        - ci
+        - infra
+    - title: Other changes
+      labels:
+        - "*"
