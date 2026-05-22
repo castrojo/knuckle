@@ -1,0 +1,60 @@
+language: en
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "internal/runner/**"
+      instructions: |
+        This is the ONLY package allowed to use exec.Command / exec.CommandContext.
+        All external commands must go through the Runner interface. Flag any
+        exec.Command usage outside this package as a critical violation.
+    - path: "internal/tui/**"
+      instructions: |
+        No business logic in view models — TUI renders, wizard transitions.
+        Flag password hashing, key merging, or config mutations here.
+        Bubble Tea owns stdout — never log to stdout from this package.
+    - path: "internal/ignition/**"
+      instructions: |
+        All user-supplied values in the Butane template MUST use yamlEscape.
+        Temp Ignition files must be created with O_EXCL, mode 0600, and
+        cleaned up via defer. Flag any unescaped template interpolation.
+    - path: "internal/install/**"
+      instructions: |
+        Never call flatcar-install or exec directly — all commands must route
+        through the runner.Runner interface. Reboot must be injected via
+        rebootFn, never called directly. Verify DryRunner behaviour is tested.
+    - path: "internal/model/**"
+      instructions: |
+        Pure data types only — zero imports of other internal packages.
+        This is the leaf package everything depends on. Flag any import
+        of internal/* here.
+    - path: "internal/validate/**"
+      instructions: |
+        Validators must cover both valid and invalid inputs in table-driven
+        tests. New exported functions without corresponding TestXxx fail the
+        coverage gate. Regex patterns must be anchored (^ and $).
+    - path: "internal/headless/**"
+      instructions: |
+        Security-sensitive: headless is the CI/automation path. Validate()
+        must check all user-supplied fields before they reach Ignition.
+        GitHub-fetched SSH keys must be validated before use (validate.SSHPublicKey).
+        Password fields expect pre-hashed values — reject plaintext.
+    - path: ".github/workflows/**"
+      instructions: |
+        Security-sensitive. Verify actions are pinned by SHA (Renovate
+        manages this). Check for secret exposure in run: blocks. Release
+        workflow must include cosign signing, SBOM, and SLSA provenance.
+        persist-credentials: false required on all checkout steps in
+        elevated-permission jobs.
+    - path: "scripts/build-iso.sh"
+      instructions: |
+        Must use --efi-boot-part --efi-boot-image for the EFI System
+        Partition (NOT -isohybrid-gpt-basdat). TTYPath in systemd units
+        must be /dev/console. Downloaded artifacts must be SHA512+GPG
+        verified before use.
+  tools:
+    golangci-lint:
+      enabled: true
+chat:
+  auto_reply: true
