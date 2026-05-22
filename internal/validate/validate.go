@@ -2,6 +2,7 @@
 package validate
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
 	"regexp"
@@ -87,12 +88,20 @@ func SSHPublicKey(s string) error {
 		"sk-ssh-ed25519@openssh.com",
 		"sk-ecdsa-sha2-nistp256@openssh.com",
 	}
+	validType := false
 	for _, t := range validTypes {
 		if parts[0] == t {
-			return nil
+			validType = true
+			break
 		}
 	}
-	return fmt.Errorf("unsupported SSH key type: %s", parts[0])
+	if !validType {
+		return fmt.Errorf("unsupported SSH key type: %s", parts[0])
+	}
+	if _, err := base64.StdEncoding.DecodeString(parts[1]); err != nil {
+		return fmt.Errorf("invalid SSH key: base64 payload is malformed")
+	}
+	return nil
 }
 
 // Username validates a Linux username.

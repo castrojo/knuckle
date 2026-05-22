@@ -44,7 +44,7 @@ func TestGenerateButane_ZeroUsers_WithSSHKeys(t *testing.T) {
 		Hostname: "keyed-node",
 		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
 		Users:    []model.UserConfig{},
-		SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV test@host"},
+		SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@host"},
 	}
 
 	output, err := g.GenerateButane(cfg)
@@ -55,7 +55,7 @@ func TestGenerateButane_ZeroUsers_WithSSHKeys(t *testing.T) {
 	if !strings.Contains(output, `name: "core"`) {
 		t.Error("expected default 'core' user")
 	}
-	if !strings.Contains(output, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV") {
+	if !strings.Contains(output, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7") {
 		t.Error("expected SSH key on default core user")
 	}
 
@@ -253,11 +253,11 @@ func TestGenerateButane_SSHKeyWithSpecialComment(t *testing.T) {
 		name string
 		key  string
 	}{
-		{"key with email comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV user@host.example.com"},
-		{"key with spaces in comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV John Doe's Key"},
-		{"key with quotes in comment", `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV "quoted comment"`},
-		{"key with backslash", `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV C:\Users\test`},
-		{"key with unicode", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV ñoño@café"},
+		{"key with email comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 user@host.example.com"},
+		{"key with spaces in comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 John Doe's Key"},
+		{"key with quotes in comment", `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 "quoted comment"`},
+		{"key with backslash", `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 C:\Users\test`},
+		{"key with unicode", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 ñoño@café"},
 	}
 
 	for _, tc := range tests {
@@ -287,7 +287,7 @@ func TestGenerateButane_SSHKeyWithSpecialComment(t *testing.T) {
 
 func TestGenerateButane_LongRSAKey(t *testing.T) {
 	// Simulate a 4096-bit RSA key (~550 chars base64 + prefix + comment)
-	longKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDLOoG8r0Mz8P5Z5q5n5oK3m3q5P" +
+	longKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDjTid/Xxpik4yiFwhLdPiIkG28XBLeIqvb0/nAwjyYJU8KU7qy91tGCFf/09D3VTnJbp3jfrOwboxb4iL+BiowC5bhbdJtHkQ89tx/xDw8ljrOx025UWp6EvOrD+rk7Aw4kYnLJ0CA5MvzdgVOal0brgHIpw34hbrP/yPNdv/H8VMsZBT+pXDQP0JcGe0K8HRM54cn/xIrSYnUvEZBb+kpscPXJtUGFNDSFxFp7fPhlViYLxDuNQtRgc7u3mAMuLMbxI6JxkIsvZ14PxxFTQ4Vq+BnJEazHgFn3wz86dHqanwx/sE9bBWsk7fhV2rfWpI1WI4KaTVfgeFaJ404VRkP" +
 		strings.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", 10) +
 		" user@very-long-key-host.example.com"
 
@@ -324,8 +324,8 @@ func TestGenerateButane_LongRSAKey(t *testing.T) {
 func TestGenerateButane_MultipleSSHKeysPerUser(t *testing.T) {
 	g := NewGenerator()
 	keys := []string{
-		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBcV key1@host",
-		"ssh-rsa AAAAB3NzaC1yc2EAAAA" + strings.Repeat("X", 500) + " key2@host",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 key1@host",
+		"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDjTid/Xxpik4yiFwhLdPiIkG28XBLeIqvb0/nAwjyYJU8KU7qy91tGCFf/09D3VTnJbp3jfrOwboxb4iL+BiowC5bhbdJtHkQ89tx/xDw8ljrOx025UWp6EvOrD+rk7Aw4kYnLJ0CA5MvzdgVOal0brgHIpw34hbrP/yPNdv/H8VMsZBT+pXDQP0JcGe0K8HRM54cn/xIrSYnUvEZBb+kpscPXJtUGFNDSFxFp7fPhlViYLxDuNQtRgc7u3mAMuLMbxI6JxkIsvZ14PxxFTQ4Vq+BnJEazHgFn3wz86dHqanwx/sE9bBWsk7fhV2rfWpI1WI4KaTVfgeFaJ404VRkP" + strings.Repeat("X", 500) + " key2@host",
 		"ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAI key3@host",
 	}
 

@@ -456,7 +456,7 @@ func TestToInstallConfig_StaticNetwork(t *testing.T) {
 }
 
 func TestRun_GitHubUser(t *testing.T) {
-	const fakeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGitHubKey github-test-key"
+	const fakeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 github-test-key"
 
 	old := fetchGitHubKeysFunc
 	fetchGitHubKeysFunc = func(_ context.Context, username string) ([]string, error) {

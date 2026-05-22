@@ -114,7 +114,7 @@ func TestNextAndPrevious(t *testing.T) {
 	}
 	// StepUser -> StepSysext: need user
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
 	}
 	if err := w.Next(); err != nil {
 		t.Fatalf("Next from User: %v", err)
@@ -257,7 +257,7 @@ func TestValidateUserValid(t *testing.T) {
 	w.State.Config.Users = []model.UserConfig{
 		{
 			Username: "core",
-			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@host"},
+			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@host"},
 		},
 	}
 
@@ -630,7 +630,7 @@ func TestNextSkipsNvidiaWhenNotSelected(t *testing.T) {
 	w.State.Config.Network.Mode = model.NetworkDHCP
 	w.State.Config.Disk.DevPath = "/dev/sda"
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
 	}
 	w.State.Config.Channel = "stable"
 	// No nvidia-runtime in sysexts
@@ -653,7 +653,7 @@ func TestNextVisitsNvidiaWhenSelected(t *testing.T) {
 	w.State.Config.Network.Mode = model.NetworkDHCP
 	w.State.Config.Disk.DevPath = "/dev/sda"
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
 	}
 	w.State.Config.Channel = "stable"
 	// nvidia-runtime IS selected
@@ -738,7 +738,7 @@ func TestBackAndModify_SSHKeysRebuilt(t *testing.T) {
 	w.State.Config.Network.Mode = model.NetworkDHCP
 	w.State.Config.Disk.DevPath = "/dev/sda"
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI original"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 original"}},
 	}
 	w.State.CurrentStep = model.StepReview
 
@@ -749,7 +749,7 @@ func TestBackAndModify_SSHKeysRebuilt(t *testing.T) {
 	}
 
 	// Modify SSH keys (simulates user editing)
-	w.State.Config.Users[0].SSHKeys = []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI newkey"}
+	w.State.Config.Users[0].SSHKeys = []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 newkey"}
 
 	// Advance back to Review
 	if err := w.Next(); err != nil {
@@ -769,7 +769,7 @@ func TestBackAndModify_SSHKeysRebuilt(t *testing.T) {
 	}
 
 	// Verify the config reflects the NEW key
-	if w.State.Config.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI newkey" {
+	if w.State.Config.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 newkey" {
 		t.Errorf("SSH key not updated after back-navigation, got: %v", w.State.Config.Users[0].SSHKeys)
 	}
 
@@ -812,7 +812,7 @@ func TestFullHappyPath_WelcomeToDone(t *testing.T) {
 
 	// StepUser — add a user with SSH key
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test@laptop"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@laptop"}},
 	}
 	w.State.Config.Hostname = "flatcar-node-01"
 	if err := w.Next(); err != nil {
@@ -958,8 +958,8 @@ func TestValidateUser_SecondUserInvalidUsername(t *testing.T) {
 	w, _, _, _ := newTestWizard()
 	w.State.CurrentStep = model.StepUser
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
-		{Username: "root", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test2"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
+		{Username: "root", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test2"}},
 	}
 
 	// "root" may or may not be valid depending on validate.Username — test the boundary
@@ -1029,7 +1029,7 @@ func TestFullHappyPath_WithNvidia(t *testing.T) {
 	w.State.Config.Network.Mode = model.NetworkDHCP
 	w.State.Config.Disk.DevPath = "/dev/sda"
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
 	}
 	w.State.Config.NvidiaDriverVersion = "570-open"
 	w.State.Sysexts = []model.SysextEntry{
@@ -1167,7 +1167,7 @@ func TestValidateUser_RejectsRoot(t *testing.T) {
 	w, _, _, _ := newTestWizard()
 	w.State.CurrentStep = model.StepUser
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "root", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"}},
+		{Username: "root", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
 	}
 
 	// validate.Username may or may not reject "root" — test what actually happens
@@ -1253,8 +1253,8 @@ func TestRouteA_DHCP_GitHubKeys_NoSysext(t *testing.T) {
 		{
 			Username: "core",
 			SSHKeys: []string{
-				"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGithubKey1 user@laptop",
-				"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGithubKey2 user@desktop",
+				"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 user@laptop",
+				"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 user@desktop",
 			},
 		},
 	}
@@ -1622,7 +1622,7 @@ func TestRouteD_NvidiaRuntime_DriverSetup(t *testing.T) {
 	// ── User ──────────────────────────────────────────────────────────────
 	w.State.Config.Hostname = "gpu-node-01"
 	w.State.Config.Users = []model.UserConfig{
-		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGpuKey user@workstation"}},
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 user@workstation"}},
 	}
 	st.record(w, t, "User→Sysext")
 
@@ -1731,7 +1731,7 @@ func TestRouteE_ReviewBackToUser_FixAndReadvance(t *testing.T) {
 	w.State.Config.Users = []model.UserConfig{
 		{
 			Username: "core",
-			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOriginalKey original@host"},
+			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 original@host"},
 		},
 	}
 
@@ -1762,11 +1762,11 @@ func TestRouteE_ReviewBackToUser_FixAndReadvance(t *testing.T) {
 	w.State.Config.Users = []model.UserConfig{
 		{
 			Username: "core",
-			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixedKey fixed@workstation"},
+			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 fixed@workstation"},
 		},
 		{
 			Username: "admin",
-			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAdminKey admin@ci"},
+			SSHKeys:  []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 admin@ci"},
 		},
 	}
 	// Validate User step with new config
@@ -1803,7 +1803,7 @@ func TestRouteE_ReviewBackToUser_FixAndReadvance(t *testing.T) {
 	if len(w.State.Config.Users) != 2 {
 		t.Fatalf("expected 2 users after edit, got %d", len(w.State.Config.Users))
 	}
-	if w.State.Config.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixedKey fixed@workstation" {
+	if w.State.Config.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 fixed@workstation" {
 		t.Errorf("SSH key not updated: got %q", w.State.Config.Users[0].SSHKeys[0])
 	}
 	if w.State.Config.Users[1].Username != "admin" {
@@ -1846,7 +1846,7 @@ func TestRouteE_ReviewBackToUser_FixAndReadvance(t *testing.T) {
 	if len(cfg.Users) != 2 {
 		t.Fatalf("final config: expected 2 users, got %d", len(cfg.Users))
 	}
-	if cfg.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFixedKey fixed@workstation" {
+	if cfg.Users[0].SSHKeys[0] != "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 fixed@workstation" {
 		t.Errorf("final config: wrong SSH key for core: %q", cfg.Users[0].SSHKeys[0])
 	}
 	if cfg.Users[1].Username != "admin" {
@@ -1857,10 +1857,10 @@ func TestRouteE_ReviewBackToUser_FixAndReadvance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateButane after Route E: %v", err)
 	}
-	if strings.Contains(butane, "OriginalKey") {
+	if strings.Contains(butane, "original@host") {
 		t.Error("Butane still contains original SSH key — config mutation not propagated")
 	}
-	if !strings.Contains(butane, "FixedKey") {
+	if !strings.Contains(butane, "fixed@workstation") {
 		t.Error("Butane does not contain the fixed SSH key")
 	}
 }

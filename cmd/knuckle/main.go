@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/headless"
@@ -168,8 +169,9 @@ func runHeadless(configPath string, dryRun bool, logFile string) {
 
 	installer := install.NewFlatcarInstaller(cmdRunner, logger)
 
-	// Run headless install
-	ctx := context.Background()
+	// Run headless install with a 30-minute wall-clock timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
 	if err := headless.Run(ctx, cfg, installer, logger); err != nil {
 		fmt.Fprintf(os.Stderr, "\n❌ %v\n", err)
 		os.Exit(1)
@@ -177,7 +179,7 @@ func runHeadless(configPath string, dryRun bool, logFile string) {
 
 	// Handle reboot through runner (keeps DryRunner/SpyRunner semantics)
 	if cfg.Reboot && !cfg.DryRun {
-		if _, err := cmdRunner.Run(ctx, "systemctl", "reboot"); err != nil {
+		if _, err := cmdRunner.Run(context.Background(), "systemctl", "reboot"); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: reboot failed: %v\n", err)
 			os.Exit(1)
 		}

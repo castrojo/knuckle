@@ -160,8 +160,8 @@ func TestFetchKeysWithKeys_Advances(t *testing.T) {
 	m.sshKeyInput = ""
 
 	githubKeys := []string{
-		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA github1@user",
-		"ssh-rsa AAAAB3NzaC1yc2EAAAA github2@user",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 github1@user",
+		"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDjTid/Xxpik4yiFwhLdPiIkG28XBLeIqvb0/nAwjyYJU8KU7qy91tGCFf/09D3VTnJbp3jfrOwboxb4iL+BiowC5bhbdJtHkQ89tx/xDw8ljrOx025UWp6EvOrD+rk7Aw4kYnLJ0CA5MvzdgVOal0brgHIpw34hbrP/yPNdv/H8VMsZBT+pXDQP0JcGe0K8HRM54cn/xIrSYnUvEZBb+kpscPXJtUGFNDSFxFp7fPhlViYLxDuNQtRgc7u3mAMuLMbxI6JxkIsvZ14PxxFTQ4Vq+BnJEazHgFn3wz86dHqanwx/sE9bBWsk7fhV2rfWpI1WI4KaTVfgeFaJ404VRkP github2@user",
 	}
 	newModel, _ := m.Update(fetchKeysMsg{keys: githubKeys, err: nil})
 	got := newModel.(*Model)
@@ -260,7 +260,7 @@ func TestEnterUserStep_ManualSSHKeyOnly_Advances(t *testing.T) {
 	m.activeForm = nil
 
 	// Set the manual SSH key field; clear GitHub so no async fetch fires.
-	const manualKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA manualkey@host"
+	const manualKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 manualkey@host"
 	for i := range m.fields {
 		switch m.fields[i].key {
 		case "github_user":
@@ -348,7 +348,7 @@ func TestFetchKeysGitHubPlusLocal_MergesAndAdvances(t *testing.T) {
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
 		t.Fatalf("creating temp .ssh dir: %v", err)
 	}
-	const localKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI localkey@installer"
+	const localKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 localkey@installer"
 	if err := os.WriteFile(filepath.Join(sshDir, "id_ed25519.pub"),
 		[]byte(localKey+"\n"), 0600); err != nil {
 		t.Fatalf("writing temp pubkey: %v", err)
@@ -362,7 +362,7 @@ func TestFetchKeysGitHubPlusLocal_MergesAndAdvances(t *testing.T) {
 	m := New(w)
 	m.sshKeyInput = ""
 
-	githubKeys := []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA githubkey@user"}
+	githubKeys := []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 githubkey@user"}
 	newModel, _ := m.Update(fetchKeysMsg{keys: githubKeys, err: nil})
 	got := newModel.(*Model)
 
@@ -408,7 +408,7 @@ func TestEnterUserStep_WithLocalKeys_Advances(t *testing.T) {
 		t.Fatalf("creating temp .ssh dir: %v", err)
 	}
 	// Key format only needs type + base64-ish blob to pass validate.SSHPublicKey.
-	keyLine := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBXntestlocalkey test@local\n"
+	keyLine := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@local\n"
 	if err := os.WriteFile(filepath.Join(sshDir, "id_ed25519.pub"), []byte(keyLine), 0600); err != nil {
 		t.Fatalf("writing temp pubkey: %v", err)
 	}

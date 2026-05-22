@@ -99,15 +99,16 @@ func TestSSHPublicKey(t *testing.T) {
 		input   string
 		wantErr bool
 	}{
-		{"valid ed25519", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample user@host", false},
-		{"valid rsa", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQExample user@host", false},
+		{"valid ed25519", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 user@host", false},
+		{"valid rsa", "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDjTid/Xxpik4yiFwhLdPiIkG28XBLeIqvb0/nAwjyYJU8KU7qy91tGCFf/09D3VTnJbp3jfrOwboxb4iL+BiowC5bhbdJtHkQ89tx/xDw8ljrOx025UWp6EvOrD+rk7Aw4kYnLJ0CA5MvzdgVOal0brgHIpw34hbrP/yPNdv/H8VMsZBT+pXDQP0JcGe0K8HRM54cn/xIrSYnUvEZBb+kpscPXJtUGFNDSFxFp7fPhlViYLxDuNQtRgc7u3mAMuLMbxI6JxkIsvZ14PxxFTQ4Vq+BnJEazHgFn3wz86dHqanwx/sE9bBWsk7fhV2rfWpI1WI4KaTVfgeFaJ404VRkP user@host", false},
 		{"valid ecdsa", "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY= comment", false},
-		{"valid no comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample", false},
+		{"valid no comment", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7", false},
 		{"valid sk key", "sk-ssh-ed25519@openssh.com AAAAG3NrLXNzaC1lZDI1NTE5 user", false},
 		{"invalid empty", "", true},
 		{"invalid no data", "ssh-ed25519", true},
-		{"invalid type", "ssh-invalid AAAAC3NzaC1lZDI1NTE5AAAAIExample", true},
+		{"invalid type", "ssh-invalid AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7", true},
 		{"invalid just text", "notakey", true},
+		{"invalid base64 payload", "ssh-ed25519 not!valid@base64 user@host", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

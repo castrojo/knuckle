@@ -53,7 +53,7 @@ func TestGenerateInstallerIgnition(t *testing.T) {
 	})
 
 	t.Run("with SSH key", func(t *testing.T) {
-		key := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAATEST test@example.com"
+		key := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@example.com"
 		data, err := GenerateInstallerIgnition(key)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

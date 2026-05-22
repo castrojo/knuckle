@@ -145,6 +145,8 @@ func FetchAllChannelsArch(ctx context.Context, arch string) ([]ChannelInfo, erro
 }
 
 // fetchAllChannelsWithURLFn is a helper for parallel channel fetching with custom URLs.
+// Channels that fail are skipped and a combined error is returned alongside the
+// partial results so callers can choose to proceed with what succeeded.
 func fetchAllChannelsWithURLFn(ctx context.Context, urlFn func(string) (string, string), channels ...string) ([]ChannelInfo, error) {
 	if len(channels) == 0 {
 		channels = []string{"stable", "beta", "alpha", "lts"}
@@ -160,7 +162,7 @@ func fetchAllChannelsWithURLFn(ctx context.Context, urlFn func(string) (string, 
 			vURL, pURL := urlFn(channel)
 			info, err := fetchChannelInfoFromURLs(ctx, channel, vURL, pURL)
 			if err != nil {
-				errs[idx] = err
+				errs[idx] = fmt.Errorf("%s: %w", channel, err)
 				return
 			}
 			results[idx] = *info
@@ -168,14 +170,25 @@ func fetchAllChannelsWithURLFn(ctx context.Context, urlFn func(string) (string, 
 	}
 	wg.Wait()
 
-	// Return first error encountered
-	for _, err := range errs {
+	// Collect successful results and accumulate per-channel errors.
+	var out []ChannelInfo
+	var firstErr error
+	for i, err := range errs {
 		if err != nil {
-			return nil, err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if results[i].Channel != "" {
+			out = append(out, results[i])
 		}
 	}
+	if firstErr != nil && len(out) == 0 {
+		return nil, firstErr
+	}
 
-	return results, nil
+	return out, firstErr
 }
 
 // httpGet performs a GET request with the shared client and returns the body as a string.
