@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/knuckle/internal/ignition"
@@ -174,6 +175,133 @@ func TestInstallFlatcarInstallFailure(t *testing.T) {
 	}
 }
 
+func TestInstallWipesTargetDiskBeforeFlatcarInstall(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:  "stable",
+		Hostname: "wipe-node",
+		Disk: model.DiskInfo{
+			DevPath: "/dev/sda",
+			Path:    "/dev/disk/by-id/ata-test-disk",
+		},
+		Network: model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(spy.Calls) < 3 {
+		t.Fatalf("expected wipefs, flatcar-install, and sfdisk calls, got %v", spy.Calls)
+	}
+	if spy.Calls[0].Name != "wipefs" {
+		t.Fatalf("first command = %q, want wipefs", spy.Calls[0].Name)
+	}
+	if got, want := spy.Calls[0].Args, []string{"--all", "--force", "/dev/disk/by-id/ata-test-disk"}; strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("wipefs args = %v, want %v", got, want)
+	}
+	if spy.Calls[1].Name != "flatcar-install" {
+		t.Fatalf("second command = %q, want flatcar-install", spy.Calls[1].Name)
+	}
+	if spy.Calls[2].Name != "sfdisk" {
+		t.Fatalf("third command = %q, want sfdisk", spy.Calls[2].Name)
+	}
+	if got, want := spy.Calls[2].Args, []string{"--relocate", "gpt-bak-std", "/dev/disk/by-id/ata-test-disk"}; strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("sfdisk args = %v, want %v", got, want)
+	}
+}
+
+func TestInstallWipeFailureStopsBeforeFlatcarInstall(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	spy.StubError("wipefs --all --force /dev/sda", fmt.Errorf("permission denied"))
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:  "stable",
+		Hostname: "wipe-fail-node",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error when wipefs fails")
+	}
+	if !strings.Contains(err.Error(), "wiping target disk") {
+		t.Fatalf("error = %q, want wipefs context", err)
+	}
+	for _, call := range spy.Calls {
+		if call.Name == "flatcar-install" {
+			t.Fatalf("flatcar-install should not run after wipefs failure: %#v", spy.Calls)
+		}
+	}
+}
+
+func TestInstallGPTRepairFailureStopsAfterFlatcarInstall(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	spy.StubError("sfdisk --relocate gpt-bak-std /dev/sda", fmt.Errorf("permission denied"))
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:  "stable",
+		Hostname: "repair-fail-node",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error when GPT repair fails")
+	}
+	if !strings.Contains(err.Error(), "repairing GPT backup header") {
+		t.Fatalf("error = %q, want GPT repair context", err)
+	}
+	if len(spy.Calls) < 3 || spy.Calls[1].Name != "flatcar-install" || spy.Calls[2].Name != "sfdisk" {
+		t.Fatalf("unexpected call order: %#v", spy.Calls)
+	}
+}
+
+type stderrFailRunner struct{}
+
+func (stderrFailRunner) Run(ctx context.Context, name string, args ...string) (*runner.Result, error) {
+	// Only fail flatcar-install with stderr; wipefs and sfdisk succeed so the
+	// test exercises the flatcar-install error path specifically.
+	if name != "flatcar-install" {
+		return &runner.Result{Command: name, Args: args, ExitCode: 0}, nil
+	}
+	return &runner.Result{
+		Command:  name,
+		Args:     args,
+		Stderr:   "partition table write failed: GPT headers are invalid",
+		ExitCode: 1,
+	}, fmt.Errorf("command %q exited with code 1", name)
+}
+
+func (stderrFailRunner) RunWithInput(ctx context.Context, input string, name string, args ...string) (*runner.Result, error) {
+	return nil, fmt.Errorf("unexpected RunWithInput call")
+}
+
+func TestInstallFlatcarInstallFailureIncludesStderr(t *testing.T) {
+	installer := NewFlatcarInstaller(stderrFailRunner{}, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:  "stable",
+		Hostname: "fail-node",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error when flatcar-install fails")
+	}
+	if !strings.Contains(err.Error(), "GPT headers are invalid") {
+		t.Fatalf("error = %q, want stderr from flatcar-install", err)
+	}
+}
+
 func TestBuildInstallArgs(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -277,7 +405,9 @@ func TestProgressCallback(t *testing.T) {
 		"Generating Butane config...",
 		"Compiling Ignition config...",
 		"Writing Ignition config...",
+		"Wiping target disk signatures...",
 		"Running flatcar-install...",
+		"Repairing GPT backup header...",
 		"Installation complete!",
 	}
 

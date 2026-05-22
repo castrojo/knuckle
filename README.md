@@ -33,10 +33,10 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 - **System extensions** — architecture-aware sysext catalog fetched via TLS from [flatcar/sysext-bakery](https://github.com/flatcar/sysext-bakery) GitHub Releases API (not yet cryptographically verified — see [docs/SECURITY.md](docs/SECURITY.md))
 - **Update strategy** — reboot, off, or etcd-lock options
 - **Review screen** — full Butane YAML preview before install
-- **Install step** — progress bar, wraps `flatcar-install` for disk provisioning
+- **Install step** — progress bar, wipes stale disk signatures, runs `flatcar-install`, then relocates the backup GPT header for larger target disks
 - **Ignition generation** — produces valid Ignition JSON via in-process Butane compilation (Flatcar variant, no CLI dependency)
 - **Headless mode** — `--headless --config <file.json>` for automated installs (CI/CD friendly)
-- **Installer ISO** — UEFI-bootable ISO with systemd-boot (amd64 + arm64)
+- **Installer ISO** — UEFI-bootable ISO with systemd-boot (amd64 + arm64), with `systemd.gpt_auto=0` set in both boot entries to avoid GPT auto-generator hangs when the ISO is written to larger USB media
 - **Config validation** — consistency checks before install
 - **Dry-run mode** — `--dry-run` flag skips all disk writes
 - **Ctrl+C double-press** — confirmation before quitting
@@ -89,7 +89,8 @@ just headless-test  # build + canned JSON config (CI gate, runs on host)
 
 ```bash
 just vm           # real install in QEMU → auto-boots installed system after
-just vm-e2e       # automated: headless install → boot → verify SSH + hostname (3 passes)
+just vm-e2e       # automated: headless install → boot → verify SSH + hostname (4 passes)
+just hardware-repro # installer ISO in a hardware-like VM, captures install failure artifacts
 just boot-iso     # build ISO → boot in QEMU GTK window
 just e2e          # build ISO → boot → interactive install
 just ssh          # SSH into running VM
@@ -97,7 +98,9 @@ just ssh          # SSH into running VM
 
 `just vm` downloads a Flatcar stable QEMU image, boots a VM with two disks (boot + target), SCPs the binary in, and launches knuckle over SSH. After install completes, it kills the installer VM and boots from the installed target disk to verify SSH works.
 
-`just vm-e2e` is fully automated — runs 3 passes (DHCP, static network, docker sysext), verifying hostname, OS version, update strategy, and sysext activation on each.
+`just vm-e2e` is fully automated — runs 4 passes (DHCP, static network, docker sysext, NVIDIA), verifying hostname, OS version, update strategy, and sysext activation on each.
+
+`just hardware-repro` boots the installer ISO with `q35`, UEFI, a SATA target disk, and an `e1000e` NIC so the VM looks more like a generic physical machine than a paravirtualized guest. It then runs the same `internal/install` path via `--headless` and saves the useful artifacts under `.vm/` (`hardware-install-output.log`, `hardware-knuckle.log`, `hardware-journal.log`, `hardware-disk-inventory.log`, `hardware-installer-serial.log`).
 
 ARM64 VM testing: `KNUCKLE_ARCH=arm64 just vm` (requires native arm64 hardware or QEMU TCG).
 

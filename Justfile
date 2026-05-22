@@ -19,6 +19,7 @@ default:
     @echo "Quickstart:"
     @echo "  just vm        — install in a VM, boots into installed system after"
     @echo "  just vm-e2e    — automated: headless install → boot → verify SSH"
+    @echo "  just hardware-repro — boot installer ISO in a hardware-like VM and capture install logs"
     @echo "  just e2e       — full end-to-end: build ISO → boot → install → verify"
     @echo ""
     @echo "Pre-release (requires network):"
@@ -708,7 +709,9 @@ e2e:
         )
     else
         OVMF_CANDIDATES=(
+            /usr/share/OVMF/OVMF_CODE_4M.fd
             /usr/share/OVMF/OVMF_CODE.fd
+            /usr/share/edk2/ovmf/OVMF_CODE_4M.fd
             /usr/share/edk2/ovmf/OVMF_CODE.fd
         )
         for f in /home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
@@ -763,7 +766,9 @@ boot-iso:
         )
     else
         OVMF_CANDIDATES=(
+            /usr/share/OVMF/OVMF_CODE_4M.fd
             /usr/share/OVMF/OVMF_CODE.fd
+            /usr/share/edk2/ovmf/OVMF_CODE_4M.fd
             /usr/share/edk2/ovmf/OVMF_CODE.fd
         )
         for f in /home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
@@ -802,7 +807,9 @@ boot-iso-ssh:
         )
     else
         OVMF_CANDIDATES=(
+            /usr/share/OVMF/OVMF_CODE_4M.fd
             /usr/share/OVMF/OVMF_CODE.fd
+            /usr/share/edk2/ovmf/OVMF_CODE_4M.fd
             /usr/share/edk2/ovmf/OVMF_CODE.fd
         )
         for f in /home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
@@ -827,6 +834,133 @@ boot-iso-ssh:
     done
     echo "VM ready."
     exec ssh -t {{SSH_OPTS}} -p 2222 core@127.0.0.1
+
+# Boot the installer ISO in a hardware-like VM and capture install failure artifacts.
+hardware-repro:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PIDFILE=.vm/qemu.pid
+    cleanup() {
+        if [ -f "$PIDFILE" ]; then
+            sudo -n kill "$(sudo -n cat "$PIDFILE")" 2>/dev/null || true
+            sudo -n rm -f "$PIDFILE" 2>/dev/null || true
+            rm -f "$PIDFILE" 2>/dev/null || true
+        fi
+    }
+    trap cleanup EXIT
+    [ "{{KNUCKLE_ARCH}}" = "amd64" ] || { echo "hardware-repro currently supports amd64 only"; exit 1; }
+    just build
+    ISO="output/knuckle-installer-stable-{{KNUCKLE_ARCH}}.iso"
+    if [ ! -f "$ISO" ]; then
+        just iso
+    else
+        echo "using existing ISO: $ISO"
+    fi
+    just _kill-vm
+    mkdir -p .vm
+    rm -f .vm/hardware-target.qcow2 .vm/hardware-installer-serial.log .vm/hardware-install-output.log \
+        .vm/hardware-knuckle.log .vm/hardware-journal.log .vm/hardware-disk-inventory.log \
+        .vm/hardware-ovmf-vars.fd .vm/hardware-installer.ign .vm/hardware_key .vm/hardware_key.pub
+    qemu-img create -f qcow2 .vm/hardware-target.qcow2 20G >/dev/null
+    ssh-keygen -t ed25519 -f .vm/hardware_key -N "" -C "knuckle-hardware-repro" -q
+    HARDWARE_PUB=$(cat .vm/hardware_key.pub)
+    printf '{"ignition":{"version":"3.4.0"},"passwd":{"users":[{"name":"core","sshAuthorizedKeys":["%s"]}]},"systemd":{"units":[{"name":"sshd.service","enabled":true}]}}\n' \
+        "$HARDWARE_PUB" > .vm/hardware-installer.ign
+
+    OVMF_CODE=""
+    OVMF_VARS=""
+    for candidate in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE_4M.fd /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+        [ -f "$candidate" ] && OVMF_CODE="$candidate" && break
+    done
+    for candidate in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS_4M.fd /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+        [ -f "$candidate" ] && OVMF_VARS="$candidate" && break
+    done
+    [ -n "$OVMF_CODE" ] || { echo "OVMF firmware code image not found — install ovmf"; exit 1; }
+    [ -n "$OVMF_VARS" ] || { echo "OVMF firmware vars image not found — install ovmf"; exit 1; }
+    cp "$OVMF_VARS" .vm/hardware-ovmf-vars.fd
+
+    QEMU_CMD=({{QEMU}})
+    QEMU_ACCEL=(-enable-kvm -cpu host)
+    if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+        if sudo -n test -r /dev/kvm && sudo -n test -w /dev/kvm; then
+            echo "using sudo for KVM access"
+            QEMU_CMD=(sudo -n {{QEMU}})
+        else
+        echo "warning: /dev/kvm is not accessible; falling back to TCG emulation"
+        QEMU_ACCEL=(-accel tcg,thread=multi -cpu max)
+        fi
+    fi
+
+    "${QEMU_CMD[@]}" \
+        -machine q35 -m 4096 -smp 2 "${QEMU_ACCEL[@]}" \
+        -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+        -drive if=pflash,format=raw,file=.vm/hardware-ovmf-vars.fd \
+        -device ich9-ahci,id=sata0 \
+        -drive if=none,id=installeriso,file="$ISO",format=raw,readonly=on \
+        -device ide-cd,drive=installeriso,bus=sata0.0 \
+        -drive if=none,id=target,file=.vm/hardware-target.qcow2,format=qcow2 \
+        -device ide-hd,drive=target,bus=sata0.1,serial=target-disk \
+        -fw_cfg name=opt/org.flatcar-linux/config,file=.vm/hardware-installer.ign \
+        -netdev user,id=n0,hostfwd=tcp::2222-:22 \
+        -device e1000e,netdev=n0 \
+        -display none -daemonize -pidfile "$PIDFILE" \
+        -serial file:.vm/hardware-installer-serial.log
+
+    HARDWARE_SSH="ssh {{SSH_OPTS}} -o BatchMode=yes -i .vm/hardware_key -p 2222 core@127.0.0.1"
+    HARDWARE_SCP="scp {{SSH_OPTS}} -o BatchMode=yes -i .vm/hardware_key -P 2222"
+
+    ok=0
+    for i in $(seq 1 120); do
+        $HARDWARE_SSH -o ConnectTimeout=3 true 2>/dev/null && ok=1 && break
+        sleep 5
+    done
+    if [ "$ok" != "1" ]; then
+        echo "❌ installer ISO never came up (serial log below)"
+        tail -40 .vm/hardware-installer-serial.log 2>/dev/null || true
+        exit 1
+    fi
+    echo "✓ installer ISO ready over SSH"
+
+    TARGET_DEV=$($HARDWARE_SSH "lsblk -dnpo PATH,TYPE | awk '\$2 == \"disk\" { print \$1; exit }'")
+    [ -n "$TARGET_DEV" ] || { echo "❌ failed to detect target disk"; exit 1; }
+    TARGET_BY_ID=$($HARDWARE_SSH "for p in /dev/disk/by-id/*; do [ -e \"\$p\" ] || continue; [ \"\$(readlink -f \"\$p\")\" = \"$TARGET_DEV\" ] && case \"\$p\" in *-part*) ;; *) echo \"\$p\"; break ;; esac; done")
+    [ -n "$TARGET_BY_ID" ] || TARGET_BY_ID="$TARGET_DEV"
+
+    echo "target disk: $TARGET_BY_ID"
+    $HARDWARE_SSH "printf '=== lsblk ===\n'; lsblk -o NAME,PATH,TYPE,SIZE,MODEL,SERIAL,TRAN,RM,MOUNTPOINT; printf '\n=== /dev/disk/by-id ===\n'; ls -l /dev/disk/by-id" \
+        | tee .vm/hardware-disk-inventory.log
+
+    printf '{"channel":"stable","hostname":"hardware-repro","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"%s","update_strategy":"off","reboot":false}\n' \
+        "$HARDWARE_PUB" "$TARGET_BY_ID" > .vm/hardware-repro.json
+    $HARDWARE_SCP .vm/hardware-repro.json core@127.0.0.1:/tmp/hardware-repro.json >/dev/null
+
+    set +e
+    $HARDWARE_SSH "timeout 15m sudo /usr/bin/knuckle --headless --config /tmp/hardware-repro.json --log-file /tmp/knuckle.log" 2>&1 \
+        | tee .vm/hardware-install-output.log
+    rc=${PIPESTATUS[0]}
+    set -e
+
+    $HARDWARE_SSH "sudo cat /tmp/knuckle.log" 2>/dev/null | tee .vm/hardware-knuckle.log >/dev/null || true
+    $HARDWARE_SSH "sudo journalctl -b --no-pager -u sshd.service -u systemd-networkd.service -u systemd-udevd.service" 2>/dev/null \
+        | tee .vm/hardware-journal.log >/dev/null || true
+
+    echo ""
+    echo "artifacts:"
+    echo "  .vm/hardware-install-output.log"
+    echo "  .vm/hardware-knuckle.log"
+    echo "  .vm/hardware-journal.log"
+    echo "  .vm/hardware-disk-inventory.log"
+    echo "  .vm/hardware-installer-serial.log"
+
+    if [ "$rc" -ne 0 ]; then
+        echo ""
+        echo "❌ hardware-like install repro failed"
+        echo "   see .vm/hardware-install-output.log and .vm/hardware-knuckle.log"
+        exit "$rc"
+    fi
+
+    echo ""
+    echo "✅ hardware-like install completed"
 
 # Stop running VM
 stop:

@@ -22,6 +22,7 @@ This document covers each.
 | ----------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Target disk contents          | Wrong-disk wipe                                     | `/dev/disk/by-id` paths; boot disk auto-filtered in `internal/probe`              |
 | Target disk contents          | TOCTOU between probe and `flatcar-install`          | `flatcar-install` re-probes; knuckle does not pre-format                         |
+| Target disk contents          | Stale signatures / misplaced GPT backup header      | `wipefs --all --force` runs before install; `sfdisk --relocate gpt-bak-std` runs after imaging |
 | Ignition file (SSH keys, pw)  | World-readable temp file                            | `os.CreateTemp` (O_EXCL) + `chmod 0600` + deferred unlink                        |
 | Sysext download               | Tampered binary in transit                          | TLS via Go stdlib; SHA512 verified for Flatcar SBOM (display-only today)         |
 | Sysext catalog                | Malicious release injected into `flatcar/sysext-bakery` | GitHub Releases API only; *no* signature verification — see Known Gaps          |

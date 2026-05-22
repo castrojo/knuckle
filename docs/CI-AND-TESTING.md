@@ -147,6 +147,28 @@ The static pass uses QEMU's slirp NAT subnet so SSH port-forwarding still works
 even with a static IP configured inside the VM. Interface name is currently
 hardcoded to `ens3` — may need `eth0` on some Flatcar versions (open issue).
 
+## Hardware-like Repro
+
+`just hardware-repro` is the closest local reproduction path for "boot the
+installer ISO, then fail inside `flatcar-install`" without needing bare metal.
+It boots the built installer ISO with:
+
+- `q35` machine type
+- UEFI (`OVMF_CODE.fd` + writable `OVMF_VARS.fd`)
+- SATA target disk (`ide-hd`, serial `target-disk`)
+- `e1000e` NIC
+- QEMU `fw_cfg` Ignition so SSH is available in the live installer
+
+The recipe runs `knuckle --headless` inside that live ISO environment so it
+exercises the same `internal/install` handoff as the TUI, while making failure
+capture deterministic. On every run it writes:
+
+- `.vm/hardware-install-output.log` — CLI output from the headless install run
+- `.vm/hardware-knuckle.log` — `/tmp/knuckle.log` from the live installer
+- `.vm/hardware-journal.log` — selected system journal from the live boot
+- `.vm/hardware-disk-inventory.log` — `lsblk` plus `/dev/disk/by-id` inventory
+- `.vm/hardware-installer-serial.log` — VM serial console output
+
 ## Roadmap
 
 Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from

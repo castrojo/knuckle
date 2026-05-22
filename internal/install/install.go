@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -37,7 +38,9 @@ func NewFlatcarInstaller(r runner.Runner, logger *slog.Logger) *FlatcarInstaller
 // Install performs the Flatcar installation:
 // 1. Generate Butane YAML (or use external IgnitionURL)
 // 2. Compile Butane → Ignition JSON via coreos/butane Go library
-// 3. Run flatcar-install with the target disk, channel, and ignition config
+// 3. Wipe stale filesystem/partition signatures from the target disk
+// 4. Run flatcar-install with the target disk, channel, and ignition config
+// 5. Relocate the backup GPT header to the end of the target disk
 func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig, progress func(step string)) error {
 	if cfg == nil {
 		return fmt.Errorf("install config cannot be nil")
@@ -73,6 +76,14 @@ func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig
 		defer i.cleanupIgnitionFile()
 	}
 
+	diskPath := installDiskPath(cfg)
+	progress("Wiping target disk signatures...")
+	i.Logger.Info("wiping target disk signatures", "disk", diskPath)
+	wipeResult, err := i.Runner.Run(ctx, "wipefs", "--all", "--force", diskPath)
+	if err != nil || (wipeResult != nil && wipeResult.ExitCode != 0) {
+		return formatCommandError("wiping target disk", wipeResult, err)
+	}
+
 	// Build flatcar-install command args
 	args := buildInstallArgs(cfg, i.ignitionPath)
 
@@ -81,23 +92,48 @@ func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig
 	i.Logger.Info("executing flatcar-install", "args", args)
 
 	result, err := i.Runner.Run(ctx, "flatcar-install", args...)
-	if err != nil {
-		return fmt.Errorf("flatcar-install: %w", err)
+	if err != nil || (result != nil && result.ExitCode != 0) {
+		return formatFlatcarInstallError(result, err)
 	}
-	if result.ExitCode != 0 {
-		return fmt.Errorf("flatcar-install failed (exit %d): %s", result.ExitCode, result.Stderr)
+
+	progress("Repairing GPT backup header...")
+	i.Logger.Info("relocating backup gpt header", "disk", diskPath)
+	// sfdisk --relocate gpt-bak-std requires util-linux >= 2.29.1 (2017).
+	// Flatcar Container Linux ships util-linux 2.41+ — verified on Flatcar 4593.2.1.
+	repairResult, err := i.Runner.Run(ctx, "sfdisk", "--relocate", "gpt-bak-std", diskPath)
+	if err != nil || (repairResult != nil && repairResult.ExitCode != 0) {
+		return formatCommandError("repairing GPT backup header", repairResult, err)
 	}
 
 	progress("Installation complete!")
 	return nil
 }
 
-func buildInstallArgs(cfg *model.InstallConfig, ignitionPath string) []string {
-	// Prefer /dev/disk/by-id path for stable identification
-	diskPath := cfg.Disk.Path
-	if diskPath == "" {
-		diskPath = cfg.Disk.DevPath
+func formatCommandError(action string, result *runner.Result, err error) error {
+	if result != nil {
+		stderr := strings.TrimSpace(result.Stderr)
+		if stderr != "" {
+			return fmt.Errorf("%s (exit %d): %s", action, result.ExitCode, stderr)
+		}
+		if result.ExitCode != 0 {
+			if err != nil {
+				return fmt.Errorf("%s (exit %d): %w", action, result.ExitCode, err)
+			}
+			return fmt.Errorf("%s (exit %d)", action, result.ExitCode)
+		}
 	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", action, err)
+	}
+	return fmt.Errorf("%s failed", action)
+}
+
+func formatFlatcarInstallError(result *runner.Result, err error) error {
+	return formatCommandError("flatcar-install failed", result, err)
+}
+
+func buildInstallArgs(cfg *model.InstallConfig, ignitionPath string) []string {
+	diskPath := installDiskPath(cfg)
 	args := []string{
 		"-d", diskPath,
 		"-C", cfg.Channel,
@@ -118,6 +154,14 @@ func buildInstallArgs(cfg *model.InstallConfig, ignitionPath string) []string {
 	}
 
 	return args
+}
+
+func installDiskPath(cfg *model.InstallConfig) string {
+	// Prefer /dev/disk/by-id path for stable identification
+	if cfg.Disk.Path != "" {
+		return cfg.Disk.Path
+	}
+	return cfg.Disk.DevPath
 }
 
 // WriteIgnitionFile writes the Ignition JSON to a secure temp file.
