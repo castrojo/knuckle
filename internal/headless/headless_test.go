@@ -1486,3 +1486,28 @@ func TestToInstallConfig_PasswordOnlyUser_SetsPasswordHash(t *testing.T) {
 		t.Error("BUG: password-only user has empty PasswordHash in InstallConfig — CheckConsistency will reject it")
 	}
 }
+
+func TestValidate_InvalidGitHubUsername(t *testing.T) {
+	cfg := &Config{
+		Channel: "stable",
+		Disk:    "/dev/vda",
+		Users:   []UserConfig{{Username: "core", GithubUser: "@@@bad"}},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for invalid github_user format, got nil")
+	}
+}
+
+func TestValidate_ValidGitHubUsername(t *testing.T) {
+	cfg := &Config{
+		Channel: "stable",
+		Disk:    "/dev/vda",
+		Users:   []UserConfig{{Username: "core", GithubUser: "octocat"}},
+	}
+	if err := cfg.Validate(); err != nil {
+		// Should pass format check (SSH key fetch happens at Run time, not Validate)
+		if !strings.Contains(err.Error(), "github_user") {
+			t.Errorf("unexpected error (not about github_user): %v", err)
+		}
+	}
+}

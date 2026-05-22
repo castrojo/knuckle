@@ -349,10 +349,12 @@ func SysextName(s string) error {
 }
 
 // TailscaleRoutes validates a comma-separated list of CIDRs for --advertise-routes.
+// At least one non-empty valid CIDR must be present; all-comma inputs like "," are rejected.
 func TailscaleRoutes(s string) error {
 	if strings.TrimSpace(s) == "" {
 		return fmt.Errorf("at least one route is required for subnet router mode")
 	}
+	found := 0
 	for _, raw := range strings.Split(s, ",") {
 		r := strings.TrimSpace(raw)
 		if r == "" {
@@ -361,6 +363,10 @@ func TailscaleRoutes(s string) error {
 		if err := CIDR(r); err != nil {
 			return fmt.Errorf("route %q: %w", r, err)
 		}
+		found++
+	}
+	if found == 0 {
+		return fmt.Errorf("at least one route is required for subnet router mode")
 	}
 	return nil
 }

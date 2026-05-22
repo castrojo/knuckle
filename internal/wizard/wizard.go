@@ -382,11 +382,13 @@ func (w *Wizard) FetchSysexts(ctx context.Context) error {
 // FetchChannels loads version info for all release channels
 func (w *Wizard) FetchChannels(ctx context.Context) error {
 	channels, err := bakery.FetchAllChannels(ctx)
-	if err != nil {
-		return err
+	if len(channels) > 0 {
+		// Use whatever channels succeeded; partial failures (e.g. one channel
+		// temporarily unreachable) are not fatal — surface only a total outage.
+		w.State.Channels = channels
+		return nil
 	}
-	w.State.Channels = channels
-	return nil
+	return err
 }
 
 // Execute runs the installation

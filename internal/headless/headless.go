@@ -307,6 +307,11 @@ func (c *Config) Validate() error {
 			if len(u.SSHKeys) == 0 && u.Password == "" && u.GithubUser == "" {
 				return fmt.Errorf("users[%d] (%s): must have ssh_keys, password, or github_user", i, u.Username)
 			}
+			if u.GithubUser != "" {
+				if err := validate.GitHubUsername(u.GithubUser); err != nil {
+					return fmt.Errorf("users[%d] (%s): github_user: %w", i, u.Username, err)
+				}
+			}
 			if u.Password != "" {
 				if err := validate.PasswordHash(u.Password); err != nil {
 					return fmt.Errorf("users[%d] (%s): %w", i, u.Username, err)

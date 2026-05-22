@@ -665,3 +665,12 @@ func TestTailscaleRoutes(t *testing.T) {
 		t.Error("expected error for invalid CIDR")
 	}
 }
+
+func TestTailscaleRoutes_AllCommas(t *testing.T) {
+	// Inputs that consist only of commas/spaces must be rejected.
+	for _, bad := range []string{",", " , ", ",,", " "} {
+		if err := TailscaleRoutes(bad); err == nil {
+			t.Errorf("TailscaleRoutes(%q) should fail: no valid CIDRs present", bad)
+		}
+	}
+}
