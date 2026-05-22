@@ -101,6 +101,12 @@ func TestViewDone_Basic(t *testing.T) {
 			t.Errorf("viewDone should contain %q, got:\n%s", want, view)
 		}
 	}
+	if strings.Contains(view, "dry-run") {
+		t.Errorf("non-dry-run viewDone must not contain 'dry-run', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Press r twice to reboot") {
+		t.Errorf("non-dry-run viewDone should show reboot prompt, got:\n%s", view)
+	}
 }
 
 func TestViewDone_DryRun(t *testing.T) {
@@ -307,6 +313,9 @@ func TestWaitForProgress_PanicMessage(t *testing.T) {
 	if done.err == nil {
 		t.Fatal("panic message should have non-nil error")
 	}
+	if strings.HasPrefix(done.err.Error(), "PANIC:") {
+		t.Errorf("PANIC prefix should be stripped from user-facing error, got: %v", done.err)
+	}
 }
 
 // ── sysextItem.FilterValue ────────────────────────────────────────────────────
@@ -336,5 +345,36 @@ func TestHashPassword_TooLong(t *testing.T) {
 	_, err := hashPassword(long)
 	if err == nil {
 		t.Error("expected error for password > 72 bytes")
+	}
+}
+
+func TestHashPassword_AtLimit(t *testing.T) {
+	exactly72 := strings.Repeat("a", 72)
+	hash, err := hashPassword(exactly72)
+	if err != nil {
+		t.Errorf("password of exactly 72 bytes should succeed, got: %v", err)
+	}
+	if hash == "" {
+		t.Error("hash should not be empty at 72-byte limit")
+	}
+}
+
+// ── viewInstall (active install path) ────────────────────────────────────────
+
+func TestViewInstall_ActivelyInstalling(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepInstall
+	w.State.ProgressMessages = []string{"Partitioning disk..."}
+	m := New(w)
+	m.installing = true
+	view := m.viewInstall()
+	if !strings.Contains(view, "Partitioning disk") {
+		t.Errorf("active install view should show prior phases, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Working...") {
+		t.Errorf("active install view should show spinner text, got:\n%s", view)
+	}
+	if strings.Contains(view, "Press Enter") {
+		t.Errorf("active install view must not show Enter prompt, got:\n%s", view)
 	}
 }

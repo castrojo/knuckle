@@ -600,7 +600,7 @@ func (m *Model) waitForProgress() tea.Cmd {
 			return installDoneMsg{err: fmt.Errorf("%s", strings.TrimPrefix(msg, "ERROR:"))}
 		}
 		if strings.HasPrefix(msg, "PANIC:") {
-			return installDoneMsg{err: fmt.Errorf("%s", msg)}
+			return installDoneMsg{err: fmt.Errorf("%s", strings.TrimPrefix(msg, "PANIC: "))}
 		}
 		return installProgressMsg(msg)
 	}
