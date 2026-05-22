@@ -18,25 +18,25 @@ changelog:
         - breaking-change
     - title: Security
       labels:
-        - security
+        - kind/security
     - title: Features
       labels:
-        - enhancement
-        - feature
+        - kind/feature
     - title: Bug fixes
       labels:
-        - bug
-        - fix
-    - title: Refactors
+        - kind/bug
+    - title: Refactors & cleanup
       labels:
-        - refactor
+        - kind/cleanup
+    - title: Tests
+      labels:
+        - kind/test
     - title: Documentation
       labels:
         - documentation
     - title: CI & infrastructure
       labels:
-        - ci
-        - infra
+        - domain:ci
     - title: Other changes
       labels:
         - "*"

@@ -1,6 +1,6 @@
 name: Bug report
 description: Something in knuckle is broken — install fails, TUI freezes, ISO won't boot, etc.
-labels: ["bug"]
+labels: ["kind/bug", "needs-triage"]
 body:
   - type: markdown
     attributes:

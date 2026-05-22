@@ -1,6 +1,6 @@
 name: Feature request
 description: Propose a new feature, wizard step, or sysext integration.
-labels: ["enhancement"]
+labels: ["kind/feature", "needs-triage"]
 body:
   - type: markdown
     attributes:
