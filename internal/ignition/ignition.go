@@ -74,6 +74,13 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		rebootStrategy = "reboot"
 	}
 
+	// Enforce HTTPS for sysext download URLs before embedding in Ignition config.
+	for _, s := range filterSelected(cfg.Sysexts) {
+		if !strings.HasPrefix(s.URL, "https://") {
+			return "", fmt.Errorf("sysext %q has non-HTTPS download URL %q", s.Name, s.URL)
+		}
+	}
+
 	hasPassword := false
 	for _, u := range cfg.Users {
 		if u.PasswordHash != "" {

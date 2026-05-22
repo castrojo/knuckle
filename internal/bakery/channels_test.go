@@ -233,16 +233,21 @@ func TestVerifySHA512(t *testing.T) {
 	// Pre-computed SHA512 of "hello world"
 	digest := "# SHA512 HASH\n309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f  test.txt\n"
 
-	if !verifySHA512(content, digest) {
-		t.Error("expected SHA512 verification to pass for known hash")
+	if !verifySHA512(content, digest, "test.txt") {
+		t.Error("expected SHA512 verification to pass for known hash+filename")
 	}
 
-	if verifySHA512("wrong content", digest) {
+	if verifySHA512("wrong content", digest, "test.txt") {
 		t.Error("expected SHA512 verification to fail for wrong content")
 	}
 
-	if verifySHA512(content, "# SHA512 HASH\ndeadbeef  test.txt\n") {
+	if verifySHA512(content, "# SHA512 HASH\ndeadbeef  test.txt\n", "test.txt") {
 		t.Error("expected SHA512 verification to fail for wrong hash")
+	}
+
+	// filename mismatch must fail even if hash matches
+	if verifySHA512(content, digest, "other.txt") {
+		t.Error("expected SHA512 verification to fail for wrong filename")
 	}
 }
 

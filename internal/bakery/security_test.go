@@ -145,18 +145,12 @@ func TestSHA256Injection_CraftedCatalogURL(t *testing.T) {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
 
-	// FINDING: The evil URL is accepted and placed into the entry — no domain
-	// validation or HTTPS enforcement on download URLs from the catalog.
+	// The catalog layer stores the URL as-is; HTTPS enforcement happens in
+	// ignition.GenerateButane() when the URL is embedded into the Ignition config.
 	if entries[0].URL != "http://evil.attacker.example.com/backdoor.raw" {
-		t.Errorf("expected evil URL to pass through, got %q", entries[0].URL)
+		t.Errorf("expected evil URL to pass through catalog fetch, got %q", entries[0].URL)
 	}
-	// NOTE: SHA256 will be empty because the SHA256SUMS URL points to the evil
-	// server which is unreachable from the test. The key finding is that the
-	// download URL itself is accepted without domain validation.
-	// In a real attack where the attacker controls the SHA256SUMS server too,
-	// they'd provide a matching hash — making verification useless.
-	// The entry proceeds regardless (soft fail on SHA256 fetch).
-	_ = entries[0].Sha256 // may be empty (unreachable) or attacker-controlled
+	_ = entries[0].Sha256 // may be empty (unreachable evil server)
 }
 
 // TestSHA256_ValidHashExtracted verifies the happy path: hash is correctly
@@ -232,7 +226,7 @@ func TestSHA256_PrefixedFilename(t *testing.T) {
 // TestVerifySHA512_EmptyDigestFile documents that an empty .DIGESTS file
 // results in verification failure (returns false).
 func TestVerifySHA512_EmptyDigestFile(t *testing.T) {
-	if verifySHA512("any content", "") {
+	if verifySHA512("any content", "", "test.txt") {
 		t.Error("verifySHA512 should return false for empty digest body")
 	}
 }
@@ -242,7 +236,7 @@ func TestVerifySHA512_EmptyDigestFile(t *testing.T) {
 func TestVerifySHA512_MissingHashSection(t *testing.T) {
 	// No "# SHA512 HASH" marker — all lines are ignored
 	digest := "309ecc489c12d6eb4cc40f50c902f2b4d0ed77ee511a7c7a9bcd3ca86d4cd86f989dd35bc5ff499670da34255b45b0cfd830e81f605dcf7dc5542e93ae9cd76f  test.txt\n"
-	if verifySHA512("hello world", digest) {
+	if verifySHA512("hello world", digest, "test.txt") {
 		t.Error("should fail when # SHA512 HASH header is missing")
 	}
 }
@@ -319,9 +313,10 @@ func TestGPGSignature_MissingAscFile(t *testing.T) {
 	}
 }
 
-// TestNoSHA256HashValidation documents that the SHA256 hash format is never
-// validated — any string is accepted as a hash (no length/hex check).
-func TestNoSHA256HashValidation(t *testing.T) {
+// TestSHA256HashValidation verifies that malformed SHA256 hashes are rejected.
+// fetchSHA256ForAsset returns ("", err) for non-hex-64 strings; the entry
+// is still included in the catalog but with an empty Sha256 (soft fail).
+func TestSHA256HashValidation(t *testing.T) {
 	payload := `[{"tag_name":"docker-v24.0.7","body":"Docker","assets":[
 		{"name":"docker-24.0.7-x86-64.raw","browser_download_url":"https://BASEURL/docker-24.0.7-x86-64.raw"},
 		{"name":"SHA256SUMS","browser_download_url":"https://BASEURL/SHA256SUMS"}
@@ -348,10 +343,8 @@ func TestNoSHA256HashValidation(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	// FINDING: Invalid hash format accepted without validation.
-	// Ignition will reject it at install time (butane validation catches it),
-	// but the catalog layer doesn't guard against it.
-	if entries[0].Sha256 != "not-a-valid-hash!!!" {
-		t.Errorf("expected invalid hash to be stored as-is, got %q", entries[0].Sha256)
+	// Invalid hash is rejected; entry is still present but Sha256 is empty (soft fail).
+	if entries[0].Sha256 != "" {
+		t.Errorf("expected empty Sha256 for invalid hash, got %q", entries[0].Sha256)
 	}
 }

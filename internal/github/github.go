@@ -67,11 +67,15 @@ func (c *Client) FetchKeys(ctx context.Context, username string) ([]string, erro
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	const maxKeys = 50
 	var keys []string
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			keys = append(keys, line)
+		}
+		if len(keys) >= maxKeys {
+			break
 		}
 	}
 

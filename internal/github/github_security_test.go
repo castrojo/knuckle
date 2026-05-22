@@ -109,10 +109,10 @@ func TestFetchKeys_MaliciousKeyContent(t *testing.T) {
 			desc:     "Windows-style line endings may leave \\r in keys",
 		},
 		{
-			name:     "many keys (1000)",
+			name:     "many keys (1000) capped at 50",
 			response: strings.Repeat("ssh-ed25519 AAAA user@host\n", 1000),
-			wantKeys: 1000,
-			desc:     "no limit on number of keys returned",
+			wantKeys: 50,
+			desc:     "key count capped at maxKeys (50) to prevent resource exhaustion",
 		},
 	}
 

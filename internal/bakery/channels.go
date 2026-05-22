@@ -91,7 +91,8 @@ func fetchChannelInfoFromURLs(ctx context.Context, channel, versionURL, pkgURL s
 	if sbomUsed && sbomBody != "" {
 		digestURL := sbomURL + ".DIGESTS"
 		if digestBody, err := httpGet(ctx, digestURL); err == nil {
-			info.DigestVerified = verifySHA512(sbomBody, digestBody)
+			sbomFilename := sbomURL[strings.LastIndex(sbomURL, "/")+1:]
+			info.DigestVerified = verifySHA512(sbomBody, digestBody, sbomFilename)
 			// Cryptographic GPG verification against the embedded Flatcar key.
 			ascURL := digestURL + ".asc"
 			if ascBody, err := httpGet(ctx, ascURL); err == nil {
@@ -303,9 +304,10 @@ func extractVersionBeforeColons(line, prefix string) string {
 	return after
 }
 
-// verifySHA512 checks if the SHA512 hash of content matches the digest file.
-// The digest file format is: "<hash>  <filename>\n" per line.
-func verifySHA512(content, digestBody string) bool {
+// verifySHA512 checks if the SHA512 hash of content matches the digest file
+// for the expected filename. Both the hash and the filename field must match
+// to prevent hash-swap attacks within the same DIGESTS file.
+func verifySHA512(content, digestBody, expectedFilename string) bool {
 	hash := sha512.Sum512([]byte(content))
 	computed := hex.EncodeToString(hash[:])
 
@@ -324,7 +326,7 @@ func verifySHA512(content, digestBody string) bool {
 		if inSHA512 && line != "" {
 			// Format: "<hash>  <filename>"
 			parts := strings.Fields(line)
-			if len(parts) >= 1 && parts[0] == computed {
+			if len(parts) >= 2 && parts[0] == computed && parts[1] == expectedFilename {
 				return true
 			}
 		}

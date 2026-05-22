@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/projectbluefin/knuckle/internal/model"
+	"github.com/projectbluefin/knuckle/internal/validate"
 )
+
+var reSHA256 = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 const (
 	// DefaultCatalogURL is the GitHub Releases API for the sysext-bakery repo.
@@ -166,6 +170,9 @@ func (c *HTTPClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 		if downloadURL == "" {
 			continue
 		}
+		if validate.SysextName(name) != nil {
+			continue
+		}
 
 		seen[name] = true
 
@@ -276,7 +283,11 @@ func (c *HTTPClient) fetchSHA256ForAsset(ctx context.Context, sha256sumsURL, raw
 			baseName = baseName[idx+1:]
 		}
 		if baseName == rawFilename {
-			return fields[0], nil
+			hash := fields[0]
+			if !reSHA256.MatchString(hash) {
+				return "", fmt.Errorf("malformed SHA256 hash %q for %s", hash, rawFilename)
+			}
+			return hash, nil
 		}
 	}
 	return "", nil // file found but hash for this asset not listed

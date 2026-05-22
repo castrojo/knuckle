@@ -784,3 +784,19 @@ func TestGenerateButaneSwapDisabled(t *testing.T) {
 		t.Error("swap unit must not appear when Swap.Enabled = false")
 	}
 }
+
+func TestGenerateButane_SysextHTTPURLRejected(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "node01",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA key"}}},
+		Sysexts: []model.SysextEntry{
+			{Name: "docker", URL: "http://evil.example.com/docker.raw", Selected: true},
+		},
+	}
+	_, err := g.GenerateButane(cfg)
+	if err == nil {
+		t.Error("expected error for non-HTTPS sysext URL, got nil")
+	}
+}
