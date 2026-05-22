@@ -136,7 +136,7 @@ headless-test:
     set -euo pipefail
     just build
     cat > /tmp/knuckle-test-config.json <<'EOF'
-    {"channel":"stable","hostname":"test-node","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI test"]}],"disk":"/dev/vdb","update_strategy":"reboot","reboot":false}
+    {"channel":"stable","hostname":"test-node","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"]}],"disk":"/dev/vdb","update_strategy":"reboot","reboot":false}
     EOF
     bin/knuckle --config /tmp/knuckle-test-config.json --headless --dry-run
     echo "✅ PASS"

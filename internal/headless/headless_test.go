@@ -1246,9 +1246,9 @@ func TestRun_MultipleGitHubUsers(t *testing.T) {
 	fetchGitHubKeysFunc = func(_ context.Context, username string) ([]string, error) {
 		switch username {
 		case "alice":
-			return []string{"ssh-ed25519 AAAAalice alice@gh"}, nil
+			return []string{"ssh-ed25519 AAAAYWxpY2U= alice@gh"}, nil
 		case "bob":
-			return []string{"ssh-ed25519 AAAAbob bob@gh"}, nil
+			return []string{"ssh-ed25519 AAAAYm9i bob@gh"}, nil
 		default:
 			return nil, fmt.Errorf("unknown user %q", username)
 		}
@@ -1290,7 +1290,7 @@ func TestRun_SecondGitHubUserFailsFirstSucceeds(t *testing.T) {
 	old := fetchGitHubKeysFunc
 	fetchGitHubKeysFunc = func(_ context.Context, username string) ([]string, error) {
 		if username == "alice" {
-			return []string{"ssh-ed25519 AAAAalice alice@gh"}, nil
+			return []string{"ssh-ed25519 AAAAYWxpY2U= alice@gh"}, nil
 		}
 		return nil, fmt.Errorf("403 rate limited")
 	}
