@@ -576,3 +576,68 @@ func TestFlatcarVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestSysextName(t *testing.T) {
+	tests := []struct {
+		in      string
+		wantErr bool
+	}{
+		{"docker", false},
+		{"nvidia-runtime", false},
+		{"my_ext", false},
+		{"", true},
+		{"bad/name", true},
+		{"bad.name", true},
+		{"bad name", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			err := SysextName(tt.in)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SysextName(%q) error=%v wantErr=%v", tt.in, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGateway(t *testing.T) {
+	if err := Gateway("192.168.1.1"); err != nil {
+		t.Errorf("expected valid gateway, got %v", err)
+	}
+	if err := Gateway("notanip"); err == nil {
+		t.Error("expected error for invalid gateway")
+	}
+}
+
+func TestDNSServer(t *testing.T) {
+	if err := DNSServer("8.8.8.8"); err != nil {
+		t.Errorf("expected valid DNS, got %v", err)
+	}
+	if err := DNSServer("notanip"); err == nil {
+		t.Error("expected error for invalid DNS")
+	}
+}
+
+func TestTailscaleAuthKey(t *testing.T) {
+	if err := TailscaleAuthKey("tskey-auth-abcdef1234-secretsecretsecretsecret12"); err != nil {
+		t.Errorf("expected valid key, got %v", err)
+	}
+	if err := TailscaleAuthKey("plaintext"); err == nil {
+		t.Error("expected error for invalid key")
+	}
+	if err := TailscaleAuthKey(""); err == nil {
+		t.Error("expected error for empty key")
+	}
+}
+
+func TestTailscaleRoutes(t *testing.T) {
+	if err := TailscaleRoutes("10.0.0.0/24,192.168.1.0/24"); err != nil {
+		t.Errorf("expected valid routes, got %v", err)
+	}
+	if err := TailscaleRoutes(""); err == nil {
+		t.Error("expected error for empty routes")
+	}
+	if err := TailscaleRoutes("notacidr"); err == nil {
+		t.Error("expected error for invalid CIDR")
+	}
+}
