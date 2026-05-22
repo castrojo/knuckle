@@ -1,69 +1,89 @@
 #!/usr/bin/env bash
-# Record the knuckle TUI demo.
-# Usage: TERM=xterm-256color asciinema rec -c "./scripts/drive-demo.sh" demo/out.cast
+# Drive the knuckle TUI for demo recording.
+#
+# Uses --demo mode: hardcoded mock hardware + sysexts, no network, no disk writes.
+# Works on any machine — CI, dev laptop, recording rig.
+#
+# Usage:
+#   # Build first if needed:
+#   go build -o bin/knuckle ./cmd/knuckle
+#
+#   # Record with asciinema:
+#   asciinema rec -c "./scripts/drive-demo.sh" demo/out.cast
+#
+#   # Or run VHS (generates GIF directly):
+#   vhs demo/knuckle-demo.tape
 set -u
+
+BINARY=""
+for candidate in "bin/knuckle" "./knuckle"; do
+    if [[ -f "$candidate" ]]; then
+        BINARY="$candidate"
+        break
+    fi
+done
+if [[ -z "$BINARY" ]]; then
+    echo "knuckle binary not found — run 'go build -o bin/knuckle ./cmd/knuckle' first" >&2
+    exit 1
+fi
 
 FIFO=$(mktemp -u)
 mkfifo "$FIFO"
 
-# Launch knuckle reading from the FIFO
-bin/knuckle --dry-run < "$FIFO" &
+# --demo: mock hardware/catalog, implies --dry-run (no real writes)
+"$BINARY" --demo < "$FIFO" &
 KNUCKLE_PID=$!
-
-# Open the fifo for writing (keeps it open so knuckle doesn't get EOF)
 exec 3>"$FIFO"
 
-send() { printf "$1" >&3; }
+send() { printf "%b" "$1" >&3; }
 pause() { sleep "$1"; }
 
-# Wait for TUI to render
-pause 3
+# Demo mode starts instantly (no network fetch delay)
+pause 1.5
 
-# Welcome — browse channels
-send "j"; pause 0.7
-send "j"; pause 0.7
-send "j"; pause 0.7
-send "k"; pause 0.7
-send "k"; pause 0.7
-send "k"; pause 1.2
+# Welcome — browse channel cards with arrow keys
+send "\033[B"; pause 0.6   # ↓ lts
+send "\033[B"; pause 0.6   # ↓ beta
+send "\033[B"; pause 0.6   # ↓ alpha
+send "\033[A"; pause 0.5   # ↑ beta
+send "\033[A"; pause 0.5   # ↑ lts
+send "\033[A"; pause 0.8   # ↑ stable
 
-# Select stable
-send "\r"; pause 2.5
+# Confirm stable, advance to Network
+send "\r"; pause 1.2
 
-# Network form — Enter
-send "\r"; pause 2.5
+# Network — accept DHCP default (two groups)
+send "\r"; pause 0.8
+send "\r"; pause 1.2
 
-# Storage — Enter
-send "\r"; pause 2.5
+# Storage — select first disk
+send "\r"; pause 1.2
 
-# User form — Enter (uses local SSH keys)
-send "\r"; pause 3
+# User form — identity group, then auth group
+send "\r"; pause 0.8
+send "\r"; pause 1.2
 
-# Sysext — select a few
-pause 1
-send "j"; pause 0.4
-send " "; pause 0.6
-send "j"; pause 0.4
-send "j"; pause 0.4
-send " "; pause 0.6
-send "j"; pause 0.4
-send "j"; pause 0.4
-send "j"; pause 0.4
-send " "; pause 1
-send "\r"; pause 2.5
+# Sysext — browse and toggle three extensions
+send "\033[B"; pause 0.4   # ↓ to docker
+send " ";      pause 0.5   # toggle on
+send "\033[B"; pause 0.4   # ↓ containerd
+send "\033[B"; pause 0.4   # ↓ kubernetes
+send " ";      pause 0.5   # toggle on
+send "\033[B"; pause 0.4   # ↓ tailscale
+send " ";      pause 0.6   # toggle on
+send "\r";     pause 1.2   # advance
 
-# Update strategy
-send "\r"; pause 2.5
+# Update strategy — default reboot
+send "\r"; pause 1.2
 
-# Review
-pause 3
+# Review — pause to let the summary render
+pause 2.5
 
-# Quit
+# Quit without confirming install
 send "q"; pause 0.5
-send "q"; pause 1.5
+send "q"; pause 1.0
 
-# Cleanup
 exec 3>&-
 rm -f "$FIFO"
-wait $KNUCKLE_PID 2>/dev/null
+wait "$KNUCKLE_PID" 2>/dev/null
 exit 0
