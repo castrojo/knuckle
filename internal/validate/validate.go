@@ -18,8 +18,8 @@ var (
 	reGroupName      = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 	reInterfaceName  = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 	reGitHubUsername = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$`)
-	reFlatcarVersion   = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-	reSysextName       = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
+	reFlatcarVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	reSysextName     = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 	// Tailscale auth keys: tskey-auth-<id12>-<secret32+>; tskey-client- variant also accepted.
 	// See https://tailscale.com/kb/1085/auth-keys for the format.
 	reTailscaleAuthKey = regexp.MustCompile(`^tskey-(auth|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}$`)
