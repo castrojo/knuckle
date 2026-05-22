@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/demo"
 	"github.com/projectbluefin/knuckle/internal/headless"
 	"github.com/projectbluefin/knuckle/internal/install"
 	"github.com/projectbluefin/knuckle/internal/probe"
@@ -33,6 +34,7 @@ func main() {
 	var (
 		configFile   string
 		headlessMode bool
+		demoMode     bool
 	)
 	flag.BoolVar(&dryRun, "dry-run", false, "simulate installation without writing to disk")
 	flag.StringVar(&logFile, "log-file", "/tmp/knuckle.log", "path to log file")
@@ -40,6 +42,7 @@ func main() {
 	flag.BoolVar(&showVer, "version", false, "print version and exit")
 	flag.StringVar(&configFile, "config", "", "path to JSON config file for headless install")
 	flag.BoolVar(&headlessMode, "headless", false, "run without TUI (requires --config)")
+	flag.BoolVar(&demoMode, "demo", false, "run with mock hardware/catalog data for UI demos and recording (no network, no real disks)")
 	var flatcarVersion string
 	flag.StringVar(&flatcarVersion, "flatcar-version", "", "pin to specific Flatcar version (e.g. 3510.2.8)")
 	flag.Parse()
@@ -79,41 +82,64 @@ func main() {
 
 	logger.Info("knuckle starting", "version", version, "dry-run", dryRun, "channel", channel)
 
-	// Set up runner (dry-run or real)
+	// Set up runner (dry-run or real; demo implies dry-run)
 	var cmdRunner runner.Runner
-	if dryRun {
+	if dryRun || demoMode {
 		cmdRunner = runner.NewDryRunner(logger)
 	} else {
 		cmdRunner = runner.NewRealRunner(logger)
 	}
 
-	// Prober always uses real runner — it only reads system state
-	realRunner := runner.NewRealRunner(logger)
-	prober := probe.NewSystemProber(realRunner)
-	bakeryClient := bakery.NewHTTPClient()
-	installer := install.NewFlatcarInstaller(cmdRunner, logger)
+	// In demo mode use mock implementations that need no hardware or network.
+	// In normal mode use the real system prober, bakery HTTP client, and installer.
+	var (
+		prober       probe.Prober
+		bakeryClient bakery.Client
+		installer    install.Installer
+	)
+	if demoMode {
+		prober = &demo.Prober{}
+		bakeryClient = &demo.Bakery{}
+		installer = &demo.Installer{}
+	} else {
+		realRunner := runner.NewRealRunner(logger)
+		prober = probe.NewSystemProber(realRunner)
+		bakeryClient = bakery.NewHTTPClient()
+		installer = install.NewFlatcarInstaller(cmdRunner, logger)
+	}
 
 	// Create wizard
 	w := wizard.New(prober, bakeryClient, installer)
 	w.State.Config.Channel = channel
-	w.State.Config.DryRun = dryRun
+	w.State.Config.DryRun = dryRun || demoMode
 	w.State.Config.Version = flatcarVersion
 
-	// Probe hardware before starting TUI
 	ctx := context.Background()
-	if err := w.ProbeHardware(ctx); err != nil {
-		logger.Warn("hardware probe failed", "error", err)
-		// Non-fatal — user can still proceed with manual input
-	}
+	if demoMode {
+		// Populate wizard state from mock data instead of probing hardware or
+		// making network calls — keeps startup instant and recording deterministic.
+		if err := w.ProbeHardware(ctx); err != nil {
+			logger.Warn("demo hardware probe failed", "error", err)
+		}
+		if err := w.FetchSysexts(ctx); err != nil {
+			logger.Warn("demo sysext fetch failed", "error", err)
+		}
+		w.State.Channels = demo.Channels()
+	} else {
+		// Probe hardware before starting TUI
+		if err := w.ProbeHardware(ctx); err != nil {
+			logger.Warn("hardware probe failed", "error", err)
+		}
 
-	// Fetch sysext catalog (non-fatal if it fails)
-	if err := w.FetchSysexts(ctx); err != nil {
-		logger.Warn("sysext catalog fetch failed", "error", err)
-	}
+		// Fetch sysext catalog (non-fatal if it fails)
+		if err := w.FetchSysexts(ctx); err != nil {
+			logger.Warn("sysext catalog fetch failed", "error", err)
+		}
 
-	// Fetch channel version info (non-fatal if it fails)
-	if err := w.FetchChannels(ctx); err != nil {
-		logger.Warn("channel info fetch failed", "error", err)
+		// Fetch channel version info (non-fatal if it fails)
+		if err := w.FetchChannels(ctx); err != nil {
+			logger.Warn("channel info fetch failed", "error", err)
+		}
 	}
 
 	// Run the TUI — wire reboot through the runner so dry-run/spy work correctly
