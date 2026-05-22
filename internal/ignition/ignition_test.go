@@ -800,3 +800,109 @@ func TestGenerateButane_SysextHTTPURLRejected(t *testing.T) {
 		t.Error("expected error for non-HTTPS sysext URL, got nil")
 	}
 }
+
+func TestGenerateButaneTailscaleAuthKey(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "ts-node",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abcdefghij0-secret-secret-secret-secret-1",
+			Mode:    model.TailscaleModeConnect,
+		},
+	}
+
+	out, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "/etc/tailscale/tailscale.env") {
+		t.Error("expected /etc/tailscale/tailscale.env in Butane output")
+	}
+	if !strings.Contains(out, "TS_AUTHKEY=tskey-auth-") {
+		t.Error("expected TS_AUTHKEY in tailscale.env contents")
+	}
+	if !strings.Contains(out, "tailscaled.service") {
+		t.Error("expected tailscaled.service enabled")
+	}
+	if !strings.Contains(out, "knuckle-tailscale-up.service") {
+		t.Error("expected knuckle-tailscale-up.service in systemd units")
+	}
+	if strings.Contains(out, "net.ipv4.ip_forward = 1") {
+		t.Error("connect mode should not enable IP forwarding")
+	}
+	// The unit body references $${TS_EXTRA_ARGS} as an env var; the env file
+	// itself should not define TS_EXTRA_ARGS= in connect mode (empty → expands
+	// to an empty string).
+	if strings.Contains(out, "TS_EXTRA_ARGS=") {
+		t.Error("connect mode should not set TS_EXTRA_ARGS= in tailscale.env")
+	}
+}
+
+func TestGenerateButaneTailscaleExitNode(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "ts-exit",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abcdefghij0-secret-secret-secret-secret-1",
+			Mode:    model.TailscaleModeExitNode,
+		},
+	}
+	out, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "--advertise-exit-node") {
+		t.Error("expected --advertise-exit-node in TS_EXTRA_ARGS")
+	}
+	if !strings.Contains(out, "net.ipv4.ip_forward = 1") {
+		t.Error("expected IP forwarding sysctl for exit node")
+	}
+}
+
+func TestGenerateButaneTailscaleSubnetRouter(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname: "ts-subnet",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abcdefghij0-secret-secret-secret-secret-1",
+			Mode:    model.TailscaleModeSubnetRouter,
+			Routes:  "10.0.0.0/24,192.168.1.0/24",
+		},
+	}
+	out, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "--advertise-routes=10.0.0.0/24,192.168.1.0/24") {
+		t.Errorf("expected --advertise-routes in TS_EXTRA_ARGS, got:\n%s", out)
+	}
+	if !strings.Contains(out, "net.ipv4.ip_forward = 1") {
+		t.Error("expected IP forwarding sysctl for subnet router")
+	}
+}
+
+func TestGenerateButaneTailscaleSkippedWhenNoAuthKey(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		Hostname:  "ts-skip",
+		Network:   model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:     []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{}, // no auth key
+	}
+	out, err := g.GenerateButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "tailscale.env") {
+		t.Error("tailscale.env should not appear when AuthKey is empty")
+	}
+	if strings.Contains(out, "tailscaled.service") {
+		t.Error("tailscaled.service should not be force-enabled when AuthKey is empty")
+	}
+}

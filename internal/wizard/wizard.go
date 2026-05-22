@@ -96,6 +96,10 @@ func (w *Wizard) Next() error {
 		if w.State.CurrentStep == model.StepNvidia && !w.isNvidiaSelected() {
 			w.State.CurrentStep++
 		}
+		// StepTailscale is conditional — only visit it when tailscale is selected.
+		if w.State.CurrentStep == model.StepTailscale && !w.isTailscaleSelected() {
+			w.State.CurrentStep++
+		}
 	}
 	return nil
 }
@@ -104,6 +108,10 @@ func (w *Wizard) Next() error {
 func (w *Wizard) Previous() {
 	if w.State.CurrentStep > model.StepWelcome {
 		w.State.CurrentStep--
+		// StepTailscale is conditional — skip back over it when tailscale is not selected.
+		if w.State.CurrentStep == model.StepTailscale && !w.isTailscaleSelected() {
+			w.State.CurrentStep--
+		}
 		// StepNvidia is conditional — skip back over it when nvidia-runtime is not selected.
 		if w.State.CurrentStep == model.StepNvidia && !w.isNvidiaSelected() {
 			w.State.CurrentStep--
@@ -121,11 +129,25 @@ func (w *Wizard) isNvidiaSelected() bool {
 	return false
 }
 
+// isTailscaleSelected returns true when the tailscale sysext is toggled on.
+func (w *Wizard) isTailscaleSelected() bool {
+	for _, s := range w.State.Sysexts {
+		if s.Name == "tailscale" && s.Selected {
+			return true
+		}
+	}
+	return false
+}
+
 // GoToStep jumps to a specific step (for review screen navigation)
 func (w *Wizard) GoToStep(step model.WizardStep) {
 	if step >= model.StepWelcome && step <= model.StepDone {
 		// StepNvidia is conditional — refuse jump when nvidia-runtime not selected.
 		if step == model.StepNvidia && !w.isNvidiaSelected() {
+			return
+		}
+		// StepTailscale is conditional — refuse jump when tailscale not selected.
+		if step == model.StepTailscale && !w.isTailscaleSelected() {
 			return
 		}
 		w.State.CurrentStep = step
@@ -147,6 +169,8 @@ func (w *Wizard) ValidateCurrentStep() error {
 		return nil // sysext selection is optional
 	case model.StepNvidia:
 		return nil // driver series has a safe default; no validation needed
+	case model.StepTailscale:
+		return w.validateTailscale()
 	case model.StepUpdate:
 		return nil // update strategy selection is optional (defaults to "reboot")
 	case model.StepReview:
@@ -201,6 +225,23 @@ func (w *Wizard) validateStorage() error {
 		}
 	}
 	return validate.DiskPath(w.State.Config.Disk.DevPath)
+}
+
+func (w *Wizard) validateTailscale() error {
+	ts := w.State.Config.Tailscale
+	if ts.AuthKey == "" {
+		// Empty auth key is allowed: user skips the step, no provisioning.
+		return nil
+	}
+	if err := validate.TailscaleAuthKey(ts.AuthKey); err != nil {
+		return fmt.Errorf("tailscale auth key: %w", err)
+	}
+	if ts.Mode == model.TailscaleModeSubnetRouter {
+		if err := validate.TailscaleRoutes(ts.Routes); err != nil {
+			return fmt.Errorf("tailscale routes: %w", err)
+		}
+	}
+	return nil
 }
 
 func (w *Wizard) validateUser() error {

@@ -38,6 +38,7 @@ func NewRealRunner(logger *slog.Logger) *RealRunner {
 	return &RealRunner{Logger: logger}
 }
 
+// Run executes a command and returns its result.
 func (r *RealRunner) Run(ctx context.Context, name string, args ...string) (*Result, error) {
 	r.Logger.Debug("executing command", "cmd", name, "args", args)
 
@@ -70,6 +71,7 @@ func (r *RealRunner) Run(ctx context.Context, name string, args ...string) (*Res
 	return result, nil
 }
 
+// RunWithInput executes a command with the given string as standard input.
 func (r *RealRunner) RunWithInput(ctx context.Context, input string, name string, args ...string) (*Result, error) {
 	r.Logger.Debug("executing command with input", "cmd", name, "args", args)
 
@@ -115,6 +117,7 @@ func NewDryRunner(logger *slog.Logger) *DryRunner {
 	return &DryRunner{Logger: logger}
 }
 
+// Run records the command and returns a success result without executing it.
 func (r *DryRunner) Run(ctx context.Context, name string, args ...string) (*Result, error) {
 	r.Logger.Info("dry-run", "cmd", name, "args", args)
 	result := &Result{Command: name, Args: args, ExitCode: 0}
@@ -122,14 +125,10 @@ func (r *DryRunner) Run(ctx context.Context, name string, args ...string) (*Resu
 	return result, nil
 }
 
+// RunWithInput records the command and input, and returns a success result without executing it.
 func (r *DryRunner) RunWithInput(ctx context.Context, input string, name string, args ...string) (*Result, error) {
 	r.Logger.Info("dry-run with input", "cmd", name, "args", args)
 	result := &Result{Command: name, Args: args, ExitCode: 0}
-	// When butane is invoked in dry-run, return a minimal valid Ignition JSON
-	// so downstream steps can proceed without error.
-	if name == "butane" {
-		result.Stdout = `{"ignition":{"version":"3.4.0"}}`
-	}
 	r.History = append(r.History, *result)
 	return result, nil
 }
@@ -167,6 +166,7 @@ func (r *SpyRunner) StubError(command string, err error) {
 	r.Errors[command] = err
 }
 
+// Run records the call and returns a stubbed response or error if configured.
 func (r *SpyRunner) Run(ctx context.Context, name string, args ...string) (*Result, error) {
 	r.Calls = append(r.Calls, SpyCall{Name: name, Args: args})
 
@@ -185,6 +185,7 @@ func (r *SpyRunner) Run(ctx context.Context, name string, args ...string) (*Resu
 	return &Result{Command: name, Args: args, ExitCode: 0}, nil
 }
 
+// RunWithInput records the call and input, and returns a stubbed response or error.
 func (r *SpyRunner) RunWithInput(ctx context.Context, input string, name string, args ...string) (*Result, error) {
 	r.Calls = append(r.Calls, SpyCall{Name: name, Args: args, Input: input})
 

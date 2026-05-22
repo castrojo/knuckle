@@ -38,6 +38,14 @@ func (m *Model) initForm() {
 			m.Wizard.State.Config.Timezone = "UTC"
 		}
 		m.activeForm = m.buildUserForm()
+	case model.StepTailscale:
+		m.tailscaleAuthKeyIn = m.Wizard.State.Config.Tailscale.AuthKey
+		m.tailscaleModeIn = m.Wizard.State.Config.Tailscale.Mode
+		if m.tailscaleModeIn == "" {
+			m.tailscaleModeIn = model.TailscaleModeConnect
+		}
+		m.tailscaleRoutesIn = m.Wizard.State.Config.Tailscale.Routes
+		m.activeForm = m.buildTailscaleForm()
 	case model.StepReview:
 		m.activeForm = m.buildReviewForm()
 	default:
@@ -99,6 +107,22 @@ func (m *Model) onFormComplete() tea.Cmd {
 				keys, err := github.FetchKeys(username)
 				return fetchKeysMsg{keys: keys, err: err}
 			}
+		}
+
+	case model.StepTailscale:
+		cfg.Tailscale.AuthKey = strings.TrimSpace(m.tailscaleAuthKeyIn)
+		cfg.Tailscale.Mode = m.tailscaleModeIn
+		if cfg.Tailscale.Mode == "" {
+			cfg.Tailscale.Mode = model.TailscaleModeConnect
+		}
+		cfg.Tailscale.Routes = strings.TrimSpace(m.tailscaleRoutesIn)
+		if err := m.Wizard.ValidateCurrentStep(); err != nil {
+			m.err = err
+			m.initForm()
+			if m.activeForm != nil {
+				return m.activeForm.Init()
+			}
+			return nil
 		}
 
 	case model.StepReview:

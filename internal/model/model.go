@@ -11,7 +11,8 @@ const (
 	StepStorage
 	StepUser
 	StepSysext
-	StepNvidia // conditional: only visited when nvidia-runtime sysext is selected
+	StepNvidia    // conditional: only visited when nvidia-runtime sysext is selected
+	StepTailscale // conditional: only visited when tailscale sysext is selected
 	StepUpdate
 	StepReview
 	StepInstall
@@ -33,6 +34,8 @@ func (s WizardStep) String() string {
 		return "Sysext"
 	case StepNvidia:
 		return "GPU Setup"
+	case StepTailscale:
+		return "Tailscale"
 	case StepUpdate:
 		return "Update Strategy"
 	case StepReview:
@@ -62,6 +65,7 @@ type InstallConfig struct {
 	IgnitionURL         string // external ignition URL (mutually exclusive with local gen)
 	NvidiaDriverVersion string // Flatcar NVIDIA kernel driver series, e.g. "570-open". Empty = none.
 	Swap                SwapConfig
+	Tailscale           TailscaleConfig
 	DryRun              bool
 }
 
@@ -77,6 +81,29 @@ type SwapConfig struct {
 // Swap.SizeMB = 0. 4 GiB is the upstream Flatcar example and a reasonable cap
 // for home-server workloads; explicit SizeMB always overrides.
 const DefaultSwapSizeMB = 4096
+
+// TailscaleConfig holds optional Tailscale provisioning for the installed system.
+// Populated only when the tailscale sysext is selected. AuthKey is written to
+// /etc/tailscale/tailscale.env (mode 0600) and consumed by a oneshot systemd
+// unit that runs `tailscale up` at first boot.
+type TailscaleConfig struct {
+	// AuthKey is the Tailscale auth/preauth key (tskey-auth-…). Empty = step skipped.
+	AuthKey string
+	// Mode controls how the node advertises itself:
+	//   "connect"      — plain client (default)
+	//   "exit-node"    — advertise as exit node (--advertise-exit-node)
+	//   "subnet-router" — advertise routes via --advertise-routes
+	Mode string
+	// Routes is the comma-separated CIDR list advertised when Mode == "subnet-router".
+	Routes string
+}
+
+// Tailscale mode constants.
+const (
+	TailscaleModeConnect      = "connect"
+	TailscaleModeExitNode     = "exit-node"
+	TailscaleModeSubnetRouter = "subnet-router"
+)
 
 // UpdateStrategy holds OS update and reboot settings for Flatcar.
 type UpdateStrategy struct {

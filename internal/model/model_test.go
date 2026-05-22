@@ -12,6 +12,8 @@ func TestWizardStepString(t *testing.T) {
 		{StepStorage, "Storage"},
 		{StepUser, "User"},
 		{StepSysext, "Sysext"},
+		{StepNvidia, "GPU Setup"},
+		{StepTailscale, "Tailscale"},
 		{StepUpdate, "Update Strategy"},
 		{StepReview, "Review"},
 		{StepInstall, "Install"},

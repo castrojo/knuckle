@@ -20,21 +20,31 @@ import (
 // Config is the JSON schema for headless install configuration.
 // It maps closely to model.InstallConfig but uses simpler types for JSON.
 type Config struct {
-	Arch                string        `json:"arch,omitempty"` // "amd64" or "arm64"; defaults to "amd64"
-	Channel             string        `json:"channel"`
-	Version             string        `json:"version,omitempty"`
-	Hostname            string        `json:"hostname"`
-	Timezone            string        `json:"timezone,omitempty"`
-	Network             NetworkConfig `json:"network"`
-	Users               []UserConfig  `json:"users"`
-	Disk                string        `json:"disk"`
-	Sysexts             []string      `json:"sysexts,omitempty"`
-	NvidiaDriverVersion string        `json:"nvidia_driver_version,omitempty"` // e.g. "570-open"; empty = no NVIDIA kernel driver
-	Swap                *SwapConfig   `json:"swap,omitempty"`                  // nil = default-on (4 GiB); pass {"enabled":false} to disable
-	UpdateStrategy      string        `json:"update_strategy"`
-	IgnitionURL         string        `json:"ignition_url,omitempty"`
-	Reboot              bool          `json:"reboot"`
-	DryRun              bool          `json:"dry_run,omitempty"`
+	Arch                string          `json:"arch,omitempty"` // "amd64" or "arm64"; defaults to "amd64"
+	Channel             string          `json:"channel"`
+	Version             string          `json:"version,omitempty"`
+	Hostname            string          `json:"hostname"`
+	Timezone            string          `json:"timezone,omitempty"`
+	Network             NetworkConfig   `json:"network"`
+	Users               []UserConfig    `json:"users"`
+	Disk                string          `json:"disk"`
+	Sysexts             []string        `json:"sysexts,omitempty"`
+	NvidiaDriverVersion string          `json:"nvidia_driver_version,omitempty"` // e.g. "570-open"; empty = no NVIDIA kernel driver
+	Swap                *SwapConfig     `json:"swap,omitempty"`                  // nil = default-on (4 GiB); pass {"enabled":false} to disable
+	Tailscale           TailscaleConfig `json:"tailscale,omitempty"`
+	UpdateStrategy      string          `json:"update_strategy"`
+	IgnitionURL         string          `json:"ignition_url,omitempty"`
+	Reboot              bool            `json:"reboot"`
+	DryRun              bool            `json:"dry_run,omitempty"`
+}
+
+// TailscaleConfig for JSON input. Empty AuthKey skips the integration.
+type TailscaleConfig struct {
+	AuthKey string `json:"auth_key,omitempty"`
+	// Mode: "connect" (default), "exit-node", or "subnet-router".
+	Mode string `json:"mode,omitempty"`
+	// Routes: comma-separated CIDRs, only used when mode == "subnet-router".
+	Routes string `json:"routes,omitempty"`
 }
 
 // SwapConfig for JSON input. Default (nil) ⇒ enabled with default size.
@@ -131,6 +141,19 @@ func (c *Config) ToInstallConfig() (*model.InstallConfig, error) {
 		cfg.Swap = model.SwapConfig{Enabled: true, SizeMB: 0}
 	} else {
 		cfg.Swap = model.SwapConfig{Enabled: c.Swap.Enabled, SizeMB: c.Swap.SizeMB}
+	}
+
+	// Tailscale (empty AuthKey skips provisioning)
+	if c.Tailscale.AuthKey != "" {
+		mode := c.Tailscale.Mode
+		if mode == "" {
+			mode = model.TailscaleModeConnect
+		}
+		cfg.Tailscale = model.TailscaleConfig{
+			AuthKey: c.Tailscale.AuthKey,
+			Mode:    mode,
+			Routes:  c.Tailscale.Routes,
+		}
 	}
 
 	// Users
@@ -296,6 +319,25 @@ func (c *Config) Validate() error {
 	// Swap size must be non-negative if explicit
 	if c.Swap != nil && c.Swap.SizeMB < 0 {
 		return fmt.Errorf("swap.size_mb: must be ≥ 0 (got %d)", c.Swap.SizeMB)
+	}
+
+	// Tailscale
+	if c.Tailscale.AuthKey != "" {
+		if err := validate.TailscaleAuthKey(c.Tailscale.AuthKey); err != nil {
+			return fmt.Errorf("tailscale auth_key: %w", err)
+		}
+		switch c.Tailscale.Mode {
+		case "", model.TailscaleModeConnect, model.TailscaleModeExitNode, model.TailscaleModeSubnetRouter:
+			// ok
+		default:
+			return fmt.Errorf("tailscale mode: must be %q, %q, or %q (got %q)",
+				model.TailscaleModeConnect, model.TailscaleModeExitNode, model.TailscaleModeSubnetRouter, c.Tailscale.Mode)
+		}
+		if c.Tailscale.Mode == model.TailscaleModeSubnetRouter {
+			if err := validate.TailscaleRoutes(c.Tailscale.Routes); err != nil {
+				return fmt.Errorf("tailscale routes: %w", err)
+			}
+		}
 	}
 
 	// NVIDIA driver version must be a known series

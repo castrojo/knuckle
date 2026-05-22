@@ -57,14 +57,17 @@ type Model struct {
 	fieldIdx      int
 
 	// huh form state
-	activeForm       *huh.Form
-	dnsInput         string
-	networkModeInput string
-	usernameInput    string
-	passwordInput    string
-	githubUserInput  string
-	sshKeyInput      string
-	showAdvanced     bool
+	activeForm         *huh.Form
+	dnsInput           string
+	networkModeInput   string
+	usernameInput      string
+	passwordInput      string
+	githubUserInput    string
+	sshKeyInput        string
+	tailscaleAuthKeyIn string
+	tailscaleModeIn    string
+	tailscaleRoutesIn  string
+	showAdvanced       bool
 
 	// Sysext list (bubbles/list)
 	sysextList      list.Model

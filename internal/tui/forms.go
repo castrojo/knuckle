@@ -152,6 +152,45 @@ func (m *Model) localKeysSummary() string {
 	return fmt.Sprintf("🔑 %d local key(s) from ~/.ssh/ will be included automatically", len(keys))
 }
 
+// buildTailscaleForm creates the huh form for the Tailscale step.
+// Shown only when the tailscale sysext is selected.
+func (m *Model) buildTailscaleForm() *huh.Form {
+	modeOptions := []huh.Option[string]{
+		huh.NewOption("Just connect — plain client", model.TailscaleModeConnect),
+		huh.NewOption("Exit node — advertise as exit node", model.TailscaleModeExitNode),
+		huh.NewOption("Subnet router — advertise routes", model.TailscaleModeSubnetRouter),
+	}
+
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Tailscale").
+				Description("Optional. Paste a tailnet auth key to provision Tailscale at first boot.\nLeave the auth key blank to skip — tailscale binaries will still be installed."),
+			huh.NewInput().
+				Title("Auth Key").
+				Description("From https://login.tailscale.com/admin/settings/keys — preauth is recommended").
+				Placeholder("tskey-auth-...").
+				EchoMode(huh.EchoModePassword).
+				Value(&m.tailscaleAuthKeyIn).
+				Validate(func(s string) error {
+					if s == "" {
+						return nil
+					}
+					return validate.TailscaleAuthKey(s)
+				}),
+			huh.NewSelect[string]().
+				Title("Mode").
+				Options(modeOptions...).
+				Value(&m.tailscaleModeIn),
+			huh.NewInput().
+				Title("Advertised routes").
+				Description("Only used in Subnet router mode. Comma-separated CIDRs (e.g. 10.0.0.0/24,192.168.1.0/24)").
+				Placeholder("10.0.0.0/24").
+				Value(&m.tailscaleRoutesIn),
+		),
+	).WithTheme(huh.ThemeDracula()).WithShowHelp(true).WithWidth(80)
+}
+
 // buildReviewForm creates the huh confirm for the Review step.
 func (m *Model) buildReviewForm() *huh.Form {
 	return huh.NewForm(
@@ -203,6 +242,16 @@ func (m *Model) reviewSummary() string {
 		fmt.Fprintf(&b, "\nSwap: %d MiB (/var/swapfile)", size)
 	} else {
 		b.WriteString("\nSwap: disabled")
+	}
+	if cfg.Tailscale.AuthKey != "" {
+		mode := cfg.Tailscale.Mode
+		if mode == "" {
+			mode = model.TailscaleModeConnect
+		}
+		fmt.Fprintf(&b, "\nTailscale: auth key set, mode=%s", mode)
+		if mode == model.TailscaleModeSubnetRouter && cfg.Tailscale.Routes != "" {
+			fmt.Fprintf(&b, " routes=%s", cfg.Tailscale.Routes)
+		}
 	}
 	return b.String()
 }

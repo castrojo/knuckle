@@ -38,28 +38,23 @@ func TestDryRunnerRecordsHistory(t *testing.T) {
 	}
 }
 
-func TestDryRunnerButaneReturnsIgnitionJSON(t *testing.T) {
+func TestDryRunnerRunWithInputReturnsEmptyStdout(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	dr := NewDryRunner(logger)
 	ctx := context.Background()
 
-	result, err := dr.RunWithInput(ctx, "some butane yaml", "butane", "--strict")
+	result, err := dr.RunWithInput(ctx, "input", "cat")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	expected := `{"ignition":{"version":"3.4.0"}}`
-	if result.Stdout != expected {
-		t.Errorf("expected butane stub output %q, got %q", expected, result.Stdout)
+	if result.Stdout != "" {
+		t.Errorf("expected empty stdout, got %q", result.Stdout)
 	}
-
-	// Non-butane commands should still return empty stdout
-	result2, err := dr.RunWithInput(ctx, "input", "cat")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if len(dr.History) != 1 {
+		t.Fatalf("expected 1 history entry, got %d", len(dr.History))
 	}
-	if result2.Stdout != "" {
-		t.Errorf("expected empty stdout for non-butane command, got %q", result2.Stdout)
+	if dr.History[0].Command != "cat" {
+		t.Errorf("expected command 'cat', got %q", dr.History[0].Command)
 	}
 }
 

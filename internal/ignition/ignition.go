@@ -107,6 +107,10 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		NvidiaDriverVersion: cfg.NvidiaDriverVersion,
 		SwapEnabled:         cfg.Swap.Enabled,
 		SwapSizeMB:          swapSize,
+		Tailscale:           cfg.Tailscale,
+		TailscaleEnabled:    cfg.Tailscale.AuthKey != "",
+		TailscaleForwarding: cfg.Tailscale.AuthKey != "" && (cfg.Tailscale.Mode == model.TailscaleModeExitNode || cfg.Tailscale.Mode == model.TailscaleModeSubnetRouter),
+		TailscaleExtraArgs:  tailscaleExtraArgs(cfg.Tailscale),
 	}
 
 	var buf bytes.Buffer
@@ -130,6 +134,27 @@ type templateData struct {
 	NvidiaDriverVersion string // e.g. "570-open"; empty = no NVIDIA kernel driver setup
 	SwapEnabled         bool
 	SwapSizeMB          int // effective swap size in MiB when SwapEnabled
+	Tailscale           model.TailscaleConfig
+	TailscaleEnabled    bool   // AuthKey is set, i.e. user filled the step
+	TailscaleForwarding bool   // exit-node or subnet-router → need sysctl ip_forward=1
+	TailscaleExtraArgs  string // value of TS_EXTRA_ARGS in tailscale.env
+}
+
+// tailscaleExtraArgs builds the TS_EXTRA_ARGS value for /etc/tailscale/tailscale.env
+// based on the selected mode.
+func tailscaleExtraArgs(ts model.TailscaleConfig) string {
+	switch ts.Mode {
+	case model.TailscaleModeExitNode:
+		return "--advertise-exit-node"
+	case model.TailscaleModeSubnetRouter:
+		routes := strings.ReplaceAll(strings.TrimSpace(ts.Routes), " ", "")
+		if routes == "" {
+			return ""
+		}
+		return "--advertise-routes=" + routes
+	default:
+		return ""
+	}
 }
 
 func filterSelected(sysexts []model.SysextEntry) []model.SysextEntry {
@@ -204,6 +229,27 @@ storage:
       contents:
         source: "data:,"
 {{- end}}
+{{- if .TailscaleEnabled}}
+    - path: /etc/tailscale/tailscale.env
+      mode: 0600
+      overwrite: true
+      contents:
+        inline: |
+          TS_AUTHKEY={{.Tailscale.AuthKey | yamlEscape}}
+          TS_AUTH_ONCE=true
+{{- if .TailscaleExtraArgs}}
+          TS_EXTRA_ARGS={{.TailscaleExtraArgs | yamlEscape}}
+{{- end}}
+{{- if .TailscaleForwarding}}
+    - path: /etc/sysctl.d/99-tailscale.conf
+      mode: 0644
+      overwrite: true
+      contents:
+        inline: |
+          net.ipv4.ip_forward = 1
+          net.ipv6.conf.all.forwarding = 1
+{{- end}}
+{{- end}}
 {{- if .Timezone}}
   links:
     - path: /etc/localtime
@@ -247,6 +293,29 @@ systemd:
 
         [Swap]
         What=/var/swapfile
+
+        [Install]
+        WantedBy=multi-user.target
+{{- end}}
+{{- if .TailscaleEnabled}}
+    - name: tailscaled.service
+      enabled: true
+    - name: knuckle-tailscale-up.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Bring up Tailscale with the auth key provisioned by knuckle
+        Requires=tailscaled.service network-online.target
+        After=tailscaled.service network-online.target
+        ConditionPathExists=/etc/tailscale/tailscale.env
+        ConditionPathExists=!/var/lib/tailscale/.knuckle-up-done
+
+        [Service]
+        Type=oneshot
+        EnvironmentFile=/etc/tailscale/tailscale.env
+        ExecStart=/usr/bin/tailscale up --auth-key=$${TS_AUTHKEY} $${TS_EXTRA_ARGS}
+        ExecStartPost=/bin/sh -c 'install -m 0600 /dev/null /var/lib/tailscale/.knuckle-up-done'
+        RemainAfterExit=yes
 
         [Install]
         WantedBy=multi-user.target
