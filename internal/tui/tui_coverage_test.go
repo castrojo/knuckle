@@ -450,3 +450,40 @@ func TestDetectLocalSSHKeys_UnreadableFile(t *testing.T) {
 		t.Errorf("unreadable .pub file should be skipped, got %d keys", len(keys))
 	}
 }
+
+// ── renderDetailPanel branches ────────────────────────────────────────────────
+
+func TestRenderDetailPanel_NarrowTerminal_ReturnsEmpty(t *testing.T) {
+	m := New(newTestWizard())
+	m.width = 50 // effectiveWidth=50 < 60 → early return ""
+	ext := model.SysextEntry{Name: "docker", Version: "24.0", Category: "container"}
+	out := m.renderDetailPanel(ext)
+	if out != "" {
+		t.Errorf("narrow terminal should return empty string, got: %q", out)
+	}
+}
+
+func TestRenderDetailPanel_EmptyFieldDefaults(t *testing.T) {
+	m := New(newTestWizard())
+	m.width = 120 // wide enough to render the panel
+	// No category, tier, or version set — each should default to placeholder.
+	ext := model.SysextEntry{Name: "unknown-ext", Version: "", Category: ""}
+	out := m.renderDetailPanel(ext)
+	if !strings.Contains(out, "unknown") {
+		t.Errorf("empty version should show 'unknown' in panel: %q", out)
+	}
+	if !strings.Contains(out, "Other") {
+		t.Errorf("empty category should default to 'Other' in panel: %q", out)
+	}
+}
+
+func TestRenderDetailPanel_WithCaveats(t *testing.T) {
+	m := New(newTestWizard())
+	m.width = 120
+	// "bird" is in the curated catalog with a caveat about manual config files.
+	ext := model.SysextEntry{Name: "bird", Version: "2.0.0", Category: "networking"}
+	out := m.renderDetailPanel(ext)
+	if !strings.Contains(out, "!") {
+		t.Errorf("sysext with caveats should show '!' prefix: %q", out)
+	}
+}

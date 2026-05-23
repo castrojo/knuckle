@@ -2072,3 +2072,54 @@ func TestValidateUser_InvalidGlobalSSHKey(t *testing.T) {
 		t.Fatal("expected error for invalid global SSH key, got nil")
 	}
 }
+func TestRunSystemChecks_SysextsAvailable(t *testing.T) {
+	// Covers the len(Sysexts) > 0 → "ok" branch in runSystemChecks.
+	p := &mockProber{
+		disks:  []model.DiskInfo{{DevPath: "/dev/sda"}},
+		ifaces: []model.NetworkInterface{{Name: "eth0", IPv4Addrs: []string{"10.0.0.1"}}},
+	}
+	w := New(p, &mockBakery{}, &mockInstaller{})
+	w.State.Sysexts = []model.SysextEntry{{Name: "docker"}} // pre-populate before ProbeHardware
+
+	if err := w.ProbeHardware(context.Background()); err != nil {
+		t.Fatalf("ProbeHardware: %v", err)
+	}
+	var catalogCheck *SystemCheck
+	for i := range w.State.SystemChecks {
+		if w.State.SystemChecks[i].Name == "Sysext Catalog" {
+			catalogCheck = &w.State.SystemChecks[i]
+		}
+	}
+	if catalogCheck == nil {
+		t.Fatal("expected Sysext Catalog check")
+	}
+	if catalogCheck.Status != "ok" {
+		t.Errorf("Sysext Catalog status = %q, want %q", catalogCheck.Status, "ok")
+	}
+}
+
+type diskOkNetFailProber struct {
+	disks []model.DiskInfo
+}
+
+func (p *diskOkNetFailProber) ListDisks(ctx context.Context) ([]model.DiskInfo, error) {
+	return p.disks, nil
+}
+
+func (p *diskOkNetFailProber) ListNetworkInterfaces(ctx context.Context) ([]model.NetworkInterface, error) {
+	return nil, fmt.Errorf("network probe failed")
+}
+
+func TestProbeHardware_NetworkError(t *testing.T) {
+	// Covers return fmt.Errorf("probing network: %w", err) in ProbeHardware.
+	// ListDisks succeeds, ListNetworkInterfaces fails.
+	p := &diskOkNetFailProber{disks: []model.DiskInfo{{DevPath: "/dev/sda"}}}
+	w := New(p, &mockBakery{}, &mockInstaller{})
+	err := w.ProbeHardware(context.Background())
+	if err == nil {
+		t.Fatal("expected error from ProbeHardware when network probe fails")
+	}
+	if !strings.Contains(err.Error(), "probing network") {
+		t.Errorf("error should mention 'probing network', got: %v", err)
+	}
+}

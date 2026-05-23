@@ -153,3 +153,16 @@ func TestMergeSSHKeysPreservesOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeSSHKeys_FiltersEmptyStrings(t *testing.T) {
+	// The k == "" → continue branch is only hit when an empty string appears in a list.
+	result := MergeSSHKeys([]string{"ssh-ed25519 AAAA key1", "", "ssh-ed25519 AAAA key2"})
+	if len(result) != 2 {
+		t.Errorf("expected 2 keys (empty string filtered), got %d: %v", len(result), result)
+	}
+	for _, k := range result {
+		if k == "" {
+			t.Error("empty string should be filtered out by MergeSSHKeys")
+		}
+	}
+}
