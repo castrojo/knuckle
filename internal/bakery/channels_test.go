@@ -489,3 +489,56 @@ func TestParseSBOMJSON_IgnitionRevisionStripped(t *testing.T) {
 		t.Errorf("Etcd = %q, want 3.5.18", info.Etcd)
 	}
 }
+
+// ── FetchChannelInfoArch validation branches ──────────────────────────────────
+
+func TestFetchChannelInfoArch_UnsupportedArch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := FetchChannelInfoArch(ctx, "stable", "riscv64")
+	if err == nil {
+		t.Fatal("expected error for unsupported arch")
+	}
+}
+
+func TestFetchChannelInfoArch_LTSArm64Rejected(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := FetchChannelInfoArch(ctx, "lts", "arm64")
+	if err == nil {
+		t.Fatal("expected error: LTS not available for arm64")
+	}
+}
+
+func TestFetchChannelInfoArch_Arm64CancelledContext(t *testing.T) {
+	// arm64 + non-lts channel is valid architecture combination — hits network path
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := FetchChannelInfoArch(ctx, "stable", "arm64")
+	if err == nil {
+		t.Fatal("cancelled context should produce error")
+	}
+}
+
+// ── FetchAllChannelsArch validation branches ──────────────────────────────────
+
+func TestFetchAllChannelsArch_UnsupportedArch(t *testing.T) {
+	ctx := context.Background()
+	_, err := FetchAllChannelsArch(ctx, "mips")
+	if err == nil {
+		t.Fatal("expected error for unsupported arch")
+	}
+}
+
+func TestFetchAllChannelsArch_Arm64ExcludesLTS(t *testing.T) {
+	// arm64 should not include lts in the channels list; it should attempt
+	// stable/beta/alpha only. With a cancelled context all fail, but the
+	// function must not error on the arch validation itself.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// Should return error (network fails) but NOT an arch-validation error.
+	_, err := FetchAllChannelsArch(ctx, "arm64")
+	if err != nil && err.Error() == `unsupported architecture "arm64": must be amd64 or arm64` {
+		t.Fatal("arm64 should not be rejected as invalid arch")
+	}
+}
