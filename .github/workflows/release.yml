@@ -100,7 +100,7 @@ jobs:
           cosign sign -y "${IMAGE_REGISTRY}/${IMAGE_NAME}/knuckle-linux-amd64@${SBOM_DIGEST}"
 
       - name: SLSA provenance attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-path: knuckle-linux-amd64
 
@@ -204,7 +204,7 @@ jobs:
           cosign sign -y "${IMAGE_REGISTRY}/${IMAGE_NAME}/knuckle-linux-arm64@${SBOM_DIGEST}"
 
       - name: SLSA provenance attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-path: knuckle-linux-arm64
 
