@@ -87,9 +87,10 @@ YAML
 }
 
 # kv_inject_ssh_key <name>
-# Stop VM, poll until VMI is gone, mount ROOT p9, inject authorized_keys.
+# Stop VM, poll until VMI is gone, mount ROOT p9 via losetup, inject authorized_keys.
 # Flatcar reads ignition via fw_cfg — cloudInitNoCloud silently ignored.
-# Flatcar core UID=500. ROOT = partition 9, offset 6513754112.
+# Flatcar core UID=500. ROOT = partition 9 (p9) in Flatcar's GPT layout.
+# Uses losetup -P to probe partition table dynamically — no hardcoded byte offset.
 # TIMING: wait for VMI to exist before stopping (it may still be Scheduling),
 # then wait up to 60s for VMI to disappear before mounting disk.
 kv_inject_ssh_key() {
@@ -115,14 +116,16 @@ kv_inject_ssh_key() {
   done
 
   ssh $GOPTS "$GHOST" "
+    LOOP=\$(sudo losetup -f --show -P '${img}')
     sudo mkdir -p /mnt/flatcar-root
-    sudo mount -o loop,offset=6513754112 '${img}' /mnt/flatcar-root
+    sudo mount \${LOOP}p9 /mnt/flatcar-root
     sudo mkdir -p /mnt/flatcar-root/home/core/.ssh
     printf '%s\n' '${key}' | sudo tee /mnt/flatcar-root/home/core/.ssh/authorized_keys >/dev/null
     sudo chown -R 500:500 /mnt/flatcar-root/home/core/.ssh
     sudo chmod 700 /mnt/flatcar-root/home/core/.ssh
     sudo chmod 600 /mnt/flatcar-root/home/core/.ssh/authorized_keys
     sudo umount /mnt/flatcar-root
+    sudo losetup -d \"\${LOOP}\"
   "
   _vc "start ${name}"
 }
@@ -168,18 +171,22 @@ kv_ip() {
 # Poll until SSH inside the VM is actually accepting connections (not just VMI Ready).
 # KubeVirt condition:Ready fires when the QEMU process starts, not when the guest
 # OS has booted. Flatcar needs ~30-60s after VM start to boot and open sshd.
-# Also gives the CNI (flannel) time to set up routes to the pod IP.
+# Pod IP is re-resolved on each attempt — CNI may not have assigned it yet when
+# polling starts (fixes stale-IP bug: issue #263).
 kv_wait_ssh() {
   local name="$1"
   local timeout="${2:-120}"
   local deadline=$(( $(date +%s) + timeout ))
-  local ip; ip=$(kv_ip "$name")
-  echo "Waiting for SSH in VM ${name} at ${ip}..."
-  until ssh $GOPTS "$GHOST" \
+  local ip
+  echo "Waiting for SSH in VM ${name}..."
+  until {
+    ip=$(kv_ip "$name" 2>/dev/null)
+    [[ -n "$ip" ]] && ssh $GOPTS "$GHOST" \
       "ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-           -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 core@${ip} true" &>/dev/null 2>&1; do
+           -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 core@${ip} true"
+  } &>/dev/null 2>&1; do
     if [[ $(date +%s) -ge $deadline ]]; then
-      echo "TIMEOUT: SSH never ready in VM ${name} (pod IP ${ip})"
+      echo "TIMEOUT: SSH never ready in VM ${name} (last pod IP: ${ip:-unresolved})"
       return 1
     fi
     sleep 5
@@ -223,8 +230,13 @@ kv_boot_installed() {
   ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
     --ignore-not-found --wait=false" 2>/dev/null || true
 
-  # Brief pause for KubeVirt controller to fully release the disk
-  sleep 5
+  # Poll until VMI is fully gone before reusing the target disk (fixes race: issue #261).
+  # sleep 5 was insufficient under load; KubeVirt may take up to 60s to release the disk.
+  local deadline=$(( $(date +%s) + 60 ))
+  while _kube "get vmi ${name}" &>/dev/null 2>&1; do
+    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: old VMI ${name} did not stop before boot-installed"; return 1; }
+    sleep 3
+  done
 
   # Create a new minimal VM: only the installed target disk, no installer disk
   ssh $GOPTS "$GHOST" kubectl apply -f - << YAML
