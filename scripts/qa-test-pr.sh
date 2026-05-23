@@ -17,8 +17,7 @@ PR=${1:?usage: qa-test-pr.sh <PR_NUMBER>}
 # Example: export QA_HOST=jorge@192.168.1.102
 # See docs/GHOST-LAB.md for lab setup instructions.
 GHOST=${QA_HOST:-localhost}
-GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-BASE_IMG="${QA_FLATCAR_BASE:-/var/tmp/knuckle-test/flatcar_base.img}"
+GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519"
 WORK_REMOTE="/var/tmp/knuckle-qa-pr-${PR}"
 RUN_ID="pr-${PR}-$(date +%Y%m%d-%H%M%S)"
 RUNDIR=".qa/runs/${RUN_ID}"
@@ -50,7 +49,7 @@ _file_issue_on_fail() {
 ### Failing output
 
 \`\`\`
-$(grep -A3 "FAIL\|\u274c" "$report" | head -30)
+$(grep -A3 "FAIL\|❌" "$report" | head -30)
 \`\`\`
 
 ### To reproduce
@@ -60,6 +59,19 @@ just qa-pr ${PR}
 ISSUE_EOF
   log "Issue body: ${issue_file}"
 }
+
+# Source KubeVirt helpers
+# shellcheck source=scripts/lib/vm-kubevirt.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/vm-kubevirt.sh"
+
+VM_NAME=""  # set when VM is allocated; trap uses this
+_cleanup_kv() {
+  local exit_code=$?
+  [[ -n "${VM_NAME:-}" ]] && kv_delete "${VM_NAME}" 2>/dev/null || true
+  exit "$exit_code"
+}
+trap '_cleanup_kv' EXIT INT TERM
 
 mkdir -p "$RUNDIR"
 
@@ -184,51 +196,40 @@ fi
   cat "$REPORT"; exit 0
 }
 
-# ── 7. Allocate port + boot installer VM ─────────────────────────────────────
-log "Setting up installer VM on ghost..."
+# ── 7. Create KubeVirt installer VM ──────────────────────────────────────────
+log "Setting up KubeVirt installer VM..."
+VM_NAME="qa-pr-${PR}-$(date +%s)"
+
 _ghost "mkdir -p ${WORK_REMOTE}"
-_scp_to $GOPTS bin/knuckle "$GHOST:${WORK_REMOTE}/knuckle"
 
 HOST_KEY=$(_ghost "cat ~/.ssh/id_ed25519.pub")
-PORT=$(_ghost "for p in \$(seq 2300 2315); do ss -tln | grep -q \":\${p} \" || { echo \$p; exit 0; }; done; echo NONE")
-[[ "$PORT" == "NONE" ]] && { echo "**⛔ No free port on ghost.**" >> "$REPORT"; cat "$REPORT"; exit 1; }
-log "Port ${PORT}"
 
-_ghost "
-  rm -f ${WORK_REMOTE}/boot.qcow2 ${WORK_REMOTE}/target.qcow2 \
-        ${WORK_REMOTE}/serial-installer.log ${WORK_REMOTE}/knuckle-install.log
-  qemu-img create -f qcow2 -b ${BASE_IMG} -F qcow2 ${WORK_REMOTE}/boot.qcow2 >/dev/null
-  qemu-img create -f qcow2 ${WORK_REMOTE}/target.qcow2 20G >/dev/null
-  printf '{\"ignition\":{\"version\":\"3.4.0\"},\"passwd\":{\"users\":[{\"name\":\"core\",\"sshAuthorizedKeys\":[\"%s\"]}]},\"systemd\":{\"units\":[{\"name\":\"sshd.service\",\"enabled\":true}]}}\n' '${HOST_KEY}' > ${WORK_REMOTE}/installer.ign
-  qemu-system-x86_64 \
-    -m 2048 -smp 2 -enable-kvm -cpu host \
-    -drive if=virtio,file=${WORK_REMOTE}/boot.qcow2,format=qcow2 \
-    -drive if=virtio,file=${WORK_REMOTE}/target.qcow2,format=qcow2 \
-    -fw_cfg name=opt/org.flatcar-linux/config,file=${WORK_REMOTE}/installer.ign \
-    -net nic,model=virtio -net user,hostfwd=tcp::${PORT}-:22 \
-    -display none -daemonize -pidfile ${WORK_REMOTE}/qemu-installer.pid \
-    -serial file:${WORK_REMOTE}/serial-installer.log >/dev/null 2>&1
-"
+log "Preparing disks..."
+kv_prepare_disk "$VM_NAME"
 
-log "Waiting for installer VM SSH..."
-_ghost "
-  ok=0
-  for i in \$(seq 1 20); do
-    ssh $GOPTS -o ConnectTimeout=2 -p ${PORT} core@127.0.0.1 true 2>/dev/null && ok=1 && break
-    sleep 2
-  done
-  [ \$ok -eq 1 ] || { echo BOOT_TIMEOUT; tail -10 ${WORK_REMOTE}/serial-installer.log >&2; exit 1; }
-" || {
-  _ghost_logs_to_rundir
+log "Applying VM to cluster..."
+kv_apply_vm "$VM_NAME"
+
+log "Injecting SSH key..."
+kv_inject_ssh_key "$VM_NAME"
+
+log "Waiting for installer VM ready..."
+kv_wait_ready "$VM_NAME" 120 || {
   { echo "### Installer VM Boot"; echo "**⛔ BOOT TIMEOUT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
   cat "$REPORT"; exit 1
 }
 
-_ghost "
-  scp $GOPTS -P ${PORT} ${WORK_REMOTE}/knuckle core@127.0.0.1:/tmp/knuckle
-  ssh $GOPTS -p ${PORT} core@127.0.0.1 'chmod +x /tmp/knuckle'
-"
-log "Installer VM ready"
+kv_wait_ssh "$VM_NAME" 120 || {
+  { echo "### Installer VM Boot"; echo "**⛔ SSH TIMEOUT — Flatcar did not finish booting**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  cat "$REPORT"; exit 1
+}
+
+INSTALLER_IP=$(kv_ip "$VM_NAME")
+log "Installer VM ready at ${INSTALLER_IP}"
+
+kv_scp_to_vm "$VM_NAME" bin/knuckle /tmp/knuckle
+kv_ssh "$VM_NAME" 'chmod +x /tmp/knuckle'
+log "Binary deployed"
 
 # ── 8. Tier 1 — tool check + dry-run ─────────────────────────────────────────
 log "Tier 1: tool check + dry-run..."
@@ -265,14 +266,13 @@ json.dump(d, open(p, "w"))
 PYEOF
 fi
 
-# SCP config to ghost, then ghost SCPs it into the VM
+# SCP config to ghost for artifact storage, then directly into the VM
 _scp_to $GOPTS "${QA_CONFIG_FILE}" "$GHOST:${WORK_REMOTE}/qa.json"
-_ghost "scp $GOPTS -P ${PORT} ${WORK_REMOTE}/qa.json core@127.0.0.1:/tmp/qa.json"
+kv_scp_to_vm "$VM_NAME" "${QA_CONFIG_FILE}" /tmp/qa.json
 
-T1=$(_ghost "
-  ssh $GOPTS -p ${PORT} core@127.0.0.1 '
+T1=$(kv_ssh "$VM_NAME" '
     echo --- os ---
-    grep -E \"VERSION_ID|PRETTY_NAME\" /etc/os-release
+    grep -E "VERSION_ID|PRETTY_NAME" /etc/os-release
     echo --- util-linux ---
     sfdisk --version
     wipefs --version
@@ -281,16 +281,15 @@ T1=$(_ghost "
     echo --- headless --dry-run ---
     sudo /tmp/knuckle --headless --dry-run --config /tmp/qa.json --log-file /tmp/knuckle-dryrun.log 2>&1
     echo --- progress steps ---
-    sudo cat /tmp/knuckle-dryrun.log 2>/dev/null | grep -o \"\\\"msg\\\":\\\"[^\\\"]*\\\"\" | head -12
-  '
-" 2>&1) || T1="DRY_RUN_ERROR"
+    sudo cat /tmp/knuckle-dryrun.log 2>/dev/null | grep -o "\"msg\":\"[^\"]*\"" | head -12
+' 2>&1) || T1="DRY_RUN_ERROR"
 
 DRY_OK=$(echo "$T1" | grep -c "Installation complete" || true)
 # Also check for JSON parse errors — indicates config was malformed
 JSON_ERR=$(echo "$T1" | grep -c "parsing config JSON\|invalid character" || true)
 [[ $JSON_ERR -gt 0 ]] && DRY_OK=0
 {
-  echo "### Tier 1 — Installer VM: tool check + dry-run (port ${PORT})"
+  echo "### Tier 1 — Installer VM: tool check + dry-run (VM ${VM_NAME})"
   echo
   echo '```'
   echo "$T1"
@@ -301,7 +300,6 @@ JSON_ERR=$(echo "$T1" | grep -c "parsing config JSON\|invalid character" || true
 } >> "$REPORT"
 
 if [[ $DRY_OK -eq 0 ]]; then
-  _ghost "kill \$(cat ${WORK_REMOTE}/qemu-installer.pid 2>/dev/null) 2>/dev/null || true"
   echo "**Verdict: ❌ FAIL — dry-run did not complete**" >> "$REPORT"
   _fetch_artifacts
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Dry-run failed" || true
@@ -362,9 +360,9 @@ exit $FAIL
 SECSCRIPT
 
   _scp_to $GOPTS /tmp/qa-sec-tests-${PR}.sh "$GHOST:${WORK_REMOTE}/sec-tests.sh"
-  _ghost "scp $GOPTS -P ${PORT} ${WORK_REMOTE}/sec-tests.sh core@127.0.0.1:/tmp/sec-tests.sh"
+  kv_scp_to_vm "$VM_NAME" "/tmp/qa-sec-tests-${PR}.sh" /tmp/sec-tests.sh
 
-  SEC=$(_ghost "ssh $GOPTS -p ${PORT} core@127.0.0.1 'bash /tmp/sec-tests.sh 2>&1'" 2>&1) || SEC_OK=0
+  SEC=$(kv_ssh "$VM_NAME" 'bash /tmp/sec-tests.sh 2>&1' 2>&1) || SEC_OK=0
   SEC_OK=$(echo "$SEC" | grep -c "SECURITY_TESTS_DONE fail_count=0" || true)
 
   {
@@ -379,7 +377,6 @@ SECSCRIPT
   } >> "$REPORT"
 
   if [[ $SEC_OK -eq 0 ]]; then
-    _ghost "kill \$(cat ${WORK_REMOTE}/qemu-installer.pid 2>/dev/null) 2>/dev/null || true"
     echo "**Verdict: ❌ FAIL — security regression**" >> "$REPORT"
     _fetch_artifacts
     _file_issue_on_fail "$REPORT" "$RUNDIR" "Security regression: bad input accepted" || true
@@ -397,13 +394,11 @@ fi
 # ── 10. Tier 3 — real headless install ───────────────────────────────────────
 log "Tier 3: real headless install..."
 
-INSTALL_OUT=$(_ghost "
-  ssh $GOPTS -p ${PORT} core@127.0.0.1 '
-    sudo /tmp/knuckle --headless --config /tmp/qa.json \
-      --log-file /tmp/knuckle-install.log 2>&1
-    echo INSTALL_EXIT_CODE=\$?
-  '
-" 2>&1) || true
+INSTALL_OUT=$(kv_ssh "$VM_NAME" '
+  sudo /tmp/knuckle --headless --config /tmp/qa.json \
+    --log-file /tmp/knuckle-install.log 2>&1
+  echo INSTALL_EXIT_CODE=$?
+' 2>&1) || true
 INSTALL_DONE=$(echo "$INSTALL_OUT" | grep -c "INSTALL_EXIT_CODE=0" || true)
 
 {
@@ -415,8 +410,8 @@ INSTALL_DONE=$(echo "$INSTALL_OUT" | grep -c "INSTALL_EXIT_CODE=0" || true)
   echo
 } >> "$REPORT"
 
-# Retrieve install log from VM before killing it
-_ghost "ssh $GOPTS -p ${PORT} core@127.0.0.1 'sudo cat /tmp/knuckle-install.log 2>/dev/null'" \
+# Retrieve install log from VM
+kv_ssh "$VM_NAME" 'sudo cat /tmp/knuckle-install.log 2>/dev/null' \
   > "${RUNDIR}/knuckle-install.log" 2>/dev/null || true
 {
   echo "<details><summary>knuckle-install.log</summary>"
@@ -431,8 +426,6 @@ _ghost "ssh $GOPTS -p ${PORT} core@127.0.0.1 'sudo cat /tmp/knuckle-install.log 
   echo
 } >> "$REPORT"
 
-_ghost "kill \$(cat ${WORK_REMOTE}/qemu-installer.pid 2>/dev/null) 2>/dev/null || true; sleep 2"
-
 if [[ $INSTALL_DONE -eq 0 ]]; then
   _fetch_artifacts
   echo "**Verdict: ❌ FAIL — install did not complete**" >> "$REPORT"
@@ -441,29 +434,17 @@ if [[ $INSTALL_DONE -eq 0 ]]; then
 fi
 
 # ── 11. Boot installed Flatcar ────────────────────────────────────────────────
-log "Booting installed system..."
-
-_ghost "
-  rm -f ${WORK_REMOTE}/serial-installed.log ${WORK_REMOTE}/qemu-installed.pid
-  qemu-system-x86_64 \
-    -m 2048 -smp 2 -enable-kvm -cpu host \
-    -drive if=virtio,file=${WORK_REMOTE}/target.qcow2,format=qcow2 \
-    -net nic,model=virtio -net user,hostfwd=tcp::${PORT}-:22 \
-    -display none -daemonize -pidfile ${WORK_REMOTE}/qemu-installed.pid \
-    -serial file:${WORK_REMOTE}/serial-installed.log >/dev/null 2>&1
-"
-
-_ghost "
-  ok=0
-  for i in \$(seq 1 30); do
-    ssh $GOPTS -o ConnectTimeout=3 -p ${PORT} core@127.0.0.1 true 2>/dev/null && ok=1 && break
-    sleep 5
-  done
-  [ \$ok -eq 1 ] || { echo INSTALLED_BOOT_TIMEOUT; tail -10 ${WORK_REMOTE}/serial-installed.log >&2; exit 1; }
-" || {
-  _fetch_artifacts
+log "Booting installed Flatcar (delete installer VM, boot-only)..."
+kv_boot_installed "$VM_NAME"
+kv_wait_ready "$VM_NAME" 180 || {
   { echo "### Installed System Boot"; echo "**⛔ INSTALLED SYSTEM DID NOT BOOT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar did not boot" || true
+  cat "$REPORT"; exit 1
+}
+
+kv_wait_ssh "$VM_NAME" 180 || {
+  { echo "### Installed System Boot"; echo "**⛔ SSH TIMEOUT — installed Flatcar did not come up**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar SSH never ready" || true
   cat "$REPORT"; exit 1
 }
 log "Installed system online"
@@ -648,11 +629,10 @@ fi
 exit $FAIL
 FINAL
 
-# SCP assertion script to ghost, then into the VM
+# SCP assertion script to ghost for artifact storage, then directly into the VM
 _scp_to $GOPTS "$ASSERT_SCRIPT" "$GHOST:${WORK_REMOTE}/assert.sh" || true
-_ghost "scp $GOPTS -P ${PORT} ${WORK_REMOTE}/assert.sh core@127.0.0.1:/tmp/assert.sh" || true
-
-ASSERT_OUT=$(_ghost "ssh $GOPTS -p ${PORT} core@127.0.0.1 'bash /tmp/assert.sh 2>&1'" 2>&1) || true
+kv_scp_to_vm "$VM_NAME" "$ASSERT_SCRIPT" /tmp/assert.sh 2>/dev/null || true
+ASSERT_OUT=$(kv_ssh "$VM_NAME" 'bash /tmp/assert.sh 2>&1' 2>&1) || true
 ASSERT_OK=$(echo "$ASSERT_OUT" | grep -c "ALL_ASSERTIONS_PASS" || true)
 ASSERT_FAILS=$(echo "$ASSERT_OUT" | grep -c "^FAIL:" || true)
 
@@ -671,8 +651,7 @@ ASSERT_FAILS=$(echo "$ASSERT_OUT" | grep -c "^FAIL:" || true)
   echo
 } >> "$REPORT"
 
-# Cleanup installed VM
-_ghost "kill \$(cat ${WORK_REMOTE}/qemu-installed.pid 2>/dev/null) 2>/dev/null || true" 2>/dev/null || true
+# Cleanup handled by trap (_cleanup_kv calls kv_delete)
 
 # Fetch all artifacts from ghost
 _fetch_artifacts
@@ -697,4 +676,3 @@ fi
 log "Artifacts: ${RUNDIR}/"
 cat "$REPORT"
 [[ $ASSERT_OK -gt 0 ]] && exit 0 || exit 1
-
