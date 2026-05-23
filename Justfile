@@ -906,7 +906,7 @@ hardware-repro:
         -display none -daemonize -pidfile "$PIDFILE" \
         -serial file:.vm/hardware-installer-serial.log
 
-    HARDWARE_SSH="ssh {{SSH_OPTS}} -o BatchMode=yes -i .vm/hardware_key -p 2222 core@127.0.0.1"
+    HARDWARE_SSH="ssh {{SSH_OPTS}} -o BatchMode=yes -i .vm/hardware_key -p 2222 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 core@127.0.0.1"
     HARDWARE_SCP="scp {{SSH_OPTS}} -o BatchMode=yes -i .vm/hardware_key -P 2222"
 
     ok=0
