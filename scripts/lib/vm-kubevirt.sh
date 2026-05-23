@@ -7,8 +7,8 @@ set -euo pipefail
 KUBEVIRT_NS="${KUBEVIRT_NS:-knuckle-test}"
 FLATCAR_BASE="${QA_FLATCAR_BASE:-/var/tmp/knuckle-test/flatcar_base.img}"
 
-_kube() { ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} $*"; }
-_vc()   { ssh "$GHOST" "virtctl -n ${KUBEVIRT_NS} $*"; }
+_kube() { ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} $*"; }
+_vc()   { ssh $GOPTS "$GHOST" "virtctl -n ${KUBEVIRT_NS} $*"; }
 
 # kv_prepare_disk <name>
 # Expand flatcar_base.img to a named raw disk on ghost.
@@ -17,7 +17,7 @@ kv_prepare_disk() {
   local name="$1"
   local dst="/var/tmp/knuckle-test/${name}-raw.img"
   local tgt="/var/tmp/knuckle-test/${name}-target.img"
-  ssh "$GHOST" "
+  ssh $GOPTS "$GHOST" "
     if [[ ! -f '${dst}' ]]; then
       sudo qemu-img convert -p -f qcow2 -O raw '${FLATCAR_BASE}' '${dst}'
       sudo chown qemu:qemu '${dst}' && sudo chmod 664 '${dst}'
@@ -38,7 +38,7 @@ kv_apply_vm() {
   local name="$1"
   local root_path="/var/tmp/knuckle-test/${name}-raw.img"
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
-  ssh "$GHOST" kubectl apply -f - << YAML
+  ssh $GOPTS "$GHOST" kubectl apply -f - << YAML
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -93,14 +93,14 @@ YAML
 kv_inject_ssh_key() {
   local name="$1"
   local img="/var/tmp/knuckle-test/${name}-raw.img"
-  local key; key=$(ssh "$GHOST" "cat ~/.ssh/id_ed25519.pub")
+  local key; key=$(ssh $GOPTS "$GHOST" "cat ~/.ssh/id_ed25519.pub")
   _vc "stop ${name}" 2>/dev/null || true
   local deadline=$(( $(date +%s) + 30 ))
-  while ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
+  while ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
     [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI stop"; return 1; }
     sleep 2
   done
-  ssh "$GHOST" "
+  ssh $GOPTS "$GHOST" "
     sudo mkdir -p /mnt/flatcar-root
     sudo mount -o loop,offset=6513754112 '${img}' /mnt/flatcar-root
     sudo mkdir -p /mnt/flatcar-root/home/core/.ssh
@@ -203,12 +203,12 @@ kv_swap_to_target() {
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
   _vc "stop ${name}" 2>/dev/null || true
   local deadline=$(( $(date +%s) + 30 ))
-  while ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
+  while ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
     [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI stop before swap"; return 1; }
     sleep 2
   done
   # Patch rootdisk path to the target (installed) disk
-  ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} patch vm ${name} --type=json -p='
+  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} patch vm ${name} --type=json -p='
     [{\"op\":\"replace\",\"path\":\"/spec/template/spec/volumes/0/hostDisk/path\",\"value\":\"${tgt_path}\"}]'"
   _vc "start ${name}"
 }
@@ -217,9 +217,9 @@ kv_swap_to_target() {
 # Delete VM and disk files. B5 FIX: --wait=false avoids 60s block during crash cleanup.
 kv_delete() {
   local name="$1"
-  ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
+  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
     --ignore-not-found --wait=false" 2>/dev/null || true
-  ssh "$GHOST" "
+  ssh $GOPTS "$GHOST" "
     sudo rm -f /var/tmp/knuckle-test/${name}-raw.img  2>/dev/null || true
     sudo rm -f /var/tmp/knuckle-test/${name}-target.img 2>/dev/null || true
   " 2>/dev/null || true
