@@ -166,74 +166,120 @@ The only requirement on the remote host is QEMU + KVM + SSH access.
 
 ## KubeVirt on Ghost (installed 2026-05-23)
 
-Ghost runs k3s v1.32.4 + KubeVirt v1.8.2. This provides a second testing
-path for `domain:tui` PRs: a persistent Flatcar VM accessible via SSH,
-without the QEMU `hostfwd` port-forwarding complexity.
+Ghost runs k3s v1.32.4 + KubeVirt v1.8.2. All VM lifecycle is managed via
+`kubectl` and `virtctl` directly against the cluster — no FastAPI, no libvirt.
 
-The QEMU `qa-test-pr.sh` path remains the primary gate for all Tier 1/3 tests.
-KubeVirt is used for interactive TUI verification — the human connects and looks.
+```
+Cluster  : https://192.168.1.102:6443  (k3s)
+Namespace: knuckle-test
+Tools    : kubectl, virtctl  (/usr/local/bin on ghost)
+```
 
 ### When to use which approach
 
 | Approach | Use for |
 |---|---|
 | `qa-test-pr.sh` | All automated Tier 0/1/3 tests, merge-gate evidence |
-| KubeVirt VM | Interactive TUI visual verification (`domain:tui` PRs) |
+| KubeVirt VM via kubectl | Interactive TUI visual verification (`domain:tui` PRs) |
 
-### Quick reference
-
-```bash
-# Check health
-ssh jorge@192.168.1.102 "kubectl -n kubevirt get pods --no-headers | grep -c Running"
-# Expected: 5
-
-# List running VMs
-ssh jorge@192.168.1.102 "kubectl -n knuckle-test get vmi"
-
-# Create a TUI test VM for PR N (see full procedure in ghost-testlab skill)
-# 1. Convert flatcar_base.img to raw, inject SSH key, apply VM manifest
-# 2. Deploy binary:  scp /tmp/knuckle-prN jorge@ghost:/tmp/
-# 3. Ghost→VM:  ssh jorge@ghost "scp ... core@<VMIP>:/tmp/knuckle"
-# 4. Interactive: ssh -J jorge@192.168.1.102 core@<VMIP> -t /tmp/knuckle
-
-# Stop and delete a VM when done
-ssh jorge@192.168.1.102 "virtctl stop flatcar-pr<N> -n knuckle-test"
-ssh jorge@192.168.1.102 "kubectl -n knuckle-test delete vm flatcar-pr<N>"
-```
-
-### Disk files (hostDisk requirements)
-
-KubeVirt's `hostDisk` has strict requirements:
+### Full VM lifecycle — kubectl/virtctl only
 
 ```bash
-# Files MUST be:
-# - raw format (not qcow2) — KubeVirt passes type=raw to QEMU
-# - owned by qemu:qemu (uid 107)
-# - SELinux context: container_file_t
-sudo qemu-img convert -p -f qcow2 -O raw flatcar_base.img flatcar-prN-raw.img
-sudo chown qemu:qemu flatcar-prN-raw.img && sudo chmod 664 flatcar-prN-raw.img
-sudo chcon -t container_file_t flatcar-prN-raw.img
-```
-
-### SSH key injection (cloudInitNoCloud does not work for Flatcar)
-
-Flatcar on QEMU reads ignition from `fw_cfg`, not from a NoCloud ISO.
-The only way to inject SSH keys into a KubeVirt Flatcar VM is to mount
-the raw disk and write `authorized_keys` directly before first boot:
-
-```bash
-# Flatcar ROOT = partition 9, sector offset 12722176
-# Offset bytes: 12722176 × 512 = 6513754112
-virtctl stop flatcar-prN -n knuckle-test
+# 1. Prepare raw disk (hostDisk MUST be raw; qcow2 causes type mismatch)
 ssh jorge@192.168.1.102 "
-  sudo mount -o loop,offset=6513754112 /var/tmp/knuckle-test/flatcar-prN-raw.img /mnt/flatcar-root
+  sudo qemu-img convert -p -f qcow2 -O raw \
+    /var/tmp/knuckle-test/flatcar_base.img \
+    /var/tmp/knuckle-test/pr<N>-vm-raw.img
+  sudo chown qemu:qemu /var/tmp/knuckle-test/pr<N>-vm-raw.img
+  sudo chmod 664     /var/tmp/knuckle-test/pr<N>-vm-raw.img
+  sudo chcon -t container_file_t /var/tmp/knuckle-test/pr<N>-vm-raw.img
+"
+
+# 2. Apply VM to the cluster
+ssh jorge@192.168.1.102 "kubectl apply -f - << 'EOF'
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: flatcar-pr<N>
+  namespace: knuckle-test
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: flatcar-pr<N>
+    spec:
+      domain:
+        cpu:
+          cores: 4
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+            - name: rootdisk
+              bootOrder: 1
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        machine:
+          type: q35
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: rootdisk
+          hostDisk:
+            path: /var/tmp/knuckle-test/pr<N>-vm-raw.img
+            type: Disk
+EOF
+"
+
+# 3. Wait for Ready
+ssh jorge@192.168.1.102 \
+  "kubectl -n knuckle-test wait vmi flatcar-pr<N> --for=condition=Ready --timeout=120s"
+
+# 4. Inject SSH key — cloudInitNoCloud does NOT work for Flatcar on QEMU
+#    Flatcar reads ignition via fw_cfg; NoCloud ISO is silently ignored.
+#    Mount the ROOT partition (p9, offset 6513754112) and write authorized_keys.
+ssh jorge@192.168.1.102 "
+  virtctl stop flatcar-pr<N> -n knuckle-test && sleep 5
+  sudo mount -o loop,offset=6513754112 \
+    /var/tmp/knuckle-test/pr<N>-vm-raw.img /mnt/flatcar-root
   sudo mkdir -p /mnt/flatcar-root/home/core/.ssh
-  echo '<your-pubkey>' | sudo tee /mnt/flatcar-root/home/core/.ssh/authorized_keys
+  cat ~/.ssh/id_ed25519.pub \
+    | sudo tee /mnt/flatcar-root/home/core/.ssh/authorized_keys
   sudo chown -R 500:500 /mnt/flatcar-root/home/core/.ssh  # core UID=500
   sudo chmod 700 /mnt/flatcar-root/home/core/.ssh
   sudo chmod 600 /mnt/flatcar-root/home/core/.ssh/authorized_keys
   sudo umount /mnt/flatcar-root
+  virtctl start flatcar-pr<N> -n knuckle-test
 "
-virtctl start flatcar-prN -n knuckle-test
+
+# 5. Deploy binary
+VMIP=$(ssh jorge@192.168.1.102 \
+  "kubectl -n knuckle-test get vmi flatcar-pr<N> \
+   -o jsonpath='{.status.interfaces[0].ipAddress}'")
+scp /tmp/knuckle-pr<N> jorge@192.168.1.102:/tmp/knuckle-pr<N>
+ssh jorge@192.168.1.102 "
+  scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -i ~/.ssh/id_ed25519 /tmp/knuckle-pr<N> core@${VMIP}:/tmp/knuckle
+"
+
+# 6. Connect (agent hands off here — human verifies visuals)
+echo "ssh -J jorge@192.168.1.102 -i ~/.ssh/id_ed25519 core@${VMIP} -t /tmp/knuckle"
+
+# 7. Clean up
+ssh jorge@192.168.1.102 "kubectl -n knuckle-test delete vm flatcar-pr<N>"
+```
+
+### Cluster health check
+
+```bash
+ssh jorge@192.168.1.102 "kubectl get nodes && \
+  kubectl -n kubevirt get pods --no-headers | grep -c Running"
+# Expected: ghost   Ready   control-plane   ...
+#           5  (virt-api x1, virt-controller x2, virt-handler x1, virt-operator x2)
 ```
 
