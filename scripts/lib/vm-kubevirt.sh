@@ -7,6 +7,11 @@ set -euo pipefail
 KUBEVIRT_NS="${KUBEVIRT_NS:-knuckle-test}"
 FLATCAR_BASE="${QA_FLATCAR_BASE:-/var/tmp/knuckle-test/flatcar_base.img}"
 
+# ControlMaster: share a single connection to ghost across all SSH/SCP calls.
+# Saves ~400 TCP connections per Tier 3 run and avoids sshd MaxStartups throttling.
+_KV_CM_PATH="/tmp/.ssh-cm-knuckle-${$}"
+export GOPTS="${GOPTS} -o ControlMaster=auto -o ControlPath=${_KV_CM_PATH} -o ControlPersist=120"
+
 _kube() { ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} $*"; }
 _vc()   { ssh $GOPTS "$GHOST" "virtctl -n ${KUBEVIRT_NS} $*"; }
 
@@ -129,17 +134,22 @@ kv_inject_ssh_key() {
     sleep 3
   done
 
+  # Per-VM mount point avoids collision when two PRs test concurrently.
+  # set -e + trap guarantee loopback cleanup even on mount failure (fixes: if mount fails
+  # without set -e, bash continues and writes authorized_keys to the HOST filesystem).
   ssh $GOPTS "$GHOST" "
+    set -euo pipefail
+    MNT='/mnt/flatcar-${name}'
     LOOP=\$(sudo losetup -f --show -P '${img}')
-    sudo mkdir -p /mnt/flatcar-root
-    sudo mount \${LOOP}p9 /mnt/flatcar-root
-    sudo mkdir -p /mnt/flatcar-root/home/core/.ssh
-    printf '%s\n' '${key}' | sudo tee /mnt/flatcar-root/home/core/.ssh/authorized_keys >/dev/null
-    sudo chown -R 500:500 /mnt/flatcar-root/home/core/.ssh
-    sudo chmod 700 /mnt/flatcar-root/home/core/.ssh
-    sudo chmod 600 /mnt/flatcar-root/home/core/.ssh/authorized_keys
-    sudo umount /mnt/flatcar-root
-    sudo losetup -d \"\${LOOP}\"
+    _cleanup() { sudo umount \"\${MNT}\" 2>/dev/null || true; sudo losetup -d \"\${LOOP}\" 2>/dev/null || true; }
+    trap _cleanup EXIT
+    sudo mkdir -p \"\${MNT}\"
+    sudo mount \${LOOP}p9 \"\${MNT}\"
+    sudo mkdir -p \"\${MNT}\"/home/core/.ssh
+    printf '%s\n' '${key}' | sudo tee \"\${MNT}\"/home/core/.ssh/authorized_keys >/dev/null
+    sudo chown -R 500:500 \"\${MNT}\"/home/core/.ssh
+    sudo chmod 700 \"\${MNT}\"/home/core/.ssh
+    sudo chmod 600 \"\${MNT}\"/home/core/.ssh/authorized_keys
   "
   _vc "start ${name}"
 }
@@ -164,15 +174,7 @@ kv_wait_ready() {
 }
 
 # kv_ip <name>
-# B1 FIX: masquerade networking. Uses $GOPTS so IdentitiesOnly is enforced.
-kv_ip() {
-  local name="$1"
-  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get pod -l kubevirt.io/vm=${name} \
-    -o jsonpath='{.items[0].status.podIP}'"
-}
-
-# kv_ip <name>
-# B1 FIX: masquerade networking — .status.interfaces[0].ipAddress is the guest-internal
+# masquerade networking — .status.interfaces[0].ipAddress is the guest-internal
 # NAT address (10.0.2.2), not routable from ghost. Use the virt-launcher pod IP instead.
 # NOTE: uses $GOPTS explicitly so IdentitiesOnly forces the right SSH key.
 kv_ip() {
@@ -190,7 +192,8 @@ kv_ip() {
 kv_wait_ssh() {
   local name="$1"
   local timeout="${2:-120}"
-  local deadline=$(( $(date +%s) + timeout ))
+  local deadline
+  deadline=$(( $(date +%s) + timeout ))
   local ip
   echo "Waiting for SSH in VM ${name}..."
   until {
@@ -226,8 +229,9 @@ kv_scp_to_vm() {
   local ip; ip=$(kv_ip "$name")
   local tmp="/tmp/_kv_upload_${$}_${name}"
   scp $GOPTS "$src" "${GHOST}:${tmp}"
+  # Use && not ; so a failed scp still cleans up the temp file and exits non-zero.
   ssh $GOPTS "$GHOST" "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${tmp} core@${ip}:${dst}; rm -f ${tmp}"
+    -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${tmp} core@${ip}:${dst} && rm -f ${tmp} || { rm -f ${tmp}; exit 1; }"
 }
 
 # kv_boot_installed <name>
@@ -244,11 +248,12 @@ kv_boot_installed() {
   ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
     --ignore-not-found --wait=false" 2>/dev/null || true
 
-  # Poll until VMI is fully gone before reusing the target disk (fixes race: issue #261).
-  # sleep 5 was insufficient under load; KubeVirt may take up to 60s to release the disk.
-  local deadline=$(( $(date +%s) + 60 ))
-  while _kube "get vmi ${name}" &>/dev/null 2>&1; do
-    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: old VMI ${name} did not stop before boot-installed"; return 1; }
+  # Poll until BOTH VMI and VM objects are gone before disk reuse.
+  # --wait=false returns when the delete is accepted, not when KubeVirt has released the disk.
+  local deadline
+  deadline=$(( $(date +%s) + 60 ))
+  while _kube "get vmi ${name}" &>/dev/null 2>&1 || _kube "get vm ${name}" &>/dev/null 2>&1; do
+    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: old VM/VMI ${name} did not stop before boot-installed"; return 1; }
     sleep 3
   done
 
@@ -300,7 +305,14 @@ kv_delete() {
   local name="$1"
   ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
     --ignore-not-found --wait=false" 2>/dev/null || true
+  # Detach any loopback device left over from kv_inject_ssh_key (leak on interrupted tests).
+  # Also remove per-VM mount point if it was left mounted (belt + suspenders with the trap).
   ssh $GOPTS "$GHOST" "
+    for loop in \$(sudo losetup -j '/var/tmp/knuckle-test/${name}-raw.img' 2>/dev/null | cut -d: -f1); do
+      sudo umount /mnt/flatcar-${name} 2>/dev/null || true
+      sudo losetup -d \"\$loop\" 2>/dev/null || true
+    done
+    sudo rm -rf /mnt/flatcar-${name} 2>/dev/null || true
     sudo rm -f /var/tmp/knuckle-test/${name}-raw.img  2>/dev/null || true
     sudo rm -f /var/tmp/knuckle-test/${name}-target.img 2>/dev/null || true
   " 2>/dev/null || true

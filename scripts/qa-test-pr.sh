@@ -31,7 +31,7 @@ log()        { echo "  [qa ${RUN_ID}] $*" >&2; }
 
 _fetch_artifacts() {
   log "Fetching artifacts from ghost..."
-  _scp_from $GOPTS -r "$GHOST:${WORK_REMOTE}/" "${RUNDIR}/ghost/" 2>/dev/null || true
+  _scp_from -r "$GHOST:${WORK_REMOTE}/" "${RUNDIR}/ghost/" 2>/dev/null || true
 }
 
 _file_issue_on_fail() {
@@ -267,7 +267,7 @@ PYEOF
 fi
 
 # SCP config to ghost for artifact storage, then directly into the VM
-_scp_to $GOPTS "${QA_CONFIG_FILE}" "$GHOST:${WORK_REMOTE}/qa.json"
+_scp_to "${QA_CONFIG_FILE}" "$GHOST:${WORK_REMOTE}/qa.json"
 kv_scp_to_vm "$VM_NAME" "${QA_CONFIG_FILE}" /tmp/qa.json
 
 T1=$(kv_ssh "$VM_NAME" '
@@ -359,7 +359,7 @@ echo "SECURITY_TESTS_DONE fail_count=${FAIL}"
 exit $FAIL
 SECSCRIPT
 
-  _scp_to $GOPTS /tmp/qa-sec-tests-${PR}.sh "$GHOST:${WORK_REMOTE}/sec-tests.sh"
+  _scp_to /tmp/qa-sec-tests-${PR}.sh "$GHOST:${WORK_REMOTE}/sec-tests.sh"
   kv_scp_to_vm "$VM_NAME" "/tmp/qa-sec-tests-${PR}.sh" /tmp/sec-tests.sh
 
   SEC=$(kv_ssh "$VM_NAME" 'bash /tmp/sec-tests.sh 2>&1' 2>&1) || SEC_OK=0
@@ -451,11 +451,18 @@ log "Installed system online"
 
 # ── 12. Domain assertions (run inside the booted installed system) ─────────────
 log "Running domain assertions..."
+# Wait for systemd to reach a stable state before checking service status.
+# kv_wait_ssh fires when sshd accepts a connection — well before local-fs.target
+# completes. Swap/sysext assertions can race if we start too early.
+kv_ssh "$VM_NAME" 'systemctl is-system-running --wait 2>/dev/null || true' 2>/dev/null || true
 
 # Build the assertion script locally — clean, no escaping hell
 ASSERT_SCRIPT="/tmp/knuckle-qa-assert-${PR}.sh"
 
-cat > "$ASSERT_SCRIPT" << ASSERT_SCRIPT_EOF
+# NOTE: The heredoc delimiter MUST be quoted ('ASSERT_SCRIPT_EOF') to prevent the local
+# shell from expanding $TITLE, $LABELS, or any other variable into the script body.
+# An unquoted delimiter with $TITLE in a comment = code injection via PR title (CVE class).
+cat > "$ASSERT_SCRIPT" << 'ASSERT_SCRIPT_EOF'
 #!/bin/bash
 # Domain assertions for PR #${PR}: ${TITLE}
 # Run inside the booted installed Flatcar (not the installer).
@@ -495,8 +502,8 @@ echo ""
 echo "=== BASELINE: hostname matches config ==="
 ACTUAL_HOST=\$(hostname)
 echo "\${ACTUAL_HOST}"
-if [ "\${ACTUAL_HOST}" != "qa-pr-${PR}" ]; then
-  echo "FAIL: hostname mismatch: got '\${ACTUAL_HOST}', want 'qa-pr-${PR}'"
+if [ "\${ACTUAL_HOST}" != "\${HOSTNAME_EXPECTED}" ]; then
+  echo "FAIL: hostname mismatch: got '\${ACTUAL_HOST}', want '\${HOSTNAME_EXPECTED}'"
   echo "  (Ignition hostname field may not have propagated — check knuckle-install.log)"
   FAIL=1
 else
@@ -506,10 +513,20 @@ echo ""
 
 echo "=== BASELINE: core user SSH key (Ignition applied) ==="
 must_exist /home/core/.ssh/authorized_keys
-wc -l /home/core/.ssh/authorized_keys
+# Verify ghost's public key is present by content, not just by file existence.
+if grep -qF "\${HOST_PUB_KEY}" /home/core/.ssh/authorized_keys 2>/dev/null; then
+  echo "ok: ghost key present"
+else
+  echo "FAIL: ghost's public key not found in authorized_keys (content mismatch)"
+  FAIL=1
+fi
 echo ""
 
 ASSERT_SCRIPT_EOF
+
+# Inject PR-specific values as safe shell variable assignments (never raw expansions in heredoc body).
+printf 'HOSTNAME_EXPECTED=%q\n' "qa-pr-${PR}" >> "$ASSERT_SCRIPT"
+printf 'HOST_PUB_KEY=%q\n' "${HOST_KEY}" >> "$ASSERT_SCRIPT"
 
 # Append domain-specific assertions based on labels
 _has "domain:install" && cat >> "$ASSERT_SCRIPT" << 'INSTALL_ASSERTS'
@@ -525,8 +542,12 @@ sudo sfdisk -l /dev/vda 2>&1 | grep -q "^Disk label type: gpt\|^Disklabel type: 
 echo ""
 
 echo "=== ASSERT [install]: /dev/disk/by-id populated ==="
-ls -la /dev/disk/by-id/ 2>&1 | grep -v "^total" | head -5
-ls /dev/disk/by-id/ | grep -v "^$" | wc -l | xargs echo "by-id entries:"
+COUNT=$(ls /dev/disk/by-id/ 2>/dev/null | grep -cv '^$' || echo 0)
+echo "by-id entries: ${COUNT}"
+[ "${COUNT}" -gt 0 ] || {
+  echo "FAIL: /dev/disk/by-id/ is empty — probe will fall back to raw device path"
+  FAIL=1
+}
 echo ""
 
 INSTALL_ASSERTS
@@ -545,9 +566,9 @@ swapon --show 2>/dev/null | grep -q "swapfile" || { echo "FAIL: swapfile not in 
 echo ""
 
 echo "=== ASSERT [swap]: knuckle-create-swapfile.service completed ==="
-systemctl status knuckle-create-swapfile.service 2>&1 | grep -E "Active:|Loaded:"
-systemctl is-active knuckle-create-swapfile.service | grep -q "active" || {
-  echo "FAIL: knuckle-create-swapfile.service did not complete successfully"
+systemctl is-active --quiet knuckle-create-swapfile.service && echo "active" || {
+  echo "FAIL: knuckle-create-swapfile.service is not active (exited)"
+  systemctl status knuckle-create-swapfile.service 2>&1 | grep -E 'Active:|Loaded:' || true
   FAIL=1
 }
 echo ""
@@ -567,6 +588,11 @@ must_exist /etc/tailscale/tailscale.env
 MODE=$(stat -c "%a" /etc/tailscale/tailscale.env 2>/dev/null || echo "MISSING")
 [ "$MODE" = "600" ] || { echo "FAIL: mode is ${MODE}, expected 600"; FAIL=1; }
 echo "mode: ${MODE}"
+# Verify the env file contains the key — not just that the file exists at mode 0600.
+grep -q "TS_AUTHKEY=" /etc/tailscale/tailscale.env 2>/dev/null || {
+  echo "FAIL: TS_AUTHKEY not written to tailscale.env (file exists but content is wrong)"
+  FAIL=1
+}
 echo ""
 
 echo "=== ASSERT [tailscale]: tailscaled.service is enabled ==="
@@ -591,11 +617,19 @@ _has "domain:ignition" && cat >> "$ASSERT_SCRIPT" << 'IGN_ASSERTS'
 
 # ── domain:ignition ───────────────────────────────────────────────────────────
 echo "=== ASSERT [ignition]: update strategy applied ==="
-grep -i "strategy" /etc/flatcar/update.conf 2>/dev/null || echo "(update.conf not present — expected for update_strategy:off)"
+grep -q "REBOOT_STRATEGY=off" /etc/flatcar/update.conf 2>/dev/null || {
+  echo "FAIL: update.conf missing or does not contain REBOOT_STRATEGY=off"
+  FAIL=1
+}
 echo ""
 
 echo "=== ASSERT [ignition]: timezone link correct ==="
-ls -la /etc/localtime 2>&1
+TZ_TARGET=$(readlink /etc/localtime 2>/dev/null || echo "MISSING")
+echo "${TZ_TARGET}"
+echo "${TZ_TARGET}" | grep -q "UTC" || {
+  echo "FAIL: /etc/localtime points to '${TZ_TARGET}', expected UTC"
+  FAIL=1
+}
 echo ""
 
 IGN_ASSERTS
@@ -613,6 +647,10 @@ echo ""
 
 echo "=== ASSERT [sysext]: systemd-sysext status ==="
 sudo systemd-sysext status 2>&1 | head -10
+sudo systemd-sysext status 2>/dev/null | grep -qi "active\|ACTIVE" || {
+  echo "FAIL: no active sysexts — systemd-sysext merge may have failed"
+  FAIL=1
+}
 echo ""
 
 SYSEXT_ASSERTS
@@ -630,7 +668,7 @@ exit $FAIL
 FINAL
 
 # SCP assertion script to ghost for artifact storage, then directly into the VM
-_scp_to $GOPTS "$ASSERT_SCRIPT" "$GHOST:${WORK_REMOTE}/assert.sh" || true
+_scp_to "$ASSERT_SCRIPT" "$GHOST:${WORK_REMOTE}/assert.sh" || true
 kv_scp_to_vm "$VM_NAME" "$ASSERT_SCRIPT" /tmp/assert.sh 2>/dev/null || true
 ASSERT_OUT=$(kv_ssh "$VM_NAME" 'bash /tmp/assert.sh 2>&1' 2>&1) || true
 ASSERT_OK=$(echo "$ASSERT_OUT" | grep -c "ALL_ASSERTIONS_PASS" || true)
