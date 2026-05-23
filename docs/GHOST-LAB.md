@@ -161,3 +161,79 @@ just qa-pr 170
 ```
 
 The only requirement on the remote host is QEMU + KVM + SSH access.
+
+---
+
+## KubeVirt on Ghost (installed 2026-05-23)
+
+Ghost runs k3s v1.32.4 + KubeVirt v1.8.2. This provides a second testing
+path for `domain:tui` PRs: a persistent Flatcar VM accessible via SSH,
+without the QEMU `hostfwd` port-forwarding complexity.
+
+The QEMU `qa-test-pr.sh` path remains the primary gate for all Tier 1/3 tests.
+KubeVirt is used for interactive TUI verification — the human connects and looks.
+
+### When to use which approach
+
+| Approach | Use for |
+|---|---|
+| `qa-test-pr.sh` | All automated Tier 0/1/3 tests, merge-gate evidence |
+| KubeVirt VM | Interactive TUI visual verification (`domain:tui` PRs) |
+
+### Quick reference
+
+```bash
+# Check health
+ssh jorge@192.168.1.102 "kubectl -n kubevirt get pods --no-headers | grep -c Running"
+# Expected: 5
+
+# List running VMs
+ssh jorge@192.168.1.102 "kubectl -n knuckle-test get vmi"
+
+# Create a TUI test VM for PR N (see full procedure in ghost-testlab skill)
+# 1. Convert flatcar_base.img to raw, inject SSH key, apply VM manifest
+# 2. Deploy binary:  scp /tmp/knuckle-prN jorge@ghost:/tmp/
+# 3. Ghost→VM:  ssh jorge@ghost "scp ... core@<VMIP>:/tmp/knuckle"
+# 4. Interactive: ssh -J jorge@192.168.1.102 core@<VMIP> -t /tmp/knuckle
+
+# Stop and delete a VM when done
+ssh jorge@192.168.1.102 "virtctl stop flatcar-pr<N> -n knuckle-test"
+ssh jorge@192.168.1.102 "kubectl -n knuckle-test delete vm flatcar-pr<N>"
+```
+
+### Disk files (hostDisk requirements)
+
+KubeVirt's `hostDisk` has strict requirements:
+
+```bash
+# Files MUST be:
+# - raw format (not qcow2) — KubeVirt passes type=raw to QEMU
+# - owned by qemu:qemu (uid 107)
+# - SELinux context: container_file_t
+sudo qemu-img convert -p -f qcow2 -O raw flatcar_base.img flatcar-prN-raw.img
+sudo chown qemu:qemu flatcar-prN-raw.img && sudo chmod 664 flatcar-prN-raw.img
+sudo chcon -t container_file_t flatcar-prN-raw.img
+```
+
+### SSH key injection (cloudInitNoCloud does not work for Flatcar)
+
+Flatcar on QEMU reads ignition from `fw_cfg`, not from a NoCloud ISO.
+The only way to inject SSH keys into a KubeVirt Flatcar VM is to mount
+the raw disk and write `authorized_keys` directly before first boot:
+
+```bash
+# Flatcar ROOT = partition 9, sector offset 12722176
+# Offset bytes: 12722176 × 512 = 6513754112
+virtctl stop flatcar-prN -n knuckle-test
+ssh jorge@192.168.1.102 "
+  sudo mount -o loop,offset=6513754112 /var/tmp/knuckle-test/flatcar-prN-raw.img /mnt/flatcar-root
+  sudo mkdir -p /mnt/flatcar-root/home/core/.ssh
+  echo '<your-pubkey>' | sudo tee /mnt/flatcar-root/home/core/.ssh/authorized_keys
+  sudo chown -R 500:500 /mnt/flatcar-root/home/core/.ssh  # core UID=500
+  sudo chmod 700 /mnt/flatcar-root/home/core/.ssh
+  sudo chmod 600 /mnt/flatcar-root/home/core/.ssh/authorized_keys
+  sudo umount /mnt/flatcar-root
+"
+virtctl start flatcar-prN -n knuckle-test
+```
+
