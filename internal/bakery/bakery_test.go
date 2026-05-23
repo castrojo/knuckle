@@ -574,3 +574,11 @@ func TestNewHTTPClient(t *testing.T) {
 		t.Error("HTTP client field is nil")
 	}
 }
+
+func TestParseTagName_NoMatch(t *testing.T) {
+	// A tag with no "-vN" and no "-N" pattern → both loops exhaust → ("", "")
+	name, version := bakery.ParseTagName("nodashes")
+	if name != "" || version != "" {
+		t.Errorf("ParseTagName(%q) = (%q, %q), want (\"\", \"\")", "nodashes", name, version)
+	}
+}

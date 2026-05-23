@@ -1,6 +1,7 @@
 package ignition
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1042,5 +1043,26 @@ func TestCompileToIgnition_FatalWarning(t *testing.T) {
 	_, err := CompileToIgnition(bad)
 	if err == nil {
 		t.Fatal("expected fatal error for missing local file reference, got nil")
+	}
+}
+
+// ── renderTemplate: execute error path ───────────────────────────────────────
+
+// execErrData holds a method that returns an error so text/template propagates
+// it back through Execute, covering the execute-error branch in renderTemplate.
+type execErrData struct{}
+
+func (execErrData) Fail() (string, error) {
+	return "", fmt.Errorf("injected execute error")
+}
+
+func TestRenderTemplate_ExecuteError(t *testing.T) {
+	// text/template propagates (value, error) method errors through Execute.
+	_, err := renderTemplate("exec-err", "{{.Fail}}", execErrData{})
+	if err == nil {
+		t.Fatal("expected execute error from failing method, got nil")
+	}
+	if !strings.Contains(err.Error(), "executing exec-err") {
+		t.Errorf("error should mention template name, got: %v", err)
 	}
 }

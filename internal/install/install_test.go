@@ -658,3 +658,33 @@ func TestFormatCommandError_NilResultNilErr(t *testing.T) {
 		t.Errorf("got %q, want %q", err.Error(), "unknown op failed")
 	}
 }
+
+func TestCleanupIgnitionFile_RemoveFailsNonNotExist(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root — permission checks don't apply")
+	}
+	// Create a file inside a directory, then remove write permission from the
+	// directory so os.Remove fails with EACCES (not ENOENT) → triggers Warn log.
+	dir := t.TempDir()
+	f, err := os.CreateTemp(dir, "ignition-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := f.Name()
+	f.Close()
+
+	// Revoke write on the directory so Remove can't unlink the file.
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0755) // restore so TempDir cleanup works
+
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+	installer.ignitionPath = path
+	installer.cleanupIgnitionFile() // should warn, not panic
+	// ignitionPath is cleared regardless of the Remove outcome
+	if installer.ignitionPath != "" {
+		t.Error("ignitionPath should be cleared after cleanupIgnitionFile, even on Remove failure")
+	}
+}
