@@ -17,7 +17,7 @@ PR=${1:?usage: qa-test-pr.sh <PR_NUMBER>}
 # Example: export QA_HOST=jorge@192.168.1.102
 # See docs/GHOST-LAB.md for lab setup instructions.
 GHOST=${QA_HOST:-localhost}
-GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519"
 WORK_REMOTE="/var/tmp/knuckle-qa-pr-${PR}"
 RUN_ID="pr-${PR}-$(date +%Y%m%d-%H%M%S)"
 RUNDIR=".qa/runs/${RUN_ID}"
