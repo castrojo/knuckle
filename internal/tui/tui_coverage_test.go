@@ -382,3 +382,71 @@ func TestSysextListLookup_NotFound(t *testing.T) {
 		t.Errorf("sysextListLookup(notFound) = %d, want 0", got)
 	}
 }
+
+func TestReviewSummary_WithVersion(t *testing.T) {
+	w := newTestWizard()
+	w.State.Config.Channel = "stable"
+	w.State.Config.Version = "3510.2.1"
+	s := New(w).reviewSummary()
+	if !strings.Contains(s, "3510.2.1") {
+		t.Errorf("reviewSummary should show pinned version, got: %q", s)
+	}
+}
+
+func TestReviewSummary_WithDiskModel(t *testing.T) {
+	w := newTestWizard()
+	w.State.Config.Disk = model.DiskInfo{
+		DevPath:   "/dev/sda",
+		Model:     "Samsung 970 EVO",
+		SizeHuman: "500 GB",
+	}
+	s := New(w).reviewSummary()
+	if !strings.Contains(s, "Samsung 970 EVO") {
+		t.Errorf("reviewSummary should show disk model, got: %q", s)
+	}
+}
+
+func TestReviewSummary_TailscaleSubnetRouter(t *testing.T) {
+	w := newTestWizard()
+	w.State.Config.Tailscale = model.TailscaleConfig{
+		AuthKey: "tskey-auth-kSomeID1234567-SomeSecretThatIsLongEnough",
+		Mode:    model.TailscaleModeSubnetRouter,
+		Routes:  "10.0.0.0/8",
+	}
+	s := New(w).reviewSummary()
+	if !strings.Contains(s, "subnet-router") {
+		t.Errorf("reviewSummary should show tailscale mode, got: %q", s)
+	}
+	if !strings.Contains(s, "10.0.0.0/8") {
+		t.Errorf("reviewSummary should show tailscale routes, got: %q", s)
+	}
+}
+
+// ── detectLocalSSHKeys: ReadFile error → continue ─────────────────────────────
+
+func TestDetectLocalSSHKeys_UnreadableFile(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root — permission checks don't apply")
+	}
+	dir := t.TempDir()
+	sshDir := filepath.Join(dir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Create a .pub file that is unreadable — os.ReadFile will fail → continue.
+	pubPath := filepath.Join(sshDir, "id_ed25519.pub")
+	if err := os.WriteFile(pubPath, []byte("ssh-ed25519 AAAA key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(pubPath, 0000); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(pubPath, 0600) }()
+
+	t.Setenv("HOME", dir)
+	keys := detectLocalSSHKeys()
+	// The file is skipped (continue), so no keys returned.
+	if len(keys) != 0 {
+		t.Errorf("unreadable .pub file should be skipped, got %d keys", len(keys))
+	}
+}
