@@ -219,6 +219,11 @@ kv_wait_ready "$VM_NAME" 120 || {
   cat "$REPORT"; exit 1
 }
 
+kv_wait_ssh "$VM_NAME" 120 || {
+  { echo "### Installer VM Boot"; echo "**⛔ SSH TIMEOUT — Flatcar did not finish booting**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  cat "$REPORT"; exit 1
+}
+
 INSTALLER_IP=$(kv_ip "$VM_NAME")
 log "Installer VM ready at ${INSTALLER_IP}"
 
@@ -434,6 +439,12 @@ kv_swap_to_target "$VM_NAME"
 kv_wait_ready "$VM_NAME" 180 || {
   { echo "### Installed System Boot"; echo "**⛔ INSTALLED SYSTEM DID NOT BOOT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar did not boot" || true
+  cat "$REPORT"; exit 1
+}
+
+kv_wait_ssh "$VM_NAME" 180 || {
+  { echo "### Installed System Boot"; echo "**⛔ SSH TIMEOUT — installed Flatcar did not come up**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar SSH never ready" || true
   cat "$REPORT"; exit 1
 }
 log "Installed system online"

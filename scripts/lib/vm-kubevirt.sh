@@ -133,30 +133,66 @@ kv_wait_ready() {
 }
 
 # kv_ip <name>
-# B1 FIX: masquerade networking — .status.interfaces[0].ipAddress is the guest-internal
-# NAT address (10.0.2.2), not routable from ghost. Use the virt-launcher pod IP instead.
+# B1 FIX: masquerade networking. Uses $GOPTS so IdentitiesOnly is enforced.
 kv_ip() {
   local name="$1"
-  ssh "$GHOST" "kubectl -n ${KUBEVIRT_NS} get pod -l kubevirt.io/vm=${name} \
+  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get pod -l kubevirt.io/vm=${name} \
     -o jsonpath='{.items[0].status.podIP}'"
+}
+
+# kv_ip <name>
+# B1 FIX: masquerade networking — .status.interfaces[0].ipAddress is the guest-internal
+# NAT address (10.0.2.2), not routable from ghost. Use the virt-launcher pod IP instead.
+# NOTE: uses $GOPTS explicitly so IdentitiesOnly forces the right SSH key.
+kv_ip() {
+  local name="$1"
+  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get pod -l kubevirt.io/vm=${name} \
+    -o jsonpath='{.items[0].status.podIP}'"
+}
+
+# kv_wait_ssh <name> [timeout]
+# Poll until SSH inside the VM is actually accepting connections (not just VMI Ready).
+# KubeVirt condition:Ready fires when the QEMU process starts, not when the guest
+# OS has booted. Flatcar needs ~30-60s after VM start to boot and open sshd.
+# Also gives the CNI (flannel) time to set up routes to the pod IP.
+kv_wait_ssh() {
+  local name="$1"
+  local timeout="${2:-120}"
+  local deadline=$(( $(date +%s) + timeout ))
+  local ip; ip=$(kv_ip "$name")
+  echo "Waiting for SSH in VM ${name} at ${ip}..."
+  until ssh $GOPTS "$GHOST" \
+      "ssh -o ConnectTimeout=3 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+           -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 core@${ip} true" &>/dev/null 2>&1; do
+    if [[ $(date +%s) -ge $deadline ]]; then
+      echo "TIMEOUT: SSH never ready in VM ${name} (pod IP ${ip})"
+      return 1
+    fi
+    sleep 5
+  done
+  echo "SSH ready in VM ${name} at ${ip}"
 }
 
 # kv_ssh <name> <cmd>
 # Run cmd on VM via ghost → pod-network SSH.
+# Both the ghost hop and the inner VM SSH use GOPTS (IdentitiesOnly enforced).
 kv_ssh() {
   local name="$1"; shift
   local ip; ip=$(kv_ip "$name")
-  ssh "$GHOST" "ssh $GOPTS -i ~/.ssh/id_ed25519 core@${ip} '$*'"
+  ssh $GOPTS "$GHOST" "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 core@${ip} '$*'"
 }
 
 # kv_scp_to_vm <name> <local_src> <remote_dst>
 # SCP from dev machine into VM via ghost.
+# GOPTS applied to both hops (dev→ghost, ghost→VM).
 kv_scp_to_vm() {
   local name="$1" src="$2" dst="$3"
   local ip; ip=$(kv_ip "$name")
   local tmp="/tmp/_kv_upload_${$}_${name}"
   scp $GOPTS "$src" "${GHOST}:${tmp}"
-  ssh "$GHOST" "scp $GOPTS -i ~/.ssh/id_ed25519 ${tmp} core@${ip}:${dst}; rm -f ${tmp}"
+  ssh $GOPTS "$GHOST" "scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${tmp} core@${ip}:${dst}; rm -f ${tmp}"
 }
 
 # kv_swap_to_target <name>
