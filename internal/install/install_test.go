@@ -671,13 +671,15 @@ func TestCleanupIgnitionFile_RemoveFailsNonNotExist(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := f.Name()
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Revoke write on the directory so Remove can't unlink the file.
 	if err := os.Chmod(dir, 0555); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(dir, 0755) // restore so TempDir cleanup works
+	defer func() { _ = os.Chmod(dir, 0755) }() // restore so TempDir cleanup works
 
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
