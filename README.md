@@ -4,7 +4,7 @@
 
 A modern, interactive TUI "installer" for [Flatcar Container Linux](https://www.flatcar.org/), designed for bare-metal deployments. Not a real installer because making one would be dumb. There's no reason to make a "Bluefin Server" if Bluefin just gives you a nice tool to use Flatcar. 
 
-Knuckle is a charm.sh form that makes a valid ignition file and passes it to the Flatcat installer. We're just making users not have to use ignition, with an ubuntu-server style install UX. 
+Knuckle is a charm.sh form that makes a valid ignition file and passes it to the Flatcar installer. We're just making users not have to use ignition, with an ubuntu-server style install UX. 
 
 This is also basically [Azure Container Linux (Home Edition)](https://opensource.microsoft.com/blog/2026/05/18/from-open-source-to-agentic-systems-microsoft-at-open-source-summit-north-america-2026/). 
 - [Download an ISO](https://github.com/projectbluefin/knuckle/releases) for ARM or AMD64 and install it.
