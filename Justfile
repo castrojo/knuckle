@@ -260,7 +260,7 @@ vm-e2e:
     printf '{"channel":"stable","hostname":"e2e-verified","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","update_strategy":"off","reboot":false}\n' \
         "$E2E_PUB" > .vm/e2e-config.json
 
-    E2E_SSH="ssh {{SSH_OPTS}} -i .vm/e2e_key -p 2222 core@127.0.0.1"
+    E2E_SSH="ssh {{SSH_OPTS}} -i .vm/e2e_key -p 2222 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 core@127.0.0.1"
     E2E_SCP="scp {{SSH_OPTS}} -i .vm/e2e_key -P 2222"
 
     # ── Step 1: Boot installer VM ──────────────────────────────────────────
