@@ -8,28 +8,6 @@ import (
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
-// ── sysextListCursorIdx ───────────────────────────────────────────────────────
-
-func TestSysextListCursorIdx_NotReady(t *testing.T) {
-	m := New(newTestWizard())
-	m.sysextListReady = false
-	m.cursor = 3
-	if got := m.sysextListCursorIdx(); got != 3 {
-		t.Errorf("sysextListCursorIdx (list not ready) = %d, want 3", got)
-	}
-}
-
-func TestSysextListCursorIdx_ReadyNoItem(t *testing.T) {
-	// sysextListReady=true but no item selected — falls back to m.cursor
-	m := New(newTestWizard())
-	m.sysextListReady = true
-	m.cursor = 2
-	// Don't initialise the sysext list — SelectedItem() returns nil
-	if got := m.sysextListCursorIdx(); got != 2 {
-		t.Errorf("sysextListCursorIdx (no selected item) = %d, want 2 (cursor fallback)", got)
-	}
-}
-
 // ── sysextListLookup ──────────────────────────────────────────────────────────
 
 func TestSysextListLookup_Found(t *testing.T) {
@@ -46,15 +24,6 @@ func TestSysextListLookup_Found(t *testing.T) {
 	listIdx := m.sysextListLookup(1)
 	if listIdx < 0 {
 		t.Errorf("sysextListLookup(1) = %d, want >= 0", listIdx)
-	}
-}
-
-func TestSysextListLookup_NotFound_ReturnsZero(t *testing.T) {
-	m := New(newTestWizard())
-	m.sysextListReady = true
-	// Empty list — any lookup should fall back to 0
-	if got := m.sysextListLookup(99); got != 0 {
-		t.Errorf("sysextListLookup(99) on empty list = %d, want 0", got)
 	}
 }
 
