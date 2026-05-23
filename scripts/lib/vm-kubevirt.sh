@@ -105,11 +105,13 @@ kv_inject_ssh_key() {
   done
 
   # Phase 2: stop VM and wait for VMI to be gone (safe to mount disk only then)
+  # Allow 5s for the stop request to be processed before polling.
   _vc "stop ${name}" 2>/dev/null || true
-  deadline=$(( $(date +%s) + 60 ))
+  sleep 5
+  deadline=$(( $(date +%s) + 120 ))
   while _kube "get vmi ${name}" &>/dev/null 2>&1; do
     [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI ${name} did not stop for key injection"; return 1; }
-    sleep 2
+    sleep 3
   done
 
   ssh $GOPTS "$GHOST" "
