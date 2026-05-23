@@ -518,6 +518,9 @@ func TestFetchChannelInfoArch_Arm64CancelledContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("cancelled context should produce error")
 	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled error, got: %v", err)
+	}
 }
 
 // ── FetchAllChannelsArch validation branches ──────────────────────────────────
@@ -538,7 +541,10 @@ func TestFetchAllChannelsArch_Arm64ExcludesLTS(t *testing.T) {
 	cancel()
 	// Should return error (network fails) but NOT an arch-validation error.
 	_, err := FetchAllChannelsArch(ctx, "arm64")
-	if err != nil && err.Error() == `unsupported architecture "arm64": must be amd64 or arm64` {
-		t.Fatal("arm64 should not be rejected as invalid arch")
+	if err == nil {
+		t.Fatal("cancelled context should produce error")
+	}
+	if strings.Contains(err.Error(), `unsupported architecture`) {
+		t.Fatalf("arm64 should not be rejected as invalid arch: %v", err)
 	}
 }

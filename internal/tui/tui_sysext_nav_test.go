@@ -22,8 +22,28 @@ func TestSysextListLookup_Found(t *testing.T) {
 
 	// Look up item at sysexts index 1 (tailscale)
 	listIdx := m.sysextListLookup(1)
-	if listIdx < 0 {
-		t.Errorf("sysextListLookup(1) = %d, want >= 0", listIdx)
+	if listIdx < 0 || listIdx >= len(m.sysextList.Items()) {
+		t.Fatalf("sysextListLookup(1) = %d, out of bounds", listIdx)
+	}
+	item := m.sysextList.Items()[listIdx]
+	si, ok := item.(sysextItem)
+	if !ok || si.idx != 1 {
+		t.Errorf("sysextListLookup(1) returned item with idx %d, want 1", si.idx)
+	}
+}
+
+func TestSysextListLookup_NotFound_ReturnsZero(t *testing.T) {
+	w := newTestWizard()
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "docker", SupportTier: bakery.TierIntegrated},
+	}
+	m := New(w)
+	m.Wizard.State.CurrentStep = model.StepSysext
+	m.initSysextList() // populates m.sysextList
+
+	// Index 99 doesn't exist in the list -> should return 0
+	if got := m.sysextListLookup(99); got != 0 {
+		t.Errorf("sysextListLookup(99) = %d, want 0", got)
 	}
 }
 
