@@ -548,3 +548,27 @@ func TestFetchAllChannelsArch_Arm64ExcludesLTS(t *testing.T) {
 		t.Fatalf("arm64 should not be rejected as invalid arch: %v", err)
 	}
 }
+
+func TestVerifySHA512_MultiSection(t *testing.T) {
+	// A DIGESTS file where the SHA512 section has a non-matching entry, then a
+	// second "#" header line triggers inSHA512=false; continue. The function
+	// must exhaust the loop and return false.
+	content := "hello world"
+	digest := "# SHA512 HASH\nwronghash  other-file.txt\n# MD5 HASH\ndeadbeef  test.txt\n"
+	// verifySHA512 hits "# MD5 HASH" → inSHA512=false → continues → returns false.
+	if verifySHA512(content, digest, "test.txt") {
+		t.Error("expected false: hash is in SHA512 section but for wrong file, MD5 section skipped")
+	}
+}
+
+func TestVerifySHA512_ShortBuildID(t *testing.T) {
+	// Exercises the else branch in parseVersionTxt: a FLATCAR_BUILD_ID shorter
+	// than 10 characters uses the whole value as BuildDate.
+	info := &ChannelInfo{}
+	parseVersionTxt(`FLATCAR_VERSION="4593.2.0"
+FLATCAR_BUILD_ID="20260414"
+`, info)
+	if info.BuildDate != "20260414" {
+		t.Errorf("short BuildDate: got %q, want %q", info.BuildDate, "20260414")
+	}
+}

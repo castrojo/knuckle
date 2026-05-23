@@ -1,6 +1,9 @@
 package bakery
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -51,5 +54,26 @@ func TestParseLinkNext_NonEmpty_NoNext(t *testing.T) {
 	url, ok := parseLinkNext(`<https://api.github.com/page=5>; rel="last"`)
 	if ok || url != "" {
 		t.Errorf("parseLinkNext(last-only) = (%q, %v), want (\"\", false)", url, ok)
+	}
+}
+
+func TestFetchSHA256ForAsset_MalformedHash_WhiteBox(t *testing.T) {
+	// Test fetchSHA256ForAsset directly with a malformed hash — the reSHA256
+	// regex rejects it, returning "malformed SHA256 hash" error.
+	const assetName = "target-1.0-x86-64.raw"
+	sha256Content := "NOTAHEXHASH  " + assetName + "\n"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(sha256Content))
+	}))
+	defer srv.Close()
+
+	c := &HTTPClient{HTTP: srv.Client()}
+	_, err := c.fetchSHA256ForAsset(context.Background(), srv.URL+"/SHA256SUMS", assetName)
+	if err == nil {
+		t.Fatal("expected error for malformed SHA256 hash, got nil")
+	}
+	if !strings.Contains(err.Error(), "malformed SHA256") {
+		t.Errorf("error should mention 'malformed SHA256', got: %v", err)
 	}
 }

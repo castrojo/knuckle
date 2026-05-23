@@ -582,3 +582,40 @@ func TestParseTagName_NoMatch(t *testing.T) {
 		t.Errorf("ParseTagName(%q) = (%q, %q), want (\"\", \"\")", "nodashes", name, version)
 	}
 }
+
+func TestFetchSHA256ForAsset_DotSlashPrefix(t *testing.T) {
+	// SHA256SUMS files sometimes prefix filenames with "./" — exercises
+	// the baseName = baseName[idx+1:] stripping branch.
+	const wantHash = "e5336201eedf0c5e7620c6947c821009c362231f7c9023174b9c4f99a1f0ad1b"
+	// Asset name must include arch suffix so FetchCatalogArch (amd64) picks it up.
+	const assetName = "pkg-v1.0-x86-64.raw"
+	sha256Content := wantHash + "  ./" + assetName + "\n"
+	payload := `[{"tag_name":"pkg-v1.0","body":"","assets":[
+		{"name":"` + assetName + `","browser_download_url":"https://BASEURL/` + assetName + `"},
+		{"name":"SHA256SUMS","browser_download_url":"https://BASEURL/SHA256SUMS"}
+	]}]`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/SHA256SUMS" {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte(sha256Content))
+			return
+		}
+		catalog := strings.ReplaceAll(payload, "https://BASEURL", "http://"+r.Host)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(catalog))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	entries, err := client.FetchCatalog(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one entry")
+	}
+	if entries[0].Sha256 != wantHash {
+		t.Errorf("expected hash %q, got %q", wantHash, entries[0].Sha256)
+	}
+}
