@@ -11,15 +11,29 @@ _kube() { ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} $*"; }
 _vc()   { ssh $GOPTS "$GHOST" "virtctl -n ${KUBEVIRT_NS} $*"; }
 
 # kv_prepare_disk <name>
-# Expand flatcar_base.img to a named raw disk on ghost.
-# B2 FIX: declare paths in outer function scope — never 'local' inside SSH heredoc.
+# Prepare per-VM installer and target disks on ghost.
+#
+# The qcow2 → raw conversion is expensive (~30s, 13 GB). Cache it as
+# flatcar-base.raw (shared across all test runs). Each VM gets a
+# reflink copy (--reflink=auto: instant CoW on btrfs/XFS, falls back
+# to file copy on other filesystems) so writes never touch the cache.
+# Fixes #252: previously every run did a full re-convert.
 kv_prepare_disk() {
   local name="$1"
-  local dst="/var/tmp/knuckle-test/${name}-raw.img"
-  local tgt="/var/tmp/knuckle-test/${name}-target.img"
+  local base="/var/tmp/knuckle-test/flatcar-base.raw"  # shared cache
+  local dst="/var/tmp/knuckle-test/${name}-raw.img"    # per-VM reflink copy
+  local tgt="/var/tmp/knuckle-test/${name}-target.img" # per-VM install target
   ssh $GOPTS "$GHOST" "
+    # One-time: convert qcow2 → raw (survives between runs)
+    if [[ ! -f '${base}' ]]; then
+      echo 'Converting Flatcar base to raw (one-time, cached)...'
+      sudo qemu-img convert -p -f qcow2 -O raw '${FLATCAR_BASE}' '${base}'
+      sudo chown qemu:qemu '${base}' && sudo chmod 664 '${base}'
+      sudo chcon -t container_file_t '${base}'
+    fi
+    # Per-VM: reflink copy — instant on btrfs, no extra disk space used
     if [[ ! -f '${dst}' ]]; then
-      sudo qemu-img convert -p -f qcow2 -O raw '${FLATCAR_BASE}' '${dst}'
+      sudo cp --reflink=auto '${base}' '${dst}'
       sudo chown qemu:qemu '${dst}' && sudo chmod 664 '${dst}'
       sudo chcon -t container_file_t '${dst}'
     fi
