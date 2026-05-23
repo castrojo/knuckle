@@ -79,6 +79,28 @@ generated locally and SCPed to QA_HOST, then into the VM — no heredoc escaping
 
 ---
 
+## Ghost observability noise
+
+Ghost may run `otelcol-agent` as a systemd user service for lab telemetry. Do
+not enable the hostmetrics `process` scraper there: as an unprivileged user it
+tries to inspect root-owned PIDs and can emit huge permission-denied batches to
+`journalctl --user -u otelcol-agent` every collection interval. Keep aggregate
+process counts via the `processes` scraper instead.
+
+To apply the repository-maintained fix to ghost (or any `QA_HOST`):
+
+```bash
+./scripts/fix-ghost-otel-process-noise.sh              # defaults to jorge@192.168.1.102
+QA_HOST=user@host ./scripts/fix-ghost-otel-process-noise.sh
+./scripts/fix-ghost-otel-process-noise.sh --apply-local # run directly on ghost
+```
+
+The script backs up the collector config, removes only the `scrapers.process`
+block, restarts the user service, and reports any recent permission-denied
+journal lines.
+
+---
+
 ## Artifacts
 
 Each run saves everything to `.qa/runs/pr-N-TIMESTAMP/`:
