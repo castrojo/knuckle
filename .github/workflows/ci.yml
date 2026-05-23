@@ -50,6 +50,26 @@ jobs:
       - name: test -race
         run: go test -race ./...
 
+      - name: flaky test detection
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          echo "Running tests 5x to detect flaky tests..."
+          flaky_detected=0
+          for i in {1..5}; do
+            echo "Run $i/5..."
+            if ! go test -count=1 ./... > /tmp/test_run_$i.log 2>&1; then
+              echo "FAIL: Run $i failed"
+              flaky_detected=1
+              tail -20 /tmp/test_run_$i.log
+            fi
+          done
+          if [[ $flaky_detected -eq 1 ]]; then
+            echo "::warning::Potential flaky tests detected — some runs failed. Check logs above."
+            exit 0  # Don't fail CI, just warn
+          fi
+          echo "✓ All 5 runs passed — no flaky tests detected"
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
