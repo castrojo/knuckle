@@ -90,7 +90,7 @@ WF_CHANGED=$(gh pr diff "$PR" --repo projectbluefin/knuckle --name-only 2>/dev/n
   | grep -c "^\.github/workflows/" || true)
 
 # ── 2. Complexity gate ────────────────────────────────────────────────────────
-if [[ "$SIZE" == "size:XL" ]] || [[ $DOMAIN_COUNT -gt 4 ]] || [[ $WF_CHANGED -gt 0 ]]; then
+if [[ "$SIZE" == "size:XL" || "$SIZE" == "size:XXL" ]] || [[ $DOMAIN_COUNT -gt 4 ]] || [[ $WF_CHANGED -gt 0 ]]; then
   log "SKIP: complexity gate (size=${SIZE} domains=${DOMAIN_COUNT} wf=${WF_CHANGED})"
   cat > "$REPORT" << EOF
 ## 🧪 Ghost Testlab — PR #${PR} SKIPPED
