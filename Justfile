@@ -52,7 +52,7 @@ test:
     go test ./...
 
 # Tool versions — bump here and in .github/workflows/ci.yml together
-GOLANGCI_LINT_VERSION := "2.11.4"
+GOLANGCI_LINT_VERSION := "2.12.2"
 GOLANGCI_LINT := ".tools/golangci-lint"
 
 # Install pinned tool binaries (idempotent — run once after clone, or after version bump)
