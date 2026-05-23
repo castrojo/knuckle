@@ -54,8 +54,6 @@ github.com/clipperhouse/uax29/v2 v2.5.0 h1:x7T0T4eTHDONxFJsL94uKNKPHrclyFI0lm7+w
 github.com/clipperhouse/uax29/v2 v2.5.0/go.mod h1:Wn1g7MK6OoeDT0vL+Q0SQLDz/KpfsVRgg6W7ihQeh4g=
 github.com/cloudflare/circl v1.6.3 h1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg8=
 github.com/cloudflare/circl v1.6.3/go.mod h1:2eXP6Qfat4O/Yhh8BznvKnJ+uzEoTQ6jVKJRn81BiS4=
-github.com/coreos/butane v0.27.0 h1:ses2MWOD7MsOHDvyFRdUTGJj4ZZRcThyCj1NTr+CEkc=
-github.com/coreos/butane v0.27.0/go.mod h1:cWzlkZC8bTNxfT9EaNFUPLqp6/gEM4qhunp1U6cMvrM=
 github.com/coreos/butane v0.28.0 h1:D+T5c9Q1pUQqFCcTkinCVxvG4K4v7RKzXshbBbz0hMA=
 github.com/coreos/butane v0.28.0/go.mod h1:cWzlkZC8bTNxfT9EaNFUPLqp6/gEM4qhunp1U6cMvrM=
 github.com/coreos/go-json v0.0.0-20230131223807-18775e0fb4fb h1:rmqyI19j3Z/74bIRhuC59RB442rXUazKNueVpfJPxg4=
