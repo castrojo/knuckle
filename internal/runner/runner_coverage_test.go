@@ -78,3 +78,13 @@ func TestRealRunner_RunWithInput_CommandNotFound(t *testing.T) {
 		t.Fatal("expected error for missing binary, got nil")
 	}
 }
+
+func TestSpyRunner_AllError_Run(t *testing.T) {
+	// AllError is tested via RunWithInput elsewhere; this covers SpyRunner.Run.
+	spy := NewSpyRunner()
+	spy.AllError = errors.New("all-run error")
+	_, err := spy.Run(context.Background(), "any-cmd")
+	if err == nil || err.Error() != "all-run error" {
+		t.Errorf("expected AllError from Run, got %v", err)
+	}
+}

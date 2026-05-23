@@ -1796,3 +1796,33 @@ func TestToInstallConfig_NonNilSwap(t *testing.T) {
 		t.Errorf("Swap = %+v, want {Enabled:false SizeMB:512}", ic.Swap)
 	}
 }
+
+func TestRun_ConsistencyCheckFails(t *testing.T) {
+	// A static-network config passes Validate() (gateway is optional there)
+	// but fails validate.CheckConsistency() which requires a gateway.
+	cfg := &Config{
+		Channel: "stable",
+		Disk:    "/dev/vdb",
+		Network: NetworkConfig{
+			Mode:      "static",
+			Interface: "eth0",
+			Address:   "192.168.1.10/24",
+			// Gateway intentionally omitted — passes Validate but fails CheckConsistency
+		},
+		Users:  []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+		DryRun: true,
+	}
+
+	installer := &mockInstaller{}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	err := Run(context.Background(), cfg, installer, logger)
+	if err == nil {
+		t.Fatal("expected consistency check error for static network without gateway")
+	}
+	if !strings.Contains(err.Error(), "consistency check") {
+		t.Errorf("error should mention 'consistency check', got: %v", err)
+	}
+	if installer.called {
+		t.Error("installer should not be called after consistency failure")
+	}
+}
