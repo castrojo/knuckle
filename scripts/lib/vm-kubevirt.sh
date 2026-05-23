@@ -216,8 +216,10 @@ kv_boot_installed() {
   local name="$1"
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
 
-  # Delete the installer VM (VMI + VM object) — kv_delete handles --wait=false
-  kv_delete "${name}"
+  # Delete the installer VM object ONLY — NOT the disk files.
+  # kv_delete removes both disks; we must preserve target.img (installed Flatcar).
+  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} delete vm ${name} \
+    --ignore-not-found --wait=false" 2>/dev/null || true
 
   # Brief pause for KubeVirt controller to fully release the disk
   sleep 5
