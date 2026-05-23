@@ -434,8 +434,8 @@ if [[ $INSTALL_DONE -eq 0 ]]; then
 fi
 
 # ── 11. Boot installed Flatcar ────────────────────────────────────────────────
-log "Booting installed Flatcar (swapping rootdisk to target)..."
-kv_swap_to_target "$VM_NAME"
+log "Booting installed Flatcar (delete installer VM, boot-only)..."
+kv_boot_installed "$VM_NAME"
 kv_wait_ready "$VM_NAME" 180 || {
   { echo "### Installed System Boot"; echo "**⛔ INSTALLED SYSTEM DID NOT BOOT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar did not boot" || true

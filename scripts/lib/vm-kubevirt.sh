@@ -207,29 +207,60 @@ kv_scp_to_vm() {
     -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ${tmp} core@${ip}:${dst}; rm -f ${tmp}"
 }
 
-# kv_swap_to_target <name>
-# Stop installer VM, patch spec so rootdisk → target disk, restart.
-# The installed Flatcar is now on target.img; booting it verifies the install.
-kv_swap_to_target() {
+# kv_boot_installed <name>
+# Delete the installer VM and create a fresh boot-only VM from the target disk.
+# This mirrors the original QEMU approach: kill installer, boot installed disk alone.
+# Patching the live VM spec in-place causes KubeVirt reconciler race conditions;
+# a clean VM object with only the installed disk is more reliable.
+kv_boot_installed() {
   local name="$1"
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
 
-  # Wait for running VMI before stopping (may still be Scheduling)
-  local deadline=$(( $(date +%s) + 60 ))
-  until _kube "get vmi ${name}" &>/dev/null 2>&1; do
-    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI ${name} never appeared before swap"; return 1; }
-    sleep 2
-  done
+  # Delete the installer VM (VMI + VM object) — kv_delete handles --wait=false
+  kv_delete "${name}"
 
-  _vc "stop ${name}" 2>/dev/null || true
-  deadline=$(( $(date +%s) + 60 ))
-  while _kube "get vmi ${name}" &>/dev/null 2>&1; do
-    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI stop before swap"; return 1; }
-    sleep 2
-  done
-  # Patch rootdisk path to the target (installed) disk
-  ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} patch vm ${name} --type=json -p='
-    [{\"op\":\"replace\",\"path\":\"/spec/template/spec/volumes/0/hostDisk/path\",\"value\":\"${tgt_path}\"}]'"
+  # Brief pause for KubeVirt controller to fully release the disk
+  sleep 5
+
+  # Create a new minimal VM: only the installed target disk, no installer disk
+  ssh $GOPTS "$GHOST" kubectl apply -f - << YAML
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: ${name}
+  namespace: ${KUBEVIRT_NS}
+spec:
+  runStrategy: Manual
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: ${name}
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+            - name: rootdisk
+              bootOrder: 1
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        machine:
+          type: q35
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: rootdisk
+          hostDisk:
+            path: ${tgt_path}
+            type: Disk
+YAML
   _vc "start ${name}"
 }
 
