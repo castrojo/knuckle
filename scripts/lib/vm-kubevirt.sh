@@ -87,19 +87,31 @@ YAML
 }
 
 # kv_inject_ssh_key <name>
-# Stop VM, poll until VMI is gone (B3 FIX), mount ROOT p9, inject authorized_keys.
+# Stop VM, poll until VMI is gone, mount ROOT p9, inject authorized_keys.
 # Flatcar reads ignition via fw_cfg — cloudInitNoCloud silently ignored.
 # Flatcar core UID=500. ROOT = partition 9, offset 6513754112.
+# TIMING: wait for VMI to exist before stopping (it may still be Scheduling),
+# then wait up to 60s for VMI to disappear before mounting disk.
 kv_inject_ssh_key() {
   local name="$1"
   local img="/var/tmp/knuckle-test/${name}-raw.img"
   local key; key=$(ssh $GOPTS "$GHOST" "cat ~/.ssh/id_ed25519.pub")
-  _vc "stop ${name}" 2>/dev/null || true
-  local deadline=$(( $(date +%s) + 30 ))
-  while ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
-    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI stop"; return 1; }
+
+  # Phase 1: wait for VMI to appear (KubeVirt controller creates it asynchronously)
+  local deadline=$(( $(date +%s) + 60 ))
+  until _kube "get vmi ${name}" &>/dev/null 2>&1; do
+    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI ${name} never appeared before inject"; return 1; }
     sleep 2
   done
+
+  # Phase 2: stop VM and wait for VMI to be gone (safe to mount disk only then)
+  _vc "stop ${name}" 2>/dev/null || true
+  deadline=$(( $(date +%s) + 60 ))
+  while _kube "get vmi ${name}" &>/dev/null 2>&1; do
+    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI ${name} did not stop for key injection"; return 1; }
+    sleep 2
+  done
+
   ssh $GOPTS "$GHOST" "
     sudo mkdir -p /mnt/flatcar-root
     sudo mount -o loop,offset=6513754112 '${img}' /mnt/flatcar-root
@@ -201,9 +213,17 @@ kv_scp_to_vm() {
 kv_swap_to_target() {
   local name="$1"
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
+
+  # Wait for running VMI before stopping (may still be Scheduling)
+  local deadline=$(( $(date +%s) + 60 ))
+  until _kube "get vmi ${name}" &>/dev/null 2>&1; do
+    [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI ${name} never appeared before swap"; return 1; }
+    sleep 2
+  done
+
   _vc "stop ${name}" 2>/dev/null || true
-  local deadline=$(( $(date +%s) + 30 ))
-  while ssh $GOPTS "$GHOST" "kubectl -n ${KUBEVIRT_NS} get vmi ${name}" &>/dev/null 2>&1; do
+  deadline=$(( $(date +%s) + 60 ))
+  while _kube "get vmi ${name}" &>/dev/null 2>&1; do
     [[ $(date +%s) -ge $deadline ]] && { echo "TIMEOUT: VMI stop before swap"; return 1; }
     sleep 2
   done
