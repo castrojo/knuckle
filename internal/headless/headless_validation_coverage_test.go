@@ -174,4 +174,3 @@ func (s *skipBlockDeviceInstaller) Install(_ context.Context, _ *model.InstallCo
 	progress("mock install")
 	return nil
 }
-
