@@ -400,7 +400,7 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	if cfg.Disk != "" && !cfg.DryRun {
-		if err := validate.BlockDevice(cfg.Disk); err != nil {
+		if err := validateBlockDeviceFunc(cfg.Disk); err != nil {
 			return fmt.Errorf("validation failed: disk: %w", err)
 		}
 	}
@@ -495,6 +495,10 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 // rebootDelay is the duration Run waits before returning in non-dry-run reboot mode.
 // Tests can replace this with a shorter duration to avoid 3-second waits.
 var rebootDelay = 3 * time.Second
+
+// validateBlockDeviceFunc checks that a disk path is a real block device.
+// Tests can replace this to avoid requiring physical block devices.
+var validateBlockDeviceFunc = validate.BlockDevice
 
 // fetchGitHubKeysFunc is the actual implementation used by Run; tests can replace it.
 var fetchGitHubKeysFunc = func(ctx context.Context, username string) ([]string, error) {

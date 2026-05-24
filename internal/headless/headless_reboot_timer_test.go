@@ -24,6 +24,10 @@ func TestRun_RebootTimerFires(t *testing.T) {
 		return nil, nil
 	}
 
+	origValidateBlockDevice := validateBlockDeviceFunc
+	defer func() { validateBlockDeviceFunc = origValidateBlockDevice }()
+	validateBlockDeviceFunc = func(_ string) error { return nil }
+
 	cfg := &Config{
 		Channel:     "stable",
 		Hostname:    "node01",
@@ -56,6 +60,10 @@ func TestRun_RebootTimerContextCancelled(t *testing.T) {
 	fetchGitHubKeysFunc = func(_ context.Context, _ string) ([]string, error) {
 		return nil, nil
 	}
+
+	origValidateBlockDevice := validateBlockDeviceFunc
+	defer func() { validateBlockDeviceFunc = origValidateBlockDevice }()
+	validateBlockDeviceFunc = func(_ string) error { return nil }
 
 	cfg := &Config{
 		Channel:     "stable",
@@ -91,6 +99,10 @@ func TestRun_NoReboot_DryRunFalse(t *testing.T) {
 	fetchGitHubKeysFunc = func(_ context.Context, _ string) ([]string, error) {
 		return nil, nil
 	}
+
+	origValidateBlockDevice := validateBlockDeviceFunc
+	defer func() { validateBlockDeviceFunc = origValidateBlockDevice }()
+	validateBlockDeviceFunc = func(_ string) error { return nil }
 
 	cfg := &Config{
 		Channel:     "stable",
