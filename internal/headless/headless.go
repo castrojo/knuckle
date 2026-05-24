@@ -400,7 +400,7 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	if cfg.Disk != "" && !cfg.DryRun {
-		if err := validate.BlockDevice(cfg.Disk); err != nil {
+		if err := blockDeviceCheckFunc(cfg.Disk); err != nil {
 			return fmt.Errorf("validation failed: disk: %w", err)
 		}
 	}
@@ -501,3 +501,6 @@ var fetchGitHubKeysFunc = func(ctx context.Context, username string) ([]string, 
 var newBakeryClientFunc = func() bakery.Client {
 	return bakery.NewHTTPClient()
 }
+
+// blockDeviceCheckFunc validates a disk path is a real block device; tests can replace it.
+var blockDeviceCheckFunc = validate.BlockDevice

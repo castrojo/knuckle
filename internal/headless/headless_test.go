@@ -1850,3 +1850,72 @@ func TestRun_ConsistencyCheckFails(t *testing.T) {
 		t.Error("installer should not be called after consistency failure")
 	}
 }
+
+func TestRun_RebootPath_ContextCancelled(t *testing.T) {
+// Exercises the Reboot=true, DryRun=false path (lines 477-485) with
+// a pre-cancelled context. Run() should return context.Canceled from
+// the select{} on ctx.Done().
+old := blockDeviceCheckFunc
+blockDeviceCheckFunc = func(string) error { return nil }
+t.Cleanup(func() { blockDeviceCheckFunc = old })
+
+cfg := &Config{
+Channel:        "stable",
+Hostname:       "reboot-test",
+Network:        NetworkConfig{Mode: "dhcp"},
+Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:           "/dev/sda",
+UpdateStrategy: "reboot",
+Reboot:         true,
+DryRun:         false,
+}
+
+ctx, cancel := context.WithCancel(context.Background())
+cancel() // cancel immediately
+
+installer := &mockInstaller{}
+logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+err := Run(ctx, cfg, installer, logger)
+if err == nil {
+t.Fatal("expected context.Canceled error from reboot timer path")
+}
+if err != context.Canceled {
+t.Errorf("expected context.Canceled, got: %v", err)
+}
+}
+
+func TestRun_RebootPath_TimerCompletes(t *testing.T) {
+// Exercises the Reboot=true, DryRun=false path with a valid context.
+// Run() should return nil after the 3-second timer fires.
+// NOTE: this test takes ~3 seconds due to the real time.After.
+if testing.Short() {
+t.Skip("skipping 3-second timer test in short mode")
+}
+
+old := blockDeviceCheckFunc
+blockDeviceCheckFunc = func(string) error { return nil }
+t.Cleanup(func() { blockDeviceCheckFunc = old })
+
+cfg := &Config{
+Channel:        "stable",
+Hostname:       "reboot-timer",
+Network:        NetworkConfig{Mode: "dhcp"},
+Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:           "/dev/sda",
+UpdateStrategy: "reboot",
+Reboot:         true,
+DryRun:         false,
+}
+
+installer := &mockInstaller{}
+logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+err := Run(context.Background(), cfg, installer, logger)
+if err != nil {
+t.Fatalf("expected nil from reboot timer path, got: %v", err)
+}
+if !installer.called {
+t.Error("installer should have been called before reboot")
+}
+}
