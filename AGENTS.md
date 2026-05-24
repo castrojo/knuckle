@@ -453,27 +453,28 @@ Capture output: `tee /tmp/knuckle-qa-pr-${PR}-qa-findings.md`
 
 ### Step 5 — Publish report and decide
 
-**Assemble the full comment** (test report + QA findings summary):
+**ONE COMMENT RULE: The strike report is the only comment posted on the PR. No other text.**
 
 ```bash
-# Publish ghost test report to PR
+# 1. Post the full strike report as the single PR comment
 gh pr comment $PR --repo projectbluefin/knuckle \
-  --body-file /tmp/knuckle-qa-pr-${PR}-report.md
+  --body-file /tmp/qa-stdout-${PR}.txt
 
-# If QA agent found items worth noting, add a follow-up:
-gh pr comment $PR --repo projectbluefin/knuckle \
-  --body "**QA review findings:**\n<summary of blockers/should-fixes/nits>"
+# 2. Approve or request changes with NO body text (-b flag is forbidden here)
+gh pr review $PR --repo projectbluefin/knuckle --approve          # if passing
+gh pr review $PR --repo projectbluefin/knuckle --request-changes  # if failing
 ```
+
+> ⛔ Never add a `-b` body to `gh pr review`. Never post a second comment. The report IS the review.
 
 **Decision matrix:**
 
-| Code review | Ghost tests | QA agent | Action |
-|---|---|---|---|
-| APPROVE | PASS | No blockers | Queue: `gh pr merge $PR --repo projectbluefin/knuckle` |
-| APPROVE | PASS | Should-fix only | Queue + add should-fix as issue |
-| APPROVE | FAIL | Any | Request changes: fix the test failure |
-| REQUEST_CHANGES | Any | Any | Wait for author; re-run full workflow after update |
-| Complex (skipped) | Skipped | Skipped | Leave review only; comment asking for `just vm-e2e` |
+| Code review | Ghost tests | Action |
+|---|---|---|
+| APPROVE | PASS | Post report → `gh pr review --approve` (no body) → queue |
+| APPROVE | FAIL | Post report → `gh pr review --request-changes` (no body) |
+| REQUEST_CHANGES | any | Post report → `gh pr review --request-changes` (no body) |
+| Complex (skipped) | skipped | Post Tier 0 CI result only → leave review |
 
 **Queueing:**
 ```bash
