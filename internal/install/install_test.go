@@ -153,6 +153,32 @@ func TestInstallButaneCompilationFailure(t *testing.T) {
 	}
 }
 
+func TestInstall_GenerateButaneError(t *testing.T) {
+	// Covers install.go:56-58: GenerateButane returns error when a selected
+	// sysext has a non-HTTPS download URL.
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+
+	cfg := &model.InstallConfig{
+		Hostname: "node01",
+		Channel:  "stable",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Disk:     model.DiskInfo{DevPath: "/dev/vda"},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+		Sysexts: []model.SysextEntry{
+			{Name: "docker", URL: "http://evil.example.com/docker.raw", Selected: true},
+		},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error for non-HTTPS sysext URL, got nil")
+	}
+	if !strings.Contains(err.Error(), "generating butane config") {
+		t.Errorf("error = %q, want 'generating butane config' prefix", err.Error())
+	}
+}
+
 func TestInstallFlatcarInstallFailure(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	// Stub a generic error for any flatcar-install call
