@@ -166,3 +166,66 @@ func TestMergeSSHKeys_FiltersEmptyStrings(t *testing.T) {
 		}
 	}
 }
+
+// ── HashPassword direct tests ────────────────────────────────────────────────
+
+func TestHashPassword_ValidPassword_ReturnsBcryptHash(t *testing.T) {
+	hash, err := HashPassword("hunter2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(hash, "$2a$") && !strings.HasPrefix(hash, "$2b$") {
+		t.Errorf("expected bcrypt hash prefix, got: %q", hash[:10])
+	}
+}
+
+func TestHashPassword_EmptyPassword_Succeeds(t *testing.T) {
+	hash, err := HashPassword("")
+	if err != nil {
+		t.Fatalf("empty password should succeed: %v", err)
+	}
+	if hash == "" {
+		t.Error("expected non-empty hash for empty password")
+	}
+}
+
+func TestHashPassword_Exactly72Bytes_Succeeds(t *testing.T) {
+	pw := strings.Repeat("x", 72)
+	hash, err := HashPassword(pw)
+	if err != nil {
+		t.Fatalf("72-byte password should succeed: %v", err)
+	}
+	if hash == "" {
+		t.Error("expected non-empty hash")
+	}
+}
+
+func TestHashPassword_73Bytes_ReturnsError(t *testing.T) {
+	pw := strings.Repeat("x", 73)
+	_, err := HashPassword(pw)
+	if err == nil {
+		t.Fatal("73-byte password should fail")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("error should mention 'too long', got: %v", err)
+	}
+}
+
+func TestHashPassword_MultiByte_CountsBytes(t *testing.T) {
+	// 24 runes of 3-byte chars = 72 bytes exactly → should succeed
+	pw := strings.Repeat("日", 24) // 24 * 3 = 72 bytes
+	hash, err := HashPassword(pw)
+	if err != nil {
+		t.Fatalf("72-byte multibyte password should succeed: %v", err)
+	}
+	if hash == "" {
+		t.Error("expected non-empty hash")
+	}
+
+	// 25 runes = 75 bytes → should fail
+	pw = strings.Repeat("日", 25)
+	_, err = HashPassword(pw)
+	if err == nil {
+		t.Fatal("75-byte multibyte password should fail")
+	}
+}
