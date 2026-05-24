@@ -7,6 +7,7 @@ import (
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/model"
+	"github.com/projectbluefin/knuckle/internal/probe"
 )
 
 // ── wordWrap ─────────────────────────────────────────────────────────────────
@@ -411,4 +412,133 @@ func TestViewStorage_EmptyPathFallsBackToDevPath(t *testing.T) {
 	if !strings.Contains(out, "/dev/nvme0n1") {
 		t.Errorf("viewStorage should use DevPath when Path is empty, got: %q", out)
 	}
+}
+
+// ── viewNvidia ───────────────────────────────────────────────────────────────
+
+func TestViewNvidia_GPUDetected(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepNvidia
+w.State.NvidiaGPUDetected = true
+w.State.NvidiaGPUs = []probe.NvidiaGPUInfo{
+{PCIAddress: "0000:01:00.0", DeviceName: "GA102 [GeForce RTX 3080]"},
+}
+m := New(w)
+m.cursor = 0
+
+view := m.viewNvidia()
+if !strings.Contains(view, "NVIDIA GPU detected") {
+t.Errorf("expected GPU detected message, got:\n%s", view)
+}
+if !strings.Contains(view, "0000:01:00.0") {
+t.Errorf("expected PCI address in output, got:\n%s", view)
+}
+if !strings.Contains(view, "GeForce RTX 3080") {
+t.Errorf("expected GPU name in output, got:\n%s", view)
+}
+if !strings.Contains(view, "Select kernel driver series") {
+t.Errorf("expected driver picker section, got:\n%s", view)
+}
+}
+
+func TestViewNvidia_NoGPU(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepNvidia
+w.State.NvidiaGPUDetected = false
+w.State.NvidiaGPUs = nil
+m := New(w)
+m.cursor = 0
+
+view := m.viewNvidia()
+if !strings.Contains(view, "No NVIDIA GPU detected") {
+t.Errorf("expected no-GPU warning, got:\n%s", view)
+}
+if strings.Contains(view, "NVIDIA GPU detected on this machine") {
+t.Errorf("should not show GPU-detected message when no GPU")
+}
+}
+
+func TestViewNvidia_MultipleGPUs(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepNvidia
+w.State.NvidiaGPUDetected = true
+w.State.NvidiaGPUs = []probe.NvidiaGPUInfo{
+{PCIAddress: "0000:01:00.0", DeviceName: "GA102 [GeForce RTX 3080]"},
+{PCIAddress: "0000:02:00.0", DeviceName: "AD102 [GeForce RTX 4090]"},
+}
+m := New(w)
+m.cursor = 0
+
+view := m.viewNvidia()
+if !strings.Contains(view, "0000:01:00.0") || !strings.Contains(view, "0000:02:00.0") {
+t.Errorf("expected both GPU PCI addresses in output, got:\n%s", view)
+}
+}
+
+func TestViewNvidia_CursorHighlightsOption(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepNvidia
+w.State.NvidiaGPUDetected = true
+w.State.NvidiaGPUs = []probe.NvidiaGPUInfo{
+{PCIAddress: "0000:01:00.0", DeviceName: "Test GPU"},
+}
+m := New(w)
+
+// Each driver option should appear in the output
+for i, opt := range model.NvidiaDriverOptions {
+m.cursor = i
+view := m.viewNvidia()
+if !strings.Contains(view, opt.Label) {
+t.Errorf("cursor=%d: expected label %q in output", i, opt.Label)
+}
+// Selected item shows description
+if opt.Description != "" && !strings.Contains(view, opt.Description) {
+t.Errorf("cursor=%d: expected description %q for selected item", i, opt.Description)
+}
+}
+}
+
+viewUpdate // ── ───────────
+
+func TestViewUpdate_ContainsAllStrategies(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepUpdate
+m := New(w)
+m.cursor = 0
+
+view := m.viewUpdate()
+for _, strategy := range []string{"reboot", "off", "etcd-lock"} {
+if !strings.Contains(view, strategy) {
+t.Errorf("expected strategy %q in output, got:\n%s", strategy, view)
+}
+}
+}
+
+func TestViewUpdate_CursorHighlightsSelected(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepUpdate
+m := New(w)
+
+strategies := []string{"reboot (Recommended)", "off", "etcd-lock"}
+for i, name := range strategies {
+m.cursor = i
+view := m.viewUpdate()
+expected := fmt.Sprintf("▸ %s", name)
+if !strings.Contains(view, expected) {
+t.Errorf("cursor=%d: expected highlighted %q in output, got:\n%s", i, expected, view)
+}
+}
+}
+
+func TestViewUpdate_NonSelectedNotHighlighted(t *testing.T) {
+w := newTestWizard()
+w.State.CurrentStep = model.StepUpdate
+m := New(w)
+m.cursor = 0
+
+view := m.viewUpdate()
+// "off" is not selected, should have "  " prefix not "▸ "
+if strings.Contains(view, "▸ off") {
+t.Errorf("expected 'off' to not be highlighted when cursor=0, got:\n%s", view)
+}
 }
