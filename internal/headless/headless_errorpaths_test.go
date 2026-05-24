@@ -16,6 +16,10 @@ import (
 // (lines 477-485) where context cancellation during the 3-second timer
 // causes Run to return ctx.Err().
 func TestRun_RebootTimerContextCancellation(t *testing.T) {
+	old := validateBlockDeviceFunc
+	validateBlockDeviceFunc = func(string) error { return nil }
+	defer func() { validateBlockDeviceFunc = old }()
+
 	cfg := &Config{
 		Channel:  "stable",
 		Hostname: "node01",
@@ -48,6 +52,10 @@ func TestRun_RebootTimerCompletes(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping 3-second timer test in short mode")
 	}
+
+	old := validateBlockDeviceFunc
+	validateBlockDeviceFunc = func(string) error { return nil }
+	defer func() { validateBlockDeviceFunc = old }()
 
 	cfg := &Config{
 		Channel:  "stable",
