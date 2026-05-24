@@ -166,15 +166,6 @@ tui      ← cmd/knuckle
 
 CI runs unit + race + lint + vuln + coverage gate. `just vm-e2e` and `scripts/qa-test-pr.sh` run on **ghost** (192.168.1.102). `just e2e`/`just vm` require a local display.
 
-### Ghost Testlab
-
-Ghost (192.168.1.102) is the dedicated headless QEMU host for VM-level testing:
-- Flatcar 4593.2.1 base image at `/var/tmp/knuckle-test/flatcar_base.img`
-- 32 KVM cores, 46 GB RAM available, 205 GB NVMe
-- Port range 2300–2315 reserved for PR test VMs
-- **`hostfwd` binds `127.0.0.1`** — all VM SSH must run FROM ghost, not through it
-- Full procedure: load `knuckle-qa` skill
-
 ### Per-PR Verification Policy
 
 | PR labels | Minimum required before merge | Evidence standard |
@@ -198,44 +189,6 @@ Ghost (192.168.1.102) is the dedicated headless QEMU host for VM-level testing:
 
 ## Working in this repo as an agent
 
-### Claude Code
-
-**Role in this repo:** Claude Code (Sonnet 4.6+) is the designated final
-principal-engineer review agent. Before any release tag, run the PE checklist
-below using Claude Code with the slm MCP wired — it has full cross-session
-context of every prior review finding.
-
-**Memory (slm) wiring — one-time setup:**
-
-```bash
-claude mcp add slm -s user -- podman exec -i systemd-superlocalmemory-slm slm mcp
-# restart Claude Code — mcp__slm__* tools will surface in the session
-```
-
-**Verification:** ask Claude Code to `mcp__slm__get_status` — expect
-`fact_count > 800`, `mode: "a"`. If absent or count is 0, memory is not wired.
-
-When slm is wired, use `mcp__slm__recall(query=...)` — 4-channel retrieval
-(semantic + spreading-activation + BM25 + temporal) vs FTS5-only search.
-Bootstrap queries to run at session start:
-
-```
-recall("correction violation preference constraint workflow rule", limit=10)
-recall("knuckle workflow patterns constraints project", limit=8)
-recall("knuckle <task-description>", limit=5)
-```
-
-**If memory is absent:** say so and proceed. This repo does not block on it.
-The full bootstrap from `~/src/AGENTS.md` is for the pi agent only.
-
-**Tool pins:** golangci-lint and govulncheck versions are pinned in the
-Justfile (`GOLANGCI_LINT_VERSION`) and go.mod (`tool` directive). When
-bumping a tool version: update both places and commit go.mod + go.sum.
-
-```bash
-just tools          # install / verify pinned tool binaries
-just ci             # full pre-push gate (now includes headless e2e)
-```
 
 ### ISO build internals
 
@@ -272,125 +225,6 @@ injection method for Flatcar PXE live boot.
 8. **Adding a new disk-touching code path?** Test it in QEMU via `just vm` or
    `just vm-e2e`. Unit tests use `SpyRunner` to assert commands without execution.
 
-### Subagent dispatch
-
-| Agent          | Use it for                                                      |
-| -------------- | --------------------------------------------------------------- |
-| `Explore`      | "where is X defined", broad code search                         |
-| `Plan`         | Multi-file changes, architectural decisions                     |
-| `QA`           | Edge-case enumeration, fixture gaps, test-pyramid review        |
-| `Principal SE` | Pre-release architecture audit, blocker classification          |
-| `Security`     | Any change touching disk writes, network, credentials, ignition |
-
-Don't dispatch a subagent for single-file edits or single grep queries — do
-those inline.
-
----
-
-## PR Review + Ghost Test Workflow
-
-This is the canonical procedure for reviewing any knuckle PR. Follow it in
-order, every time. No steps are optional.
-
-### Step 0 — Session start (2 minutes)
-
-```bash
-# Check open PRs
-gh pr list --repo projectbluefin/knuckle --state open
-
-# Check ghost is reachable
-ssh -o ConnectTimeout=5 jorge@192.168.1.102 "hostname && df -h /var/tmp | tail -1" 2>&1
-```
-
-If ghost is unreachable: do code review only (Step 2). Skip VM tests. Say so
-explicitly in the review comment.
-
----
-
-### Step 1 — Complexity gate (1 minute)
-
-Fetch the PR metadata:
-
-```bash
-PR=<number>
-gh pr view $PR --repo projectbluefin/knuckle --json title,labels,additions,deletions
-```
-
-**Skip to Step 2 only (no VM tests, no auto-merge) if ANY of:**
-
-| Signal | Value that triggers skip |
-|---|---|
-| `size:XL` label | present |
-| `domain:*` label count | > 4 |
-| Lines changed | > 500 |
-| Files touching `.github/workflows/` | any |
-| Closes issues count | > 5 |
-
-For complex PRs: write the code review, add this comment:
-> "This PR is too large for automated ghost VM verification. A human `just vm-e2e` run on ghost (192.168.1.102) is required before merge."
-
----
-
-### Step 2 — Code review (5–15 minutes)
-
-**Read the full diff:**
-```bash
-gh pr diff $PR --repo projectbluefin/knuckle
-```
-
-**Check against safety invariants** (non-negotiable):
-- [ ] No `exec.Command` outside `internal/runner`?
-- [ ] Disk writes only inside QEMU (never on host)?
-- [ ] Ignition tempfile uses `os.CreateTemp` + `chmod 0600` + `defer Remove`?
-- [ ] No disk secrets in `slog` output?
-- [ ] New external commands wired through `runner.Runner`?
-
-**Check domain-specific patterns:**
-
-| Domain | Key check |
-|---|---|
-| `install` | `wipefs → flatcar-install → sfdisk` order; DryRunner no-ops all three |
-| `ignition` | Template `{{- end}}` balanced; `yamlEscape` on every user string |
-| `headless` | `Validate()` called before `ToInstallConfig()`; SSH keys validated |
-| `tui` | No business logic in view model; `wizard.Apply*` for mutations |
-| `validate` | Table-driven tests; error messages include the bad value |
-| `wizard` | Conditional steps check selector (e.g. `isTailscaleSelected()`) in Next/Previous/GoToStep |
-| `bakery` | SHA512 + GPG both checked; no per-call `http.Client` creation |
-| `iso` | `systemd.gpt_auto=0` on both boot entries; `--efi-boot-part` not `--isohybrid-gpt-basdat` |
-
-**Rubber duck pass — mandatory before submitting:**
-> Read your review back. For every "LGTM" ask: is this verified from the diff, or assumed?
-> For every warning ask: would you accept this explanation if you were the author?
-
-**Never post a review to GitHub until Step 3 (ghost test) passes.**
-The review and test report are posted together as one comment in Step 5.
-
-**Submit the review** via `gh pr review` or MCP tools. Use `APPROVE`,
-`REQUEST_CHANGES`, or `COMMENT`. Do not open a new PR for fixes — push to
-the existing branch.
-
----
-
-### Step 3 — Ghost VM test (5–25 minutes depending on tier)
-
-Run from the **dev machine** (not ghost — the script SCPs the binary to ghost):
-
-```bash
-cd ~/src/knuckle
-./scripts/qa-test-pr.sh $PR 2>&1 | tee /tmp/knuckle-qa-pr-${PR}-report.md
-echo "Exit: $?"
-```
-
-**What the script does automatically:**
-1. Fetches PR labels and branch from GitHub
-2. Complexity gate (exits 2 if too complex — you already checked in Step 1)
-3. Checks out the PR head, runs `just ci` locally (all unit tests, lint, coverage)
-4. Builds `bin/knuckle` from the PR head commit
-5. SCPs the binary to ghost (`jorge@192.168.1.102:/var/tmp/knuckle-qa-pr-${PR}/`)
-6. On ghost: allocates a free port (2300–2315), boots a fresh Flatcar VM (qcow2 CoW overlay on `flatcar_base.img`)
-7. Waits for SSH (20 × 2s, fails fast with serial log if timeout)
-8. Runs tier-appropriate tests (see below)
-9. Writes a markdown report to stdout
 
 **Tier selection by label:**
 
@@ -453,27 +287,28 @@ Capture output: `tee /tmp/knuckle-qa-pr-${PR}-qa-findings.md`
 
 ### Step 5 — Publish report and decide
 
-**Assemble the full comment** (test report + QA findings summary):
+**ONE COMMENT RULE: The strike report is the only comment posted on the PR. No other text.**
 
 ```bash
-# Publish ghost test report to PR
+# 1. Post the full strike report as the single PR comment
 gh pr comment $PR --repo projectbluefin/knuckle \
-  --body-file /tmp/knuckle-qa-pr-${PR}-report.md
+  --body-file /tmp/qa-stdout-${PR}.txt
 
-# If QA agent found items worth noting, add a follow-up:
-gh pr comment $PR --repo projectbluefin/knuckle \
-  --body "**QA review findings:**\n<summary of blockers/should-fixes/nits>"
+# 2. Approve or request changes with NO body text (-b flag is forbidden here)
+gh pr review $PR --repo projectbluefin/knuckle --approve          # if passing
+gh pr review $PR --repo projectbluefin/knuckle --request-changes  # if failing
 ```
+
+> ⛔ Never add a `-b` body to `gh pr review`. Never post a second comment. The report IS the review.
 
 **Decision matrix:**
 
-| Code review | Ghost tests | QA agent | Action |
-|---|---|---|---|
-| APPROVE | PASS | No blockers | Queue: `gh pr merge $PR --repo projectbluefin/knuckle` |
-| APPROVE | PASS | Should-fix only | Queue + add should-fix as issue |
-| APPROVE | FAIL | Any | Request changes: fix the test failure |
-| REQUEST_CHANGES | Any | Any | Wait for author; re-run full workflow after update |
-| Complex (skipped) | Skipped | Skipped | Leave review only; comment asking for `just vm-e2e` |
+| Code review | Ghost tests | Action |
+|---|---|---|
+| APPROVE | PASS | Post report → `gh pr review --approve` (no body) → queue |
+| APPROVE | FAIL | Post report → `gh pr review --request-changes` (no body) |
+| REQUEST_CHANGES | any | Post report → `gh pr review --request-changes` (no body) |
+| Complex (skipped) | skipped | Post Tier 0 CI result only → leave review |
 
 **Queueing:**
 ```bash
