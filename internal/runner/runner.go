@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -44,6 +45,10 @@ func (r *RealRunner) Run(ctx context.Context, name string, args ...string) (*Res
 
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -77,6 +82,10 @@ func (r *RealRunner) RunWithInput(ctx context.Context, input string, name string
 
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 
 	cmd.Stdin = strings.NewReader(input)
 
