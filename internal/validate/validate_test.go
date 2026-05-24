@@ -168,6 +168,7 @@ func TestDiskPath(t *testing.T) {
 		{"invalid just prefix", "/dev/", true},
 		{"invalid relative", "dev/sda", true},
 		{"invalid other path", "/sys/block/sda", true},
+		{"invalid path traversal", "/dev/../etc/passwd", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,6 +211,35 @@ func TestBlockDevice_StatError(t *testing.T) {
 	err := BlockDevice(path)
 	if err == nil {
 		t.Fatal("expected error for inaccessible path, got nil")
+	}
+}
+
+func TestBlockDevice_PermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("permission checks are bypassed as root")
+	}
+	dir := t.TempDir()
+	subdir := filepath.Join(dir, "locked")
+	if err := os.Mkdir(subdir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(subdir, "device")
+	if err := os.WriteFile(inner, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Remove all permissions so os.Stat(inner) returns EACCES, not ENOENT.
+	if err := os.Chmod(subdir, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(subdir, 0o700) })
+
+	err := BlockDevice(inner)
+	if err == nil {
+		t.Fatal("expected error for permission-denied stat, got nil")
+	}
+	// Must NOT say "not found" — that would mean IsNotExist hit instead.
+	if strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected generic stat error, got not-found message: %v", err)
 	}
 }
 
@@ -534,6 +564,13 @@ func TestCheckConsistency(t *testing.T) {
 				cfg.NvidiaDriverVersion = "bogus"
 			},
 			wantErr: "unknown NVIDIA driver series",
+		},
+		{
+			name: "valid nvidia driver version",
+			modify: func(cfg *model.InstallConfig) {
+				cfg.NvidiaDriverVersion = "570-open"
+			},
+			wantErr: "",
 		},
 	}
 	for _, tt := range tests {
