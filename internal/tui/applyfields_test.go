@@ -249,7 +249,7 @@ func TestApplyFields_Nvidia_SelectsDriverVersion(t *testing.T) {
 		m := New(w)
 		m.Wizard.State.CurrentStep = model.StepNvidia
 		m.cursor = i
-		m.applyFields()
+		m.handleEnter()
 		got := m.Wizard.State.Config.NvidiaDriverVersion
 		if got != opt.ID {
 			t.Errorf("cursor=%d: expected NvidiaDriverVersion=%q, got %q", i, opt.ID, got)
@@ -289,7 +289,7 @@ func TestApplyFields_Update_SelectsStrategy(t *testing.T) {
 		m := New(w)
 		m.Wizard.State.CurrentStep = model.StepUpdate
 		m.cursor = i
-		m.applyFields()
+		m.handleEnter()
 		got := m.Wizard.State.Config.UpdateStrategy.RebootStrategy
 		if got != expected {
 			t.Errorf("cursor=%d: expected RebootStrategy=%q, got %q", i, expected, got)
