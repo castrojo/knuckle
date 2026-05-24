@@ -19,9 +19,9 @@ func TestCheckCatalogIntegration(t *testing.T) {
 		{Name: "docker", Version: "28.0.0", URL: "https://example.com/docker.raw"},
 		{Name: "unknown-ext-xyz", Version: "1.0.0", URL: "https://example.com/unknown.raw"},
 	}
-	
+
 	covered, missing := checkCatalog(entries)
-	
+
 	if covered != 1 {
 		t.Errorf("covered = %d, want 1", covered)
 	}
@@ -53,11 +53,11 @@ func TestOutputFormatting(t *testing.T) {
 		}
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	if !strings.Contains(output, "ok") {
@@ -91,11 +91,11 @@ func TestOutputFormattingMissing(t *testing.T) {
 		}
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	if !strings.Contains(output, "MISSING") {
@@ -133,11 +133,11 @@ func TestMissingEntryInstructions(t *testing.T) {
 		fmt.Println()
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	expectedStrings := []string{
@@ -163,7 +163,7 @@ func TestMissingEntryInstructions(t *testing.T) {
 func TestEmptyCatalogOutput(t *testing.T) {
 	entries := []model.SysextEntry{}
 	covered, missing := checkCatalog(entries)
-	
+
 	if covered != 0 {
 		t.Errorf("covered = %d, want 0 for empty catalog", covered)
 	}
@@ -180,21 +180,21 @@ func TestMultipleMixedEntries(t *testing.T) {
 		{Name: "unknown-1", Version: "1.0.0", URL: "https://example.com/u1.raw"},
 		{Name: "unknown-2", Version: "2.0.0", URL: "https://example.com/u2.raw"},
 	}
-	
+
 	covered, missing := checkCatalog(entries)
-	
+
 	if covered != 2 {
 		t.Errorf("covered = %d, want 2 (docker + tailscale)", covered)
 	}
 	if len(missing) != 2 {
 		t.Errorf("len(missing) = %d, want 2", len(missing))
 	}
-	
+
 	missingNames := make(map[string]bool)
 	for _, m := range missing {
 		missingNames[m.Name] = true
 	}
-	
+
 	if !missingNames["unknown-1"] || !missingNames["unknown-2"] {
 		t.Errorf("missing should contain unknown-1 and unknown-2, got: %v", missing)
 	}
@@ -204,10 +204,10 @@ func TestMultipleMixedEntries(t *testing.T) {
 func TestFlagParsing(t *testing.T) {
 	// Reset flags for testing
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	
+
 	strict := flag.Bool("strict", false, "exit 1 if any extensions are missing curated descriptions")
 	arch := flag.String("arch", "amd64", "architecture to query")
-	
+
 	if *strict != false {
 		t.Errorf("strict flag default = %v, want false", *strict)
 	}
@@ -231,11 +231,11 @@ func TestResultSummaryFormat(t *testing.T) {
 
 	fmt.Printf("Result: %d covered, %d missing\n", covered, len(missing))
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	if !strings.Contains(output, "Result:") {
@@ -257,18 +257,18 @@ func TestSuccessMessage(t *testing.T) {
 	os.Stdout = w
 
 	missing := []bakery.MissingEntry{}
-	
+
 	if len(missing) == 0 {
 		fmt.Println()
 		fmt.Println("✓ All live bakery extensions have curated descriptions.")
 		fmt.Println("  No action needed.")
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	if !strings.Contains(output, "✓ All live bakery extensions have curated descriptions") {
@@ -297,11 +297,11 @@ func TestChecklistOutput(t *testing.T) {
 	fmt.Println("4. Run: just ci")
 	fmt.Println()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	output := buf.String()
 
 	expectedStrings := []string{
