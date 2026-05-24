@@ -1094,6 +1094,38 @@ func TestRun_GitHubKeyFetchReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestRun_GitHubKeyFetchReturnsInvalidKey(t *testing.T) {
+	// When GitHub returns a key that fails SSH validation, Run must abort.
+	old := fetchGitHubKeysFunc
+	fetchGitHubKeysFunc = func(_ context.Context, username string) ([]string, error) {
+		return []string{"not-a-valid-ssh-public-key"}, nil
+	}
+	defer func() { fetchGitHubKeysFunc = old }()
+
+	cfg := &Config{
+		Channel:  "stable",
+		Hostname: "node01",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", GithubUser: "badkeys-user"}},
+		Disk:     "/dev/vdb",
+		DryRun:   true,
+	}
+
+	installer := &mockInstaller{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	err := Run(context.Background(), cfg, installer, logger)
+	if err == nil {
+		t.Fatal("expected error when GitHub returns invalid SSH key")
+	}
+	if !strings.Contains(err.Error(), "invalid SSH key") {
+		t.Errorf("error should mention 'invalid SSH key', got: %v", err)
+	}
+	if installer.called {
+		t.Error("installer should not be called when key validation fails")
+	}
+}
+
 func TestRun_InstallFailure(t *testing.T) {
 	// When the installer returns an error partway through, Run must propagate it.
 	cfg := &Config{
