@@ -60,6 +60,7 @@ func TestRun_ToInstallConfigPathExercised(t *testing.T) {
 		Hostname:    "node01",
 		Network:     NetworkConfig{Mode: "dhcp"},
 		IgnitionURL: "https://example.com/config.ign",
+		Disk:        "/dev/sda",
 		DryRun:      true,
 	}
 
