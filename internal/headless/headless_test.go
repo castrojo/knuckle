@@ -1525,30 +1525,54 @@ func TestValidate_SwapNegativeSize(t *testing.T) {
 }
 
 func TestValidate_TailscaleInvalidKey(t *testing.T) {
+	// Uses SSH key (not password) so user validation passes and reaches tailscale validation.
+	// Previously used Password:"hunter2" which failed PasswordHash before reaching tailscale.
 	cfg := &Config{
 		Channel:   "stable",
 		Disk:      "/dev/vda",
-		Users:     []UserConfig{{Username: "core", Password: "hunter2"}},
+		Users:     []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
 		Tailscale: TailscaleConfig{AuthKey: "not-a-real-key"},
 	}
-	if err := cfg.Validate(); err == nil {
+	err := cfg.Validate()
+	if err == nil {
 		t.Fatal("expected error for invalid Tailscale auth key, got nil")
+	}
+	if !strings.Contains(err.Error(), "tailscale auth_key") {
+		t.Errorf("error should mention 'tailscale auth_key', got: %v", err)
 	}
 }
 
 func TestValidate_TailscaleSubnetRouterNoRoutes(t *testing.T) {
+	// Uses SSH key (not password) so user validation passes and reaches tailscale validation.
+	// Previously used Password:"hunter2" which failed PasswordHash before reaching tailscale.
 	cfg := &Config{
 		Channel: "stable",
 		Disk:    "/dev/vda",
-		Users:   []UserConfig{{Username: "core", Password: "hunter2"}},
+		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
 		Tailscale: TailscaleConfig{
 			AuthKey: "tskey-auth-kExampleKeyID1-ExampleSecretThatIsLongEnough123",
 			Mode:    "subnet-router",
 			Routes:  "",
 		},
 	}
-	if err := cfg.Validate(); err == nil {
+	err := cfg.Validate()
+	if err == nil {
 		t.Fatal("expected error for subnet router with no routes, got nil")
+	}
+	if !strings.Contains(err.Error(), "tailscale routes") {
+		t.Errorf("error should mention 'tailscale routes', got: %v", err)
+	}
+}
+
+func TestResolveSysexts_EmptyNames(t *testing.T) {
+	// Covers the len(names)==0 early return guard in resolveSysexts (line 190).
+	// Run() never calls resolveSysexts with empty names, so this path needs a direct test.
+	got, err := resolveSysexts(context.Background(), []string{}, nil, "amd64")
+	if err != nil {
+		t.Fatalf("expected nil error for empty names, got: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil result for empty names, got: %v", got)
 	}
 }
 
