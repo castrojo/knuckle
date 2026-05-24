@@ -124,48 +124,48 @@ func buildSingleDiskJSON(path string, size uint64, devType string, removable boo
 }
 
 func TestHumanSize_Boundaries(t *testing.T) {
-tests := []struct {
-bytes uint64
-want  string
-}{
-// Just below each threshold
-{1024 - 1, "1023 B"},
-{1024*1024 - 1, "1024.0 KB"},
-{1024*1024*1024 - 1, "1024.0 MB"},
-{1024*1024*1024*1024 - 1, "1024.0 GB"},
-// Exact thresholds
-{1024, "1.0 KB"},
-{1024 * 1024, "1.0 MB"},
-{1024 * 1024 * 1024, "1.0 GB"},
-{1024 * 1024 * 1024 * 1024, "1.0 TB"},
-// Large values (near uint64 max)
-{16 * 1024 * 1024 * 1024 * 1024, "16.0 TB"},      // 16 TB
-{1023 * 1024 * 1024 * 1024 * 1024, "1023.0 TB"},   // 1023 TB (no PB unit)
-// Fractional display
-{1536, "1.5 KB"},                    // 1.5 KB
-{1572864, "1.5 MB"},                 // 1.5 MB
-{1610612736, "1.5 GB"},              // 1.5 GB
-{1649267441664, "1.5 TB"},           // 1.5 TB
-// Single byte
-{1, "1 B"},
-}
-for _, tt := range tests {
-t.Run(fmt.Sprintf("%d", tt.bytes), func(t *testing.T) {
-if got := humanSize(tt.bytes); got != tt.want {
-t.Errorf("humanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
-}
-})
-}
+	tests := []struct {
+		bytes uint64
+		want  string
+	}{
+		// Just below each threshold
+		{1024 - 1, "1023 B"},
+		{1024*1024 - 1, "1024.0 KB"},
+		{1024*1024*1024 - 1, "1024.0 MB"},
+		{1024*1024*1024*1024 - 1, "1024.0 GB"},
+		// Exact thresholds
+		{1024, "1.0 KB"},
+		{1024 * 1024, "1.0 MB"},
+		{1024 * 1024 * 1024, "1.0 GB"},
+		{1024 * 1024 * 1024 * 1024, "1.0 TB"},
+		// Large values (near uint64 max)
+		{16 * 1024 * 1024 * 1024 * 1024, "16.0 TB"},
+		{1023 * 1024 * 1024 * 1024 * 1024, "1023.0 TB"},
+		// Fractional display
+		{1536, "1.5 KB"},
+		{1572864, "1.5 MB"},
+		{1610612736, "1.5 GB"},
+		{1649267441664, "1.5 TB"},
+		// Single byte
+		{1, "1 B"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d", tt.bytes), func(t *testing.T) {
+			if got := humanSize(tt.bytes); got != tt.want {
+				t.Errorf("humanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestHumanSize_MaxUint64(t *testing.T) {
-// math.MaxUint64 = 18446744073709551615 ≈ 16384 TB
-// Should not overflow or panic
-got := humanSize(^uint64(0))
-if got == "" {
-t.Error("humanSize(MaxUint64) returned empty string")
-}
-if !strings.Contains(got, "TB") {
-t.Errorf("humanSize(MaxUint64) = %q, expected TB suffix", got)
-}
+	// math.MaxUint64 = 18446744073709551615 ~ 16384 TB
+	// Should not overflow or panic
+	got := humanSize(^uint64(0))
+	if got == "" {
+		t.Error("humanSize(MaxUint64) returned empty string")
+	}
+	if !strings.Contains(got, "TB") {
+		t.Errorf("humanSize(MaxUint64) = %q, expected TB suffix", got)
+	}
 }
