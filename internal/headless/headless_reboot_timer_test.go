@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/projectbluefin/knuckle/internal/model"
 )
 
 // TestRun_RebootTimerFires covers the happy-path reboot branch (lines 477-485)
