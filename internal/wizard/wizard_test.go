@@ -319,6 +319,18 @@ func TestFetchSysexts(t *testing.T) {
 	}
 }
 
+func TestFetchSysexts_BakeryError(t *testing.T) {
+	b := &mockBakery{err: fmt.Errorf("network unreachable")}
+	w := New(&mockProber{}, b, &mockInstaller{})
+	err := w.FetchSysexts(context.Background())
+	if err == nil {
+		t.Fatal("expected error when bakery fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetching sysext catalog") {
+		t.Errorf("error = %q, want 'fetching sysext catalog' prefix", err)
+	}
+}
+
 func TestExecute(t *testing.T) {
 	inst := &mockInstaller{}
 	w := New(&mockProber{}, &mockBakery{}, inst)

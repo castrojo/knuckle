@@ -229,3 +229,34 @@ func TestHashPassword_MultiByte_CountsBytes(t *testing.T) {
 		t.Fatal("75-byte multibyte password should fail")
 	}
 }
+
+func TestApplyUserStep_SetsHostname(t *testing.T) {
+	w := newApplyWizard()
+	if err := w.ApplyUserStep(UserStepInput{Hostname: "my-host"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w.State.Config.Hostname != "my-host" {
+		t.Errorf("Hostname = %q, want %q", w.State.Config.Hostname, "my-host")
+	}
+}
+
+func TestApplyUserStep_SetsTimezone(t *testing.T) {
+	w := newApplyWizard()
+	if err := w.ApplyUserStep(UserStepInput{Timezone: "America/New_York"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w.State.Config.Timezone != "America/New_York" {
+		t.Errorf("Timezone = %q, want %q", w.State.Config.Timezone, "America/New_York")
+	}
+}
+
+func TestApplyUserStep_UpdatesExistingUserUsername(t *testing.T) {
+	w := newApplyWizard()
+	w.State.Config.Users = []model.UserConfig{{Username: "old-name"}}
+	if err := w.ApplyUserStep(UserStepInput{Username: "new-name"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w.State.Config.Users[0].Username != "new-name" {
+		t.Errorf("Username = %q, want %q", w.State.Config.Users[0].Username, "new-name")
+	}
+}
