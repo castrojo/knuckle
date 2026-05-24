@@ -477,7 +477,7 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 	if cfg.Reboot && !cfg.DryRun {
 		fmt.Println("→ Rebooting in 3 seconds...")
 		select {
-		case <-time.After(3 * time.Second):
+		case <-time.After(rebootDelay):
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -491,6 +491,10 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 	}
 	return nil
 }
+
+// rebootDelay is the duration Run waits before returning in non-dry-run reboot mode.
+// Tests can replace this with a shorter duration to avoid 3-second waits.
+var rebootDelay = 3 * time.Second
 
 // fetchGitHubKeysFunc is the actual implementation used by Run; tests can replace it.
 var fetchGitHubKeysFunc = func(ctx context.Context, username string) ([]string, error) {
