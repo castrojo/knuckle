@@ -65,8 +65,8 @@ jobs:
             fi
           done
           if [[ $flaky_detected -eq 1 ]]; then
-            echo "::warning::Potential flaky tests detected — some runs failed. Check logs above."
-            exit 0  # Don't fail CI, just warn
+            echo "::error::Flaky tests detected — one or more of 5 runs failed. Check logs above."
+            exit 1
           fi
           echo "✓ All 5 runs passed — no flaky tests detected"
 
