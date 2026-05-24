@@ -65,7 +65,7 @@ jobs:
 
   scorecard:
     name: OSSF Scorecard
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
