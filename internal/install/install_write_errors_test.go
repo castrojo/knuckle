@@ -37,15 +37,6 @@ func TestWriteIgnitionFile_CreateTempFailure(t *testing.T) {
 	}
 }
 
-
-	n, err = e.w.Write(p)
-	e.written += n
-	if e.written >= e.errAfter {
-		return n, e.injectErr
-	}
-	return n, err
-}
-
 func TestWriteIgnitionFile_WriteFailure_CleansUp(t *testing.T) {
 	// Test the write error path (lines 178-182) by creating a file that fails on write.
 	// We simulate this by writing to a file, closing it, then trying to write again.
