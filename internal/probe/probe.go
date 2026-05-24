@@ -233,9 +233,14 @@ func resolveByIDPathIn(devPath, byIDDir string) string {
 		if err != nil {
 			continue
 		}
-		// Resolve relative symlink
-		absTarget := filepath.Join(byIDDir, target)
-		absTarget, _ = filepath.Abs(absTarget)
+		// Resolve symlink target: absolute targets are used as-is;
+		// relative targets are resolved from byIDDir.
+		var absTarget string
+		if filepath.IsAbs(target) {
+			absTarget = target
+		} else {
+			absTarget, _ = filepath.Abs(filepath.Join(byIDDir, target))
+		}
 		if absTarget == devPath {
 			return link
 		}
