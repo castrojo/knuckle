@@ -581,9 +581,9 @@ func TestFetchAllChannels_PartialFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "stable/version.txt"):
-			fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+			_, _ = fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
 		case strings.Contains(r.URL.Path, "stable/flatcar_production_image_packages.txt"):
-			fmt.Fprint(w, "sys-kernel/coreos-kernel-6.6.21\n")
+			_, _ = fmt.Fprint(w, "sys-kernel/coreos-kernel-6.6.21\n")
 		default:
 			http.Error(w, "not found", http.StatusNotFound)
 		}
@@ -632,7 +632,7 @@ func TestFetchAllChannels_AllFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when all channels fail")
 	}
-	if results != nil && len(results) != 0 {
+	if len(results) != 0 {
 		t.Errorf("expected nil/empty results when all fail, got %d", len(results))
 	}
 }
@@ -656,7 +656,7 @@ func TestFetchAllChannels_EmptyChannelList(t *testing.T) {
 
 func TestFetchAllChannels_ContextCancelled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "FLATCAR_VERSION=1.0.0\n")
+		_, _ = fmt.Fprint(w, "FLATCAR_VERSION=1.0.0\n")
 	}))
 	defer srv.Close()
 
