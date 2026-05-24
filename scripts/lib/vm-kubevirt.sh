@@ -31,13 +31,51 @@ kv_prepare_disk() {
   "
 }
 
+# kv_write_ignition <name> [ssh_pubkey]
+# Write installer Ignition to ghost so kv_apply_vm can deliver it via KubeVirt fw_cfg.
+kv_write_ignition() {
+  local name="$1"
+  local key="${2:-}"
+  local ign_path="/var/tmp/knuckle-test/${name}-installer.ign"
+
+  if [[ -z "$key" ]]; then
+    key=$(ssh $GOPTS "$GHOST" "cat ~/.ssh/id_ed25519.pub")
+  fi
+
+  python3 - "$key" <<'PY' | ssh $GOPTS "$GHOST" "mkdir -p /var/tmp/knuckle-test && umask 077 && cat > '${ign_path}'"
+import json
+import sys
+
+print(json.dumps({
+    "ignition": {"version": "3.4.0"},
+    "passwd": {"users": [{"name": "core", "sshAuthorizedKeys": [sys.argv[1]]}]},
+    "systemd": {"units": [{"name": "sshd.service", "enabled": True}]},
+}, separators=(",", ":")))
+PY
+}
+
 # kv_apply_vm <name>
 # Apply VirtualMachine to cluster and start it.
-# B3 FIX: runStrategy:Manual prevents controller auto-restart during disk mount.
+# If installer Ignition was prepared on ghost, pass it through KubeVirt's fw_cfg path.
 kv_apply_vm() {
   local name="$1"
   local root_path="/var/tmp/knuckle-test/${name}-raw.img"
   local tgt_path="/var/tmp/knuckle-test/${name}-target.img"
+  local ign_path="/var/tmp/knuckle-test/${name}-installer.ign"
+  local ignition_yaml=""
+
+  if ssh $GOPTS "$GHOST" "test -s '${ign_path}'"; then
+    local ignition_json
+    ignition_json=$(ssh $GOPTS "$GHOST" "cat '${ign_path}'")
+    # KubeVirt renders kubevirt.io/ignitiondata through QEMU fw_cfg for first boot.
+    ignition_yaml=$(cat <<EOF
+      annotations:
+        kubevirt.io/ignitiondata: >-
+          ${ignition_json}
+EOF
+)
+  fi
+
   ssh $GOPTS "$GHOST" kubectl apply -f - << YAML
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
@@ -50,6 +88,7 @@ spec:
     metadata:
       labels:
         kubevirt.io/vm: ${name}
+${ignition_yaml}
     spec:
       domain:
         cpu:
@@ -87,13 +126,17 @@ YAML
 }
 
 # kv_inject_ssh_key <name>
-# Stop VM, poll until VMI is gone, mount ROOT p9, inject authorized_keys.
-# Flatcar reads ignition via fw_cfg — cloudInitNoCloud silently ignored.
-# Flatcar core UID=500. ROOT = partition 9, offset 6513754112.
-# TIMING: wait for VMI to exist before stopping (it may still be Scheduling),
-# then wait up to 60s for VMI to disappear before mounting disk.
+# Backward-compat fallback for older callers.
+# If kv_write_ignition already prepared first-boot access, skip the old stop/mount/start path.
 kv_inject_ssh_key() {
   local name="$1"
+  local ign_path="/var/tmp/knuckle-test/${name}-installer.ign"
+
+  if ssh $GOPTS "$GHOST" "test -s '${ign_path}'"; then
+    echo "INFO: installer Ignition already prepared for ${name}; skipping offline SSH key injection" >&2
+    return 0
+  fi
+
   local img="/var/tmp/knuckle-test/${name}-raw.img"
   local key; key=$(ssh $GOPTS "$GHOST" "cat ~/.ssh/id_ed25519.pub")
 
@@ -269,5 +312,6 @@ kv_delete() {
   ssh $GOPTS "$GHOST" "
     sudo rm -f /var/tmp/knuckle-test/${name}-raw.img  2>/dev/null || true
     sudo rm -f /var/tmp/knuckle-test/${name}-target.img 2>/dev/null || true
+    rm -f /var/tmp/knuckle-test/${name}-installer.ign 2>/dev/null || true
   " 2>/dev/null || true
 }
