@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/NVIDIA/go-nvlib v0.10.0
 	github.com/ProtonMail/go-crypto v1.4.1
-	github.com/charmbracelet/bubbles v1.0.0
+	github.com/charmbracelet/bubbles/v2 v2.1.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/lipgloss v1.1.0
