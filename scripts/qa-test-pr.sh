@@ -741,7 +741,7 @@ _fetch_artifacts
   fi
 } >> "$REPORT"
 
-if [[ $ASSERT_OK -eq 0 ]]; then
+if [[ $ASSERT_OK -gt 0 ]]; then
   echo "" >> "$REPORT"
   echo "<!-- status:PASS target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
 else
