@@ -38,6 +38,7 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 - **Headless mode** — `--headless --config <file.json>` for automated installs (CI/CD friendly)
 - **Installer ISO** — UEFI-bootable ISO with systemd-boot (amd64 + arm64), with `systemd.gpt_auto=0` set in both boot entries to avoid GPT auto-generator hangs when the ISO is written to larger USB media
 - **Config validation** — consistency checks before install
+- **Swap file** — 4 GiB `/var/swapfile` provisioned by default; configurable size (up to 32 GiB) or disabled via headless config
 - **Dry-run mode** — `--dry-run` flag skips all disk writes
 - **Ctrl+C double-press** — confirmation before quitting
 
@@ -69,7 +70,62 @@ just build-arm64
 
 # Headless install from JSON config
 ./bin/knuckle --headless --config install.json
+
+# Pin to a specific Flatcar release
+./bin/knuckle --channel beta --flatcar-version 3975.2.1
 ```
+
+## CLI Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--dry-run` | false | Simulate install — no disk writes |
+| `--headless` | false | Non-interactive mode; requires `--config` |
+| `--config <file.json>` | — | Path to JSON config for headless installs |
+| `--channel <name>` | stable | Flatcar release channel: `stable`, `beta`, `alpha`, `lts`, `edge` |
+| `--flatcar-version <ver>` | — | Pin to a specific Flatcar version (e.g. `3510.2.8`); omit to use latest |
+| `--log-file <path>` | `/tmp/knuckle.log` | Path to structured log file (`slog`); stdout is reserved for the TUI |
+| `--demo` | false | Mock hardware and catalog data — no network, no real disks; for UI demos and screen recording |
+| `--version` | — | Print version and exit |
+
+## Headless Mode
+
+`--headless --config <file.json>` drives the same install path as the TUI without any user interaction. Useful for CI/CD, automated bare-metal provisioning, and scripted lab setups.
+
+Minimal example (`install.json`):
+
+```json
+{
+  "hostname": "flatcar-01",
+  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
+  "channel": "stable",
+  "ssh_keys": ["ssh-ed25519 AAAA..."],
+  "network": {"dhcp": true}
+}
+```
+
+Swap is **enabled by default** (4 GiB `/var/swapfile`). To customise:
+
+```json
+{
+  "hostname": "flatcar-01",
+  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
+  "channel": "stable",
+  "ssh_keys": ["ssh-ed25519 AAAA..."],
+  "network": {"dhcp": true},
+  "swap": {"enabled": true, "size_mb": 2048}
+}
+```
+
+To disable swap entirely:
+
+```json
+{
+  "swap": {"enabled": false}
+}
+```
+
+Valid `swap.size_mb` range: 1–32768 (MiB). Omitting `swap` or setting `size_mb: 0` uses the 4 GiB default.
 
 ## Development
 
