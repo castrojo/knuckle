@@ -13,6 +13,7 @@ import (
 	"log/slog"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
@@ -1742,6 +1743,32 @@ func TestValidate_TailscaleSubnetRouterValidRoutes(t *testing.T) {
 }
 
 // ── ToInstallConfig() coverage gaps ──────────────────────────────────────────
+
+func TestToInstallConfig_OmittedTailscaleSkipsIgnitionArtifacts(t *testing.T) {
+	cfg := &Config{
+		Channel: "stable",
+		Disk:    "/dev/vdb",
+		Network: NetworkConfig{Mode: "dhcp"},
+		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+
+	ic, err := cfg.ToInstallConfig()
+	if err != nil {
+		t.Fatalf("ToInstallConfig: %v", err)
+	}
+
+	gen := ignition.NewGenerator()
+	out, err := gen.GenerateButane(ic)
+	if err != nil {
+		t.Fatalf("GenerateButane: %v", err)
+	}
+	if strings.Contains(out, "/etc/tailscale/tailscale.env") {
+		t.Error("tailscale.env should not be emitted when tailscale config is omitted")
+	}
+	if strings.Contains(out, "knuckle-tailscale-up.service") {
+		t.Error("knuckle-tailscale-up.service should not be emitted when tailscale config is omitted")
+	}
+}
 
 func TestToInstallConfig_TailscaleDefaultsMode(t *testing.T) {
 	cfg := &Config{
