@@ -17,8 +17,8 @@ func TestTruncateDescription_Short(t *testing.T) {
 func TestTruncateDescription_TooLong(t *testing.T) {
 	long := strings.Repeat("x", 100)
 	got := truncateDescription(long, 80)
-	if len(got) != 80 {
-		t.Errorf("truncated len = %d, want 80", len(got))
+	if len([]rune(got)) != 80 {
+		t.Errorf("truncated rune count = %d, want 80", len([]rune(got)))
 	}
 	if !strings.HasSuffix(got, "...") {
 		t.Errorf("truncated string should end with ...: %q", got)
@@ -35,6 +35,49 @@ func TestTruncateDescription_MultilineUsesFirstLine(t *testing.T) {
 func TestTruncateDescription_Empty(t *testing.T) {
 	if got := truncateDescription("", 80); got != "" {
 		t.Errorf("got %q, want empty", got)
+	}
+}
+
+// ── truncateDescription: UTF-8 safety ────────────────────────────────────────
+
+func TestTruncateDescription_UTF8_DoesNotSplitRune(t *testing.T) {
+	// 10 runes of 3-byte chars (30 bytes) — truncate to 8 runes
+	input := strings.Repeat("日", 10) // each 日 = 3 bytes
+	got := truncateDescription(input, 8)
+	// Should be 5 runes ("日日日日日") + "..." = 8 runes total
+	wantRunes := 8
+	if runeCount := len([]rune(got)); runeCount != wantRunes {
+		t.Errorf("UTF-8 truncate: rune count = %d, want %d; got %q", runeCount, wantRunes, got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Errorf("UTF-8 truncated string should end with ...: %q", got)
+	}
+	// Must be valid UTF-8 — no partial rune at the boundary
+	for i, r := range got {
+		if r == '\uFFFD' {
+			t.Errorf("invalid UTF-8 at byte %d in %q", i, got)
+		}
+	}
+}
+
+func TestTruncateDescription_UTF8_ExactLength(t *testing.T) {
+	// Exactly maxLen runes → no truncation
+	input := strings.Repeat("é", 10) // each é = 2 bytes
+	got := truncateDescription(input, 10)
+	if got != input {
+		t.Errorf("exact-length input should not be truncated, got %q", got)
+	}
+}
+
+func TestTruncateDescription_UTF8_MixedASCIIAndMultibyte(t *testing.T) {
+	// "Hello 世界！" = 8 runes — truncate to 7 should give "Hell..."
+	input := "Hello 世界！"
+	got := truncateDescription(input, 7)
+	if !strings.HasSuffix(got, "...") {
+		t.Errorf("mixed truncation should end with ...: %q", got)
+	}
+	if runeCount := len([]rune(got)); runeCount != 7 {
+		t.Errorf("mixed truncation rune count = %d, want 7; got %q", runeCount, got)
 	}
 }
 

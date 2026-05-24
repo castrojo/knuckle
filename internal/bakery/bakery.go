@@ -320,8 +320,9 @@ func truncateDescription(s string, maxLen int) string {
 		s = s[:idx]
 	}
 	s = strings.TrimSpace(s)
-	if len(s) > maxLen {
-		s = s[:maxLen-3] + "..."
+	runes := []rune(s)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen-3]) + "..."
 	}
 	return s
 }
