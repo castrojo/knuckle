@@ -753,3 +753,70 @@ func TestViewUpdateEtcdLock(t *testing.T) {
 		t.Error("view should show etcd-lock strategy description")
 	}
 }
+
+func TestUpdateEnterSelectsReboot(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUpdate
+	m := New(w)
+	m.cursor = 0
+
+	_, _ = m.handleEnter()
+	if w.State.Config.UpdateStrategy.RebootStrategy != "reboot" {
+		t.Errorf("cursor=0 should set RebootStrategy to \"reboot\", got %q",
+			w.State.Config.UpdateStrategy.RebootStrategy)
+	}
+}
+
+func TestUpdateEnterSelectsOff(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUpdate
+	m := New(w)
+	m.cursor = 1
+
+	_, _ = m.handleEnter()
+	if w.State.Config.UpdateStrategy.RebootStrategy != "off" {
+		t.Errorf("cursor=1 should set RebootStrategy to \"off\", got %q",
+			w.State.Config.UpdateStrategy.RebootStrategy)
+	}
+}
+
+func TestUpdateEnterSelectsEtcdLock(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUpdate
+	m := New(w)
+	m.cursor = 2
+
+	_, _ = m.handleEnter()
+	if w.State.Config.UpdateStrategy.RebootStrategy != "etcd-lock" {
+		t.Errorf("cursor=2 should set RebootStrategy to \"etcd-lock\", got %q",
+			w.State.Config.UpdateStrategy.RebootStrategy)
+	}
+}
+
+func TestUpdateEnterOutOfBoundsIsNoOp(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUpdate
+	w.State.Config.UpdateStrategy.RebootStrategy = "reboot"
+	m := New(w)
+	m.cursor = 99
+
+	_, _ = m.handleEnter()
+	if w.State.Config.UpdateStrategy.RebootStrategy != "reboot" {
+		t.Errorf("OOB cursor should not change strategy, got %q",
+			w.State.Config.UpdateStrategy.RebootStrategy)
+	}
+}
+
+func TestUpdateEnterNegativeCursorIsNoOp(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUpdate
+	w.State.Config.UpdateStrategy.RebootStrategy = "off"
+	m := New(w)
+	m.cursor = -1
+
+	_, _ = m.handleEnter()
+	if w.State.Config.UpdateStrategy.RebootStrategy != "off" {
+		t.Errorf("negative cursor should not change strategy, got %q",
+			w.State.Config.UpdateStrategy.RebootStrategy)
+	}
+}
