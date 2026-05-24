@@ -37,7 +37,7 @@ func TestWriteIgnitionFile_WriteErrorPath(t *testing.T) {
 	if _, err := os.Stat("/dev/full"); err == nil {
 		// /dev/full is available - we can use it to simulate write failure
 		// However, we can't make os.CreateTemp create a file on /dev/full directly.
-		
+
 		// Let's verify the behavior pattern instead:
 		// When writes fail, the cleanup code removes the file.
 		t.Log("/dev/full exists but can't be used with os.CreateTemp pattern")
@@ -55,8 +55,8 @@ func TestWriteIgnitionFile_WriteErrorPath(t *testing.T) {
 		}
 	} else {
 		// Write succeeded - clean up
-		defer os.Remove(path)
-		
+		defer func() { _ = os.Remove(path) }()
+
 		// Verify file exists and has correct content length
 		info, err := os.Stat(path)
 		if err != nil {
@@ -76,24 +76,24 @@ func TestWriteIgnitionFile_CloseErrorPath(t *testing.T) {
 	// - The file descriptor is invalid (already closed)
 	// - There are pending I/O errors
 	// - The filesystem is being unmounted
-	
+
 	// We can't easily trigger Close() to fail without low-level syscall manipulation,
 	// but we can verify the error handling logic is correct.
-	
+
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	
+
 	// Test the normal path - if close succeeds, file should exist until removed
 	path, err := installer.WriteIgnitionFile(`{"ignition":{"version":"3.4.0"}}`)
 	if err != nil {
 		t.Fatalf("WriteIgnitionFile: %v", err)
 	}
-	
+
 	// File should exist
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("file should exist: %v", err)
 	}
-	
+
 	// Verify content
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -102,12 +102,12 @@ func TestWriteIgnitionFile_CloseErrorPath(t *testing.T) {
 	if string(content) != `{"ignition":{"version":"3.4.0"}}` {
 		t.Errorf("content = %q, want %q", string(content), `{"ignition":{"version":"3.4.0"}}`)
 	}
-	
+
 	// Clean up
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	
+
 	// Verify removed
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("file should be removed: %v", err)
@@ -119,13 +119,13 @@ func TestWriteIgnitionFile_CloseErrorPath(t *testing.T) {
 func TestWriteIgnitionFile_ReadOnlyFilesystem(t *testing.T) {
 	// Create a temporary directory
 	tmpDir := t.TempDir()
-	
+
 	// Create a subdirectory
 	roDir := filepath.Join(tmpDir, "readonly")
 	if err := os.Mkdir(roDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	
+
 	// Make it read-only (chmod 555)
 	if err := os.Chmod(roDir, 0555); err != nil {
 		t.Fatalf("chmod: %v", err)
@@ -134,24 +134,24 @@ func TestWriteIgnitionFile_ReadOnlyFilesystem(t *testing.T) {
 		// Restore write permissions for cleanup
 		_ = os.Chmod(roDir, 0755)
 	}()
-	
+
 	// Set TMPDIR to the read-only directory
 	t.Setenv("TMPDIR", roDir)
-	
+
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	
+
 	// Attempt to write - should fail at CreateTemp stage
 	_, err := installer.WriteIgnitionFile(`{"ignition":{"version":"3.4.0"}}`)
 	if err == nil {
 		t.Fatal("expected error when writing to read-only directory")
 	}
-	
+
 	// Verify error message
 	if !strings.Contains(err.Error(), "creating temp ignition file") {
 		t.Errorf("error = %q, want 'creating temp ignition file'", err.Error())
 	}
-	
+
 	// Verify no files were left behind
 	entries, err := os.ReadDir(roDir)
 	if err != nil {
@@ -167,13 +167,13 @@ func TestWriteIgnitionFile_ReadOnlyFilesystem(t *testing.T) {
 func TestWriteIgnitionFile_EmptyContent(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	
+
 	path, err := installer.WriteIgnitionFile("")
 	if err != nil {
 		t.Fatalf("WriteIgnitionFile with empty content: %v", err)
 	}
-	defer os.Remove(path)
-	
+	defer func() { _ = os.Remove(path) }()
+
 	// Verify file exists and is empty
 	info, err := os.Stat(path)
 	if err != nil {
@@ -189,16 +189,16 @@ func TestWriteIgnitionFile_EmptyContent(t *testing.T) {
 func TestWriteIgnitionFile_LargeContent(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	
+
 	// Create a large Ignition config (1MB)
 	largeContent := strings.Repeat(`{"ignition":{"version":"3.4.0"}}`, 30000) // ~1MB
-	
+
 	path, err := installer.WriteIgnitionFile(largeContent)
 	if err != nil {
 		t.Fatalf("WriteIgnitionFile with large content: %v", err)
 	}
-	defer os.Remove(path)
-	
+	defer func() { _ = os.Remove(path) }()
+
 	// Verify file size matches content length
 	info, err := os.Stat(path)
 	if err != nil {
@@ -207,7 +207,7 @@ func TestWriteIgnitionFile_LargeContent(t *testing.T) {
 	if info.Size() != int64(len(largeContent)) {
 		t.Errorf("file size = %d, want %d", info.Size(), len(largeContent))
 	}
-	
+
 	// Verify permissions remain secure even for large files
 	perm := info.Mode().Perm()
 	if perm != 0600 {
@@ -220,16 +220,16 @@ func TestWriteIgnitionFile_LargeContent(t *testing.T) {
 func TestWriteIgnitionFile_SpecialCharacters(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	
+
 	// Content with special characters, unicode, null bytes (if escaped), etc.
 	specialContent := `{"ignition":{"version":"3.4.0"},"storage":{"files":[{"path":"/etc/motd","contents":{"source":"data:,Hello%20World%0A%E2%9C%93"}}]}}`
-	
+
 	path, err := installer.WriteIgnitionFile(specialContent)
 	if err != nil {
 		t.Fatalf("WriteIgnitionFile with special chars: %v", err)
 	}
-	defer os.Remove(path)
-	
+	defer func() { _ = os.Remove(path) }()
+
 	// Read back and verify content is preserved exactly
 	content, err := os.ReadFile(path)
 	if err != nil {
