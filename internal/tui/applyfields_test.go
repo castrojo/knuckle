@@ -242,3 +242,82 @@ func TestApplyFields_Review_CaseInsensitive(t *testing.T) {
 		t.Error("expected Confirmed=true with ' yes ' (trimmed, uppercased)")
 	}
 }
+
+func TestApplyFields_Nvidia_SelectsDriverVersion(t *testing.T) {
+	for i, opt := range model.NvidiaDriverOptions {
+		w := newTestWizard()
+		m := New(w)
+		m.Wizard.State.CurrentStep = model.StepNvidia
+		m.cursor = i
+		m.applyFields()
+		got := m.Wizard.State.Config.NvidiaDriverVersion
+		if got != opt.ID {
+			t.Errorf("cursor=%d: expected NvidiaDriverVersion=%q, got %q", i, opt.ID, got)
+		}
+	}
+}
+
+func TestApplyFields_Nvidia_CursorOutOfBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		cursor int
+	}{
+		{"negative", -1},
+		{"too_large", len(model.NvidiaDriverOptions)},
+		{"way_too_large", 999},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newTestWizard()
+			m := New(w)
+			m.Wizard.State.CurrentStep = model.StepNvidia
+			m.Wizard.State.Config.NvidiaDriverVersion = "" // ensure unchanged
+			m.cursor = tc.cursor
+			m.applyFields()
+			if m.Wizard.State.Config.NvidiaDriverVersion != "" {
+				t.Errorf("cursor=%d: expected NvidiaDriverVersion unchanged (empty), got %q",
+					tc.cursor, m.Wizard.State.Config.NvidiaDriverVersion)
+			}
+		})
+	}
+}
+
+func TestApplyFields_Update_SelectsStrategy(t *testing.T) {
+	strategies := []string{"reboot", "off", "etcd-lock"}
+	for i, expected := range strategies {
+		w := newTestWizard()
+		m := New(w)
+		m.Wizard.State.CurrentStep = model.StepUpdate
+		m.cursor = i
+		m.applyFields()
+		got := m.Wizard.State.Config.UpdateStrategy.RebootStrategy
+		if got != expected {
+			t.Errorf("cursor=%d: expected RebootStrategy=%q, got %q", i, expected, got)
+		}
+	}
+}
+
+func TestApplyFields_Update_CursorOutOfBounds(t *testing.T) {
+	tests := []struct {
+		name   string
+		cursor int
+	}{
+		{"negative", -1},
+		{"too_large", 3},
+		{"way_too_large", 100},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newTestWizard()
+			m := New(w)
+			m.Wizard.State.CurrentStep = model.StepUpdate
+			m.Wizard.State.Config.UpdateStrategy.RebootStrategy = "" // ensure unchanged
+			m.cursor = tc.cursor
+			m.applyFields()
+			if m.Wizard.State.Config.UpdateStrategy.RebootStrategy != "" {
+				t.Errorf("cursor=%d: expected RebootStrategy unchanged (empty), got %q",
+					tc.cursor, m.Wizard.State.Config.UpdateStrategy.RebootStrategy)
+			}
+		})
+	}
+}
