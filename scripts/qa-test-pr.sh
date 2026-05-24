@@ -129,8 +129,8 @@ _has "domain:install"    && TIER=3 && NEEDS_BOOT=1
 _has "domain:ignition"   && TIER=3 && NEEDS_BOOT=1
 _has "domain:headless"   && TIER=3 && NEEDS_BOOT=1
 _has "domain:sysext"     && TIER=3 && NEEDS_BOOT=1
-echo "$TITLE $LABELS" | grep -qi "swap"      && TIER=3 && NEEDS_BOOT=1
-echo "$TITLE $LABELS" | grep -qi "tailscale" && TIER=3 && NEEDS_BOOT=1
+echo "$LABELS" | grep -qi "swap"      && TIER=3 && NEEDS_BOOT=1
+echo "$LABELS" | grep -qi "tailscale" && TIER=3 && NEEDS_BOOT=1
 
 log "tier=${TIER} needs_boot=${NEEDS_BOOT} security=${DO_SECURITY}"
 
@@ -290,7 +290,7 @@ JSONEOF
 
 # Inject swap config using 512 MiB — small enough to fit in the VM /var partition.
 # (Default 4 GiB exhausts the partition; 512 MiB is sufficient to verify the feature.)
-if echo "$TITLE $LABELS" | grep -qi "swap"; then
+if echo "$LABELS" | grep -qi "swap"; then
   python3 - "${QA_CONFIG_FILE}" << 'PYEOF'
 import json, sys
 p = sys.argv[1]
@@ -300,7 +300,7 @@ json.dump(d, open(p, "w"))
 PYEOF
 fi
 
-if echo "$TITLE $LABELS" | grep -qi "tailscale"; then
+if echo "$LABELS" | grep -qi "tailscale"; then
   python3 - "${QA_CONFIG_FILE}" << 'PYEOF'
 import json, sys
 p = sys.argv[1]
@@ -612,7 +612,7 @@ echo ""
 
 INSTALL_ASSERTS
 
-echo "$TITLE $LABELS" | grep -qi "swap" && cat >> "$ASSERT_SCRIPT" << 'SWAP_ASSERTS'
+echo "$LABELS" | grep -qi "swap" && cat >> "$ASSERT_SCRIPT" << 'SWAP_ASSERTS'
 
 # ── swap feature ──────────────────────────────────────────────────────────────
 echo "=== ASSERT [swap]: /var/swapfile exists at mode 0600 ==="
@@ -640,7 +640,7 @@ echo ""
 
 SWAP_ASSERTS
 
-echo "$TITLE $LABELS" | grep -qi "tailscale" && cat >> "$ASSERT_SCRIPT" << 'TS_ASSERTS'
+echo "$LABELS" | grep -qi "tailscale" && cat >> "$ASSERT_SCRIPT" << 'TS_ASSERTS'
 
 # ── tailscale feature ─────────────────────────────────────────────────────────
 echo "=== ASSERT [tailscale]: /etc/tailscale/tailscale.env exists at mode 0600 ==="
