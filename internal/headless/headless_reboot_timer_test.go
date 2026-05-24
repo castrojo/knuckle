@@ -27,6 +27,7 @@ func TestRun_RebootTimerFires(t *testing.T) {
 	cfg := &Config{
 		Channel:     "stable",
 		Hostname:    "node01",
+		Disk:        "/dev/vda",
 		Network:     NetworkConfig{Mode: "dhcp"},
 		IgnitionURL: "https://example.com/config.ign", // bypass butane generation
 		Reboot:      true,
@@ -59,6 +60,7 @@ func TestRun_RebootTimerContextCancelled(t *testing.T) {
 	cfg := &Config{
 		Channel:     "stable",
 		Hostname:    "node01",
+		Disk:        "/dev/vda",
 		Network:     NetworkConfig{Mode: "dhcp"},
 		IgnitionURL: "https://example.com/config.ign",
 		Reboot:      true,
@@ -93,6 +95,7 @@ func TestRun_NoReboot_DryRunFalse(t *testing.T) {
 	cfg := &Config{
 		Channel:     "stable",
 		Hostname:    "node01",
+		Disk:        "/dev/vda",
 		Network:     NetworkConfig{Mode: "dhcp"},
 		IgnitionURL: "https://example.com/config.ign",
 		Reboot:      false,
