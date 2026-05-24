@@ -94,11 +94,18 @@ WF_CHANGED=$(gh pr diff "$PR" --repo projectbluefin/knuckle --name-only 2>/dev/n
 # ── 2. Complexity gate ────────────────────────────────────────────────────────
 if [[ "$SIZE" == "size:XL" || "$SIZE" == "size:XXL" ]] || [[ $DOMAIN_COUNT -gt 4 ]] || [[ $WF_CHANGED -gt 0 ]]; then
   log "SKIP: complexity gate (size=${SIZE} domains=${DOMAIN_COUNT} wf=${WF_CHANGED})"
+  VM_HOSTNAME="flatcar-vm-skipped"
   cat > "$REPORT" << EOF
-## 🧪 Ghost Testlab — PR #${PR} SKIPPED
+## ⚡ Vanguard Lab Strike Report: ${VM_HOSTNAME}
+**Alpha**: Blue Universal CI Companion · Warmind Vanguard · Strike Protocol K-01
+**Guardian on Duty**: \`castrojo\` on Ghost Homelab
 
-**Reason:** Complexity gate — size: ${SIZE}, domains: ${DOMAIN_COUNT}, workflow changes: ${WF_CHANGED}
+*"The mission is too large for a single strike. Assemble the full fireteam."*
+
+**🔴 NOGO** — Complexity gate · size: ${SIZE} · domains: ${DOMAIN_COUNT} · workflow changes: ${WF_CHANGED}
 **Required:** Human \`just vm-e2e\` on ghost (192.168.1.102) before merge.
+
+<!-- status:SKIP target:knuckle label:pr-${PR} digest:none -->
 EOF
   cat "$REPORT"; exit 2
 fi
@@ -144,27 +151,40 @@ log "Building ${SHA}..."
 # ── 5. Report header ──────────────────────────────────────────────────────────
 FLATCAR_VER=$(_ghost "grep -m1 VERSION_ID= /etc/os-release 2>/dev/null | cut -d= -f2" 2>/dev/null || echo "unknown")
 
-cat > "$REPORT" << EOF
-## 🧪 Ghost Testlab Report — PR #${PR}
+# Derive tier descriptor from tier number
+case $TIER in
+  0) TIER_DESC="Ghost Uplink" ;;
+  1) TIER_DESC="Recon Element" ;;
+  3) TIER_DESC="Strike Confirmed" ;;
+  *) TIER_DESC="Tier ${TIER}" ;;
+esac
 
-| | |
+VM_HOSTNAME="flatcar-vm-${PORT:-0}"
+
+cat > "$REPORT" << EOF
+## ⚡ Vanguard Lab Strike Report: ${VM_HOSTNAME}
+**Alpha**: Blue Universal CI Companion · Warmind Vanguard · Strike Protocol K-01
+**Guardian on Duty**: \`castrojo\` on Ghost Homelab
+
+| Field | Value |
 |---|---|
-| **PR** | ${TITLE} |
-| **Author** | ${AUTHOR} |
 | **Branch** | \`${BRANCH}\` @ \`${SHA}\` |
+| **PR** | #${PR}: ${TITLE} |
+| **Author** | ${AUTHOR} |
 | **Closes** | ${CLOSES:-—} |
-| **Flatcar** | ${FLATCAR_VER} |
-| **Labels** | ${LABELS} |
-| **Tier** | ${TIER} | boot verification: $([ $NEEDS_BOOT -eq 1 ] && echo "yes ✓" || echo "no") |
-| **Run** | ${RUN_ID} |
+| **Target** | \`knuckle\` |
+| **VM/Host** | \`${VM_HOSTNAME}\` (port ${PORT:-?} on ghost) |
+| **Image** | Flatcar Container Linux ${FLATCAR_VER} |
 | **Date** | ${START} |
+| **Tier** | ${TIER} · **${TIER_DESC}** |
+| **Labels** | ${LABELS} |
 
 ---
 
 EOF
 
 if [[ $BUILD_OK -eq 0 ]]; then
-  { echo "### Build"; echo '```'; cat "${RUNDIR}/build.log" | tail -20; echo '```'; echo; echo "**Verdict: ❌ BUILD FAILED**"; } >> "$REPORT"
+  { echo "### Ghost Uplink · Build"; echo '```'; cat "${RUNDIR}/build.log" | tail -20; echo '```'; echo; echo "**🔴 NOGO** — build failed"; echo; echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Build failed" || true
   cat "$REPORT"; exit 1
 fi
@@ -182,18 +202,22 @@ CI_SUMMARY=$(grep -E "^ok |^FAIL|✅|PASS|cover:|error:" "${RUNDIR}/ci.log" | ta
   echo "$CI_SUMMARY"
   echo '```'
   echo
-  [[ $CI_OK -eq 1 ]] && echo "**✅ TIER 0 PASS**" || echo "**❌ TIER 0 FAIL**"
+  [[ $CI_OK -eq 1 ]] && echo "**Ghost Uplink · 🟢 CLEAR**" || echo "**Ghost Uplink · 🔴 BLOCKED**"
   echo
 } >> "$REPORT"
 
 if [[ $CI_OK -eq 0 ]]; then
-  echo "**Verdict: ❌ FAIL — CI gate not green**" >> "$REPORT"
+  echo "**🔴 NOGO** — CI gate not green" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->" >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "CI gate failed" || true
   cat "$REPORT"; exit 1
 fi
 
 [[ $TIER -eq 0 ]] && {
-  echo "**Verdict: ✅ PASS** — unit tests sufficient for this label set" >> "$REPORT"
+  echo "**🟢 GO** — unit tests sufficient for this label set (Ghost Uplink only)" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:PASS target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
   log "Done (tier 0)"
   cat "$REPORT"; exit 0
 }
@@ -217,12 +241,12 @@ kv_inject_ssh_key "$VM_NAME"
 
 log "Waiting for installer VM ready..."
 kv_wait_ready "$VM_NAME" 120 || {
-  { echo "### Installer VM Boot"; echo "**⛔ BOOT TIMEOUT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  { echo "### Recon Element · Installer VM Boot"; echo "**⛔ BOOT TIMEOUT**"; echo; echo "**🔴 NOGO** — VM boot timeout"; echo; echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->"; } >> "$REPORT"
   cat "$REPORT"; exit 1
 }
 
 kv_wait_ssh "$VM_NAME" 120 || {
-  { echo "### Installer VM Boot"; echo "**⛔ SSH TIMEOUT — Flatcar did not finish booting**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  { echo "### Recon Element · Installer VM Boot"; echo "**⛔ SSH TIMEOUT — Flatcar did not finish booting**"; echo; echo "**🔴 NOGO** — SSH timeout"; echo; echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->"; } >> "$REPORT"
   cat "$REPORT"; exit 1
 }
 
@@ -297,12 +321,14 @@ JSON_ERR=$(echo "$T1" | grep -c "parsing config JSON\|invalid character" || true
   echo "$T1"
   echo '```'
   echo
-  [[ $DRY_OK -gt 0 ]] && echo "**✅ TIER 1 PASS**" || echo "**❌ TIER 1 FAIL**"
+  [[ $DRY_OK -gt 0 ]] && echo "**Recon Element · 🟢 CLEAR**" || echo "**Recon Element · 🔴 BLOCKED**"
   echo
 } >> "$REPORT"
 
 if [[ $DRY_OK -eq 0 ]]; then
-  echo "**Verdict: ❌ FAIL — dry-run did not complete**" >> "$REPORT"
+  echo "**🔴 NOGO** — dry-run did not complete" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->" >> "$REPORT"
   _fetch_artifacts
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Dry-run failed" || true
   cat "$REPORT"; exit 1
@@ -374,12 +400,14 @@ SECSCRIPT
     echo "$SEC"
     echo '```'
     echo
-    [[ $SEC_OK -gt 0 ]] && echo "**✅ SECURITY TESTS PASS**" || echo "**❌ SECURITY TESTS FAIL**"
+    [[ $SEC_OK -gt 0 ]] && echo "**Security · 🟢 CLEAR**" || echo "**Security · 🔴 BLOCKED**"
     echo
   } >> "$REPORT"
 
   if [[ $SEC_OK -eq 0 ]]; then
-    echo "**Verdict: ❌ FAIL — security regression**" >> "$REPORT"
+    echo "**🔴 NOGO** — security regression: bad input accepted" >> "$REPORT"
+    echo "" >> "$REPORT"
+    echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:none -->" >> "$REPORT"
     _fetch_artifacts
     _file_issue_on_fail "$REPORT" "$RUNDIR" "Security regression: bad input accepted" || true
     cat "$REPORT"; exit 1
@@ -387,7 +415,9 @@ SECSCRIPT
 fi
 
 [[ $TIER -lt 3 ]] && {
-  echo "**Verdict: ✅ PASS**" >> "$REPORT"
+  echo "**🟢 GO** — Recon Element confirmed, no boot verification required for this label set" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:PASS target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
   _fetch_artifacts
   log "Done (tier 1)"
   cat "$REPORT"; exit 0
@@ -424,13 +454,15 @@ kv_ssh "$VM_NAME" 'sudo cat /tmp/knuckle-install.log 2>/dev/null' \
   echo
   echo "</details>"
   echo
-  [[ $INSTALL_DONE -gt 0 ]] && echo "**✅ INSTALL COMPLETE**" || echo "**❌ INSTALL FAILED**"
+  [[ $INSTALL_DONE -gt 0 ]] && echo "**Strike Confirmed · Install 🟢 COMPLETE**" || echo "**Strike Confirmed · Install 🔴 FAILED**"
   echo
 } >> "$REPORT"
 
 if [[ $INSTALL_DONE -eq 0 ]]; then
   _fetch_artifacts
-  echo "**Verdict: ❌ FAIL — install did not complete**" >> "$REPORT"
+  echo "**🔴 NOGO** — install did not complete" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Headless install failed" || true
   cat "$REPORT"; exit 1
 fi
@@ -439,13 +471,13 @@ fi
 log "Booting installed Flatcar (delete installer VM, boot-only)..."
 kv_boot_installed "$VM_NAME"
 kv_wait_ready "$VM_NAME" 180 || {
-  { echo "### Installed System Boot"; echo "**⛔ INSTALLED SYSTEM DID NOT BOOT**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  { echo "### Strike Confirmed · Installed System Boot"; echo "**⛔ INSTALLED SYSTEM DID NOT BOOT**"; echo; echo "**🔴 NOGO** — installed system failed to boot"; echo; echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar did not boot" || true
   cat "$REPORT"; exit 1
 }
 
 kv_wait_ssh "$VM_NAME" 180 || {
-  { echo "### Installed System Boot"; echo "**⛔ SSH TIMEOUT — installed Flatcar did not come up**"; echo; echo "**Verdict: ❌ FAIL**"; } >> "$REPORT"
+  { echo "### Strike Confirmed · Installed System Boot"; echo "**⛔ SSH TIMEOUT — installed Flatcar did not come up**"; echo; echo "**🔴 NOGO** — SSH timeout on installed system"; echo; echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->"; } >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Installed Flatcar SSH never ready" || true
   cat "$REPORT"; exit 1
 }
@@ -684,9 +716,9 @@ ASSERT_FAILS=$(echo "$ASSERT_OUT" | grep -c "^FAIL:" || true)
   echo '```'
   echo
   if [[ $ASSERT_OK -gt 0 ]]; then
-    echo "**✅ ALL DOMAIN ASSERTIONS PASS**"
+    echo "**🟢 ALL DOMAIN ASSERTIONS CLEAR**"
   else
-    echo "**❌ DOMAIN ASSERTIONS FAILED** (${ASSERT_FAILS} failure(s) — see FAIL: lines above)"
+    echo "**🔴 DOMAIN ASSERTIONS BLOCKED** (${ASSERT_FAILS} failure(s) — see FAIL: lines above)"
   fi
   echo
 } >> "$REPORT"
@@ -703,13 +735,19 @@ _fetch_artifacts
   echo "**Artifacts:** \`.qa/runs/${RUN_ID}/\`"
   echo
   if [[ $ASSERT_OK -gt 0 ]]; then
-    echo "**Verdict: ✅ PASS** — installed system verified, all domain assertions clean"
+    echo "**🟢 GO** — Strike Confirmed · installed system verified · all domain assertions clean"
   else
-    echo "**Verdict: ❌ FAIL** — ${ASSERT_FAILS} assertion(s) failed (see above)"
+    echo "**🔴 NOGO** — ${ASSERT_FAILS} domain assertion(s) failed (see FAIL: lines above)"
   fi
 } >> "$REPORT"
 
 if [[ $ASSERT_OK -eq 0 ]]; then
+  echo "" >> "$REPORT"
+  echo "<!-- status:PASS target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
+else
+  echo "**🔴 NOGO** — Strike Aborted · ${ASSERT_FAILS} domain assertion(s) failed" >> "$REPORT"
+  echo "" >> "$REPORT"
+  echo "<!-- status:FAIL target:knuckle label:pr-${PR} digest:Flatcar-${FLATCAR_VER} -->" >> "$REPORT"
   _file_issue_on_fail "$REPORT" "$RUNDIR" "Domain assertions failed (${ASSERT_FAILS} failure(s))" || true
 fi
 
