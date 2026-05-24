@@ -498,7 +498,7 @@ t.Errorf("cursor=%d: expected description %q for selected item", i, opt.Descript
 }
 }
 
-viewUpdate // ── ───────────
+// ── viewUpdate ───────────────────────────────────────────────────────────────
 
 func TestViewUpdate_ContainsAllStrategies(t *testing.T) {
 w := newTestWizard()
