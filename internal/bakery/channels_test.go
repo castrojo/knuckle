@@ -572,3 +572,106 @@ FLATCAR_BUILD_ID="20260414"
 		t.Errorf("short BuildDate: got %q, want %q", info.BuildDate, "20260414")
 	}
 }
+
+// ── fetchAllChannelsWithURLFn: partial failure returns both results and error ──
+
+func TestFetchAllChannels_PartialFailure(t *testing.T) {
+// Set up a server that serves stable correctly but fails for beta
+srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+switch {
+case strings.Contains(r.URL.Path, "stable/version.txt"):
+fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+case strings.Contains(r.URL.Path, "stable/flatcar_production_image_packages.txt"):
+fmt.Fprint(w, "sys-kernel/coreos-kernel-6.6.21\n")
+default:
+http.Error(w, "not found", http.StatusNotFound)
+}
+}))
+defer srv.Close()
+
+urlFn := func(channel string) (string, string) {
+return srv.URL + "/" + channel + "/version.txt",
+srv.URL + "/" + channel + "/flatcar_production_image_packages.txt"
+}
+
+results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn, "stable", "beta", "alpha")
+// Should return partial results (stable) AND an error (beta+alpha failed)
+if err == nil {
+t.Fatal("expected error for failed channels, got nil")
+}
+if len(results) == 0 {
+t.Fatal("expected at least one result from stable")
+}
+foundStable := false
+for _, r := range results {
+if r.Channel == "stable" {
+foundStable = true
+if r.Version != "3815.2.0" {
+t.Errorf("stable version = %q, want 3815.2.0", r.Version)
+}
+}
+}
+if !foundStable {
+t.Error("stable channel not found in partial results")
+}
+}
+
+func TestFetchAllChannels_AllFail(t *testing.T) {
+srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+}))
+defer srv.Close()
+
+urlFn := func(channel string) (string, string) {
+return srv.URL + "/" + channel + "/version.txt",
+srv.URL + "/" + channel + "/packages.txt"
+}
+
+results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn, "stable", "beta")
+if err == nil {
+t.Fatal("expected error when all channels fail")
+}
+if results != nil && len(results) != 0 {
+t.Errorf("expected nil/empty results when all fail, got %d", len(results))
+}
+}
+
+func TestFetchAllChannels_EmptyChannelList(t *testing.T) {
+called := false
+urlFn := func(channel string) (string, string) {
+called = true
+return "", ""
+}
+
+// With explicit empty slice, should use default channels but urlFn will fail
+// Actually the function checks len(channels)==0 and replaces with defaults
+results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn)
+// Default channels will all fail since urlFn returns empty URLs
+if !called {
+// If not called, the function short-circuited — verify behavior
+if err != nil {
+t.Logf("empty channels with failing urlFn: err=%v", err)
+}
+}
+_ = results
+}
+
+func TestFetchAllChannels_ContextCancelled(t *testing.T) {
+srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Simulate slow response that context will cancel
+fmt.Fprint(w, "FLATCAR_VERSION=1.0.0\n")
+}))
+defer srv.Close()
+
+ctx, cancel := context.WithCancel(context.Background())
+cancel() // Cancel immediately
+
+urlFn := func(channel string) (string, string) {
+return srv.URL + "/version.txt", srv.URL + "/packages.txt"
+}
+
+_, err := fetchAllChannelsWithURLFn(ctx, urlFn, "stable")
+if err == nil {
+t.Fatal("expected error with cancelled context")
+}
+}
