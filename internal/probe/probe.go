@@ -215,7 +215,12 @@ func humanSize(bytes uint64) string {
 // resolveByIDPath finds the /dev/disk/by-id/ symlink for a device path.
 // Falls back to devPath if /dev/disk/by-id is unavailable (e.g., in CI).
 func resolveByIDPath(devPath string) string {
-	byIDDir := "/dev/disk/by-id/"
+	return resolveByIDPathIn(devPath, "/dev/disk/by-id/")
+}
+
+// resolveByIDPathIn is the testable core of resolveByIDPath. It scans byIDDir
+// for symlinks pointing to devPath and returns the first match.
+func resolveByIDPathIn(devPath, byIDDir string) string {
 	entries, err := os.ReadDir(byIDDir)
 	if err != nil {
 		slog.Warn("disk identity fallback: /dev/disk/by-id resolution failed, using raw device path",
@@ -228,9 +233,14 @@ func resolveByIDPath(devPath string) string {
 		if err != nil {
 			continue
 		}
-		// Resolve relative symlink
-		absTarget := filepath.Join(byIDDir, target)
-		absTarget, _ = filepath.Abs(absTarget)
+		// Resolve symlink target: absolute targets are used as-is;
+		// relative targets are resolved from byIDDir.
+		var absTarget string
+		if filepath.IsAbs(target) {
+			absTarget = target
+		} else {
+			absTarget, _ = filepath.Abs(filepath.Join(byIDDir, target))
+		}
 		if absTarget == devPath {
 			return link
 		}
