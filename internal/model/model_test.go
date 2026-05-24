@@ -122,3 +122,40 @@ func TestInstallConfigInit(t *testing.T) {
 		t.Errorf("DryRun = false, want true")
 	}
 }
+
+func TestDefaultNvidiaDriverSeries_ExistsInOptions(t *testing.T) {
+	found := false
+	for _, opt := range NvidiaDriverOptions {
+		if opt.ID == DefaultNvidiaDriverSeries {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("DefaultNvidiaDriverSeries %q not found in NvidiaDriverOptions", DefaultNvidiaDriverSeries)
+	}
+}
+
+func TestNvidiaDriverOptions_ExactlyOneRecommended(t *testing.T) {
+	count := 0
+	for _, opt := range NvidiaDriverOptions {
+		if opt.Recommended {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 recommended NvidiaDriverOption, got %d", count)
+	}
+}
+
+func TestDefaultNvidiaDriverSeries_IsRecommended(t *testing.T) {
+	for _, opt := range NvidiaDriverOptions {
+		if opt.ID == DefaultNvidiaDriverSeries {
+			if !opt.Recommended {
+				t.Errorf("DefaultNvidiaDriverSeries %q should be marked Recommended", DefaultNvidiaDriverSeries)
+			}
+			return
+		}
+	}
+	t.Fatalf("DefaultNvidiaDriverSeries %q not found", DefaultNvidiaDriverSeries)
+}
