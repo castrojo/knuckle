@@ -251,11 +251,11 @@ _ghost "mkdir -p ${WORK_REMOTE}"
 
 HOST_KEY=$(_ghost "cat ~/.ssh/id_ed25519.pub")
 
+log "Writing installer Ignition..."
+kv_write_ignition "$VM_NAME" "$HOST_KEY"
+
 log "Applying VM to cluster..."
 kv_apply_vm "$VM_NAME"
-
-log "Injecting SSH key..."
-kv_inject_ssh_key "$VM_NAME"
 
 log "Waiting for installer VM ready..."
 kv_wait_ready "$VM_NAME" 120 || {
