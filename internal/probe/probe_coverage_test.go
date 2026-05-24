@@ -94,6 +94,18 @@ func TestListDisks_PartitionsIncluded(t *testing.T) {
 	}
 }
 
+func TestListNetworkInterfaces_RunnerError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	spy.StubError("ip -j addr show", fmt.Errorf("ip: command not found"))
+	_, err := NewSystemProber(spy).ListNetworkInterfaces(context.Background())
+	if err == nil {
+		t.Fatal("expected error when runner fails, got nil")
+	}
+	if got := err.Error(); got == "" {
+		t.Error("expected non-empty error message")
+	}
+}
+
 func buildSingleDiskJSON(path string, size uint64, devType string, removable bool, children []string) string {
 	rm := "false"
 	if removable {
