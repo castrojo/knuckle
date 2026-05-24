@@ -1,0 +1,14 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto # don't drop below current coverage
+        threshold: 1% # allow 1% tolerance for refactors
+    patch:
+      default:
+        target: 80% # new code in PRs should be ≥80% covered
+
+comment:
+  layout: reach,diff,flags
+  behavior: default
+  require_changes: true
