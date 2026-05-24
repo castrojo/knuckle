@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, 'feat/**']
   schedule:
     # Refresh CodeQL + Scorecard weekly so we catch advisories filed
     # against pinned dependencies even when the repo is quiet.
