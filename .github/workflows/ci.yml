@@ -66,7 +66,7 @@ jobs:
           done
           if [[ $flaky_detected -eq 1 ]]; then
             echo "::warning::Potential flaky tests detected — some runs failed. Check logs above."
-            exit 0  # Don't fail CI, just warn
+            exit 1  # Fail CI so flaky tests are not silently ignored
           fi
           echo "✓ All 5 runs passed — no flaky tests detected"
 
@@ -130,6 +130,11 @@ jobs:
           go-version: "1.26"
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        continue-on-error: true
+        id: setup-just-action
+      - name: install just (fallback if setup-just action fails)
+        if: steps.setup-just-action.outcome == 'failure'
+        run: curl -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
       - name: per-package coverage thresholds
         run: just cover-check
@@ -164,6 +169,11 @@ jobs:
           check-latest: true
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        continue-on-error: true
+        id: setup-just-action-e2e
+      - name: install just (fallback if setup-just action fails)
+        if: steps.setup-just-action-e2e.outcome == 'failure'
+        run: curl -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
       - name: headless dry-run
         run: just headless-test
