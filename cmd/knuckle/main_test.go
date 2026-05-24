@@ -111,3 +111,115 @@ func TestMain_ConfigWithoutHeadless(t *testing.T) {
 		t.Errorf("expected output to contain 'Error'; got: %s", out)
 	}
 }
+
+// TestMain_HeadlessInvalidJSON verifies that a config file with malformed JSON
+// exits 1 with a parsing error.
+func TestMain_HeadlessInvalidJSON(t *testing.T) {
+	cfg := writeTempConfig(t, `{not valid json}`)
+	cmd := helperCmd(t, "--headless", "--config="+cfg, "--log-file=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected non-zero exit for invalid JSON config, got exit 0")
+	}
+	if cmd.ProcessState.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", cmd.ProcessState.ExitCode())
+	}
+	if !strings.Contains(string(out), "Error") {
+		t.Errorf("expected output to contain 'Error'; got: %s", out)
+	}
+}
+
+// minimalDryRunConfig is a minimal valid headless config with dry_run: true.
+// Uses /dev/sda as the target disk — DryRunner never executes disk commands,
+// so the disk need not exist in the test environment.
+const minimalDryRunConfig = `{
+  "channel": "stable",
+  "hostname": "testhost",
+  "disk": "/dev/sda",
+  "network": {"mode": "dhcp"},
+  "users": [{"username": "core", "ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@knuckle"]}],
+  "update_strategy": "reboot",
+  "dry_run": true
+}`
+
+// writeTempConfig writes content to a temp file and returns the path.
+func writeTempConfig(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "knuckle-test-config-*.json")
+	if err != nil {
+		t.Fatalf("creating temp config: %v", err)
+	}
+	if _, err := f.WriteString(content); err != nil {
+		t.Fatalf("writing temp config: %v", err)
+	}
+	_ = f.Close()
+	return f.Name()
+}
+
+// helperCmdWithTimeout builds a subprocess with a custom timeout.
+func helperCmdWithTimeout(t *testing.T, timeout time.Duration, args ...string) *exec.Cmd {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	t.Cleanup(cancel)
+	cmd := exec.CommandContext(ctx, os.Args[0], args...)
+	cmd.Env = append(os.Environ(), "KNUCKLE_TEST_MAIN=1")
+	return cmd
+}
+
+// TestMain_HeadlessDryRun verifies a valid dry-run config exits 0 and runs the
+// full headless path (config load → validate → install via DryRunner).
+// Covers: log setup, cfg load, DryRunner branch, headless.Run success path.
+func TestMain_HeadlessDryRun(t *testing.T) {
+	cfg := writeTempConfig(t, minimalDryRunConfig)
+	cmd := helperCmdWithTimeout(t, 30*time.Second,
+		"--headless", "--config="+cfg, "--log-file=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("dry-run headless exited non-zero: %v\noutput: %s", err, out)
+	}
+	if !strings.Contains(string(out), "finished successfully") {
+		t.Errorf("expected success message in output; got: %s", out)
+	}
+}
+
+// TestMain_HeadlessDryRunFlag verifies that --dry-run CLI flag forces dry-run
+// even when the config does not set dry_run: true.
+// Covers the `if dryRun { cfg.DryRun = true }` branch in runHeadless.
+func TestMain_HeadlessDryRunFlag(t *testing.T) {
+	// Config has dry_run omitted (defaults false) — CLI flag must enable it.
+	cfg := writeTempConfig(t, `{
+  "channel": "stable",
+  "hostname": "testhost",
+  "disk": "/dev/sda",
+  "network": {"mode": "dhcp"},
+  "users": [{"username": "core", "ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@knuckle"]}],
+  "update_strategy": "reboot"
+}`)
+	cmd := helperCmdWithTimeout(t, 30*time.Second,
+		"--headless", "--config="+cfg, "--dry-run", "--log-file=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("--dry-run flag headless exited non-zero: %v\noutput: %s", err, out)
+	}
+	if !strings.Contains(string(out), "finished successfully") {
+		t.Errorf("expected success message in output; got: %s", out)
+	}
+}
+
+// TestMain_HeadlessUnwriteableLogFile verifies that an unwriteable log file
+// path exits 1 — covers the log-file open-error branch in runHeadless.
+func TestMain_HeadlessUnwriteableLogFile(t *testing.T) {
+	cfg := writeTempConfig(t, minimalDryRunConfig)
+	badLog := t.TempDir() + "/nonexistent-subdir/knuckle.log"
+	cmd := helperCmd(t, "--headless", "--config="+cfg, "--log-file="+badLog)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected non-zero exit for unwriteable log file, got exit 0")
+	}
+	if cmd.ProcessState.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", cmd.ProcessState.ExitCode())
+	}
+	if !strings.Contains(string(out), "Error") {
+		t.Errorf("expected output to contain 'Error'; got: %s", out)
+	}
+}
