@@ -169,9 +169,31 @@ if [[ $BUILD_OK -eq 0 ]]; then
   cat "$REPORT"; exit 1
 fi
 
-# ── 6. Tier 0 — CI gate ───────────────────────────────────────────────────────
+# Allocate VM early to parallelize disk prep with CI (if needed)
+VM_NAME="qa-pr-${PR}-$(date +%s)"
+KV_PREP_PID=""
+
+# ── 6. Tier 0 — CI gate (parallelize with kv_prepare_disk if Tier >= 1) ────────
 log "Tier 0: just ci..."
+
+# If we need VM (Tier >= 1), start disk prep in background while CI runs on dev machine
+if [[ $TIER -ge 1 ]]; then
+  log "Background: kv_prepare_disk ${VM_NAME}..."
+  kv_prepare_disk "$VM_NAME" > "${RUNDIR}/kv_prepare.log" 2>&1 &
+  KV_PREP_PID=$!
+fi
+
 (cd "$WORKTREE" && just ci > "${RUNDIR}/ci.log" 2>&1) && CI_OK=1 || CI_OK=0
+
+# Wait for background disk prep to complete (if started)
+if [[ -n "$KV_PREP_PID" ]]; then
+  log "Waiting for kv_prepare_disk (PID $KV_PREP_PID)..."
+  wait "$KV_PREP_PID" || {
+    log "ERROR: kv_prepare_disk failed"
+    { echo "### VM Setup"; echo "**❌ Disk preparation failed**"; } >> "$REPORT"
+    cat "$REPORT"; exit 1
+  }
+fi
 
 CI_SUMMARY=$(grep -E "^ok |^FAIL|✅|PASS|cover:|error:" "${RUNDIR}/ci.log" | tail -20)
 
@@ -200,14 +222,10 @@ fi
 
 # ── 7. Create KubeVirt installer VM ──────────────────────────────────────────
 log "Setting up KubeVirt installer VM..."
-VM_NAME="qa-pr-${PR}-$(date +%s)"
 
 _ghost "mkdir -p ${WORK_REMOTE}"
 
 HOST_KEY=$(_ghost "cat ~/.ssh/id_ed25519.pub")
-
-log "Preparing disks..."
-kv_prepare_disk "$VM_NAME"
 
 log "Applying VM to cluster..."
 kv_apply_vm "$VM_NAME"
