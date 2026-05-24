@@ -128,14 +128,14 @@ func TestBuildUserForm(t *testing.T) {
 		t.Skip("skipping TTY test in CI — no /dev/tty available")
 	}
 	tests := []struct {
-		name         string
-		hostname     string
-		username     string
-		password     string
-		githubUser   string
-		sshKey       string
-		timezone     string
-		wantGroups   int
+		name       string
+		hostname   string
+		username   string
+		password   string
+		githubUser string
+		sshKey     string
+		timezone   string
+		wantGroups int
 	}{
 		{
 			name:       "empty form",
@@ -214,7 +214,6 @@ func TestBuildUserForm(t *testing.T) {
 			if form == nil {
 				t.Fatal("buildUserForm returned nil")
 			}
-
 
 			// Verify inputs are preserved
 			if m.Wizard.State.Config.Hostname != tt.hostname {
@@ -346,7 +345,6 @@ func TestBuildTailscaleForm(t *testing.T) {
 			if form == nil {
 				t.Fatal("buildTailscaleForm returned nil")
 			}
-
 
 			// Verify inputs are preserved
 			if m.tailscaleAuthKeyIn != tt.authKey {
