@@ -94,6 +94,8 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		swapSize = model.DefaultSwapSizeMB
 	}
 
+	tailscaleEnabled := hasTailscaleConfig(cfg.Tailscale)
+
 	data := templateData{
 		Hostname:            cfg.Hostname,
 		Timezone:            cfg.Timezone,
@@ -108,8 +110,8 @@ func (g *Generator) GenerateButane(cfg *model.InstallConfig) (string, error) {
 		SwapEnabled:         cfg.Swap.Enabled,
 		SwapSizeMB:          swapSize,
 		Tailscale:           cfg.Tailscale,
-		TailscaleEnabled:    cfg.Tailscale.AuthKey != "",
-		TailscaleForwarding: cfg.Tailscale.AuthKey != "" && (cfg.Tailscale.Mode == model.TailscaleModeExitNode || cfg.Tailscale.Mode == model.TailscaleModeSubnetRouter),
+		TailscaleEnabled:    tailscaleEnabled,
+		TailscaleForwarding: tailscaleEnabled && (cfg.Tailscale.Mode == model.TailscaleModeExitNode || cfg.Tailscale.Mode == model.TailscaleModeSubnetRouter),
 		TailscaleExtraArgs:  tailscaleExtraArgs(cfg.Tailscale),
 	}
 
@@ -138,6 +140,10 @@ type templateData struct {
 	TailscaleEnabled    bool   // AuthKey is set, i.e. user filled the step
 	TailscaleForwarding bool   // exit-node or subnet-router → need sysctl ip_forward=1
 	TailscaleExtraArgs  string // value of TS_EXTRA_ARGS in tailscale.env
+}
+
+func hasTailscaleConfig(ts model.TailscaleConfig) bool {
+	return strings.TrimSpace(ts.AuthKey) != ""
 }
 
 // tailscaleExtraArgs builds the TS_EXTRA_ARGS value for /etc/tailscale/tailscale.env
