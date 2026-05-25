@@ -20,7 +20,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
+	"charm.land/bubbles/v2/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/projectbluefin/knuckle/internal/model"
