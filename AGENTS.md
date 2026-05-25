@@ -80,7 +80,7 @@ just e2e                 # build ISO → boot in QEMU GTK window → interactive
 ## Package Boundaries
 
 Coverage numbers are authoritative in [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md#coverage-gate).
-Current values (as of 2026-05-20, `just cover-check`):
+Current values (as of 2026-05-25, `just cover-check`):
 
 | Package           | Responsibility                                                     | Coverage |
 | ----------------- | ------------------------------------------------------------------ | -------- |
@@ -89,14 +89,14 @@ Current values (as of 2026-05-20, `just cover-check`):
 | `internal/runner` | `Runner` interface: `RealRunner`, `DryRunner`, `SpyRunner`         | 81%      |
 | `internal/probe`  | `lsblk` + `ip addr` JSON parsing, `/dev/disk/by-id` resolution     | 81%      |
 | `internal/validate` | Hostname, CIDR, gateway, SSH key, timezone, disk path validators | 97%      |
-| `internal/bakery` | sysext catalog + Flatcar release/SBOM fetchers, SHA512 check       | 85%      |
+| `internal/bakery` | sysext catalog + Flatcar release/SBOM fetchers, SHA512 check       | 97.8%    |
 | `internal/github` | SSH key fetch + GitHub Releases API client                         | 90%      |
 | `internal/ignition` | Butane assembly + in-process Butane→Ignition compilation         | 93%      |
-| `internal/install` | `flatcar-install` orchestration via runner                        | 76%      |
+| `internal/install` | `flatcar-install` orchestration via runner                        | 98.8%    |
 | `internal/iso`    | Installer ISO builder helpers                                      | 100%     |
-| `internal/headless` | `--headless --config` JSON-driven install path                   | 87%      |
-| `internal/wizard` | Step state machine, navigation, validation gates                   | 81%      |
-| `internal/tui`    | Bubble Tea view models (one sub-model per step), forms             | 80%      |
+| `internal/headless` | `--headless --config` JSON-driven install path                   | 98.5%    |
+| `internal/wizard` | Step state machine, navigation, validation gates                   | 99.5%    |
+| `internal/tui`    | Bubble Tea view models (one sub-model per step), forms             | 94.1%    |
 
 Targets enforced by `just cover-check` are deliberately set ≤ current numbers
 so the gate guards against *regression*. Long-term aspirations live in

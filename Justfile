@@ -114,8 +114,8 @@ cover-check:
     set -euo pipefail
     declare -A targets=(
         [model]=95  [validate]=95  [ignition]=92  [github]=90
-        [bakery]=93 [probe]=94     [runner]=95    [install]=94
-        [headless]=93 [wizard]=95  [iso]=95       [tui]=89
+        [bakery]=97 [probe]=94     [runner]=95    [install]=98
+        [headless]=98 [wizard]=99  [iso]=95       [tui]=94
         [demo]=100
     )
     fail=0
