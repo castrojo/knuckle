@@ -184,6 +184,9 @@ jobs:
       - name: headless dry-run
         run: just headless-test
 
+      - name: iso-smoke recipe dry-run
+        run: just --dry-run iso-smoke output/knuckle-installer-stable-amd64.iso /usr/share/OVMF/OVMF_CODE_4M.fd
+
   cross-compile-arm64:
     name: cross-compile arm64
     runs-on: ubuntu-latest

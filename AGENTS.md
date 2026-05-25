@@ -222,8 +222,10 @@ injection method for Flatcar PXE live boot.
   entries. The `.iso-build/` build-cache directory is gitignored; any GRUB artifacts there are
   stale local artifacts and never included in the ISO.
 - **`just vm-e2e` does NOT test ISO boot.** It deploys knuckle via SSH to a running Flatcar VM.
-  Only `just boot-iso`/`just e2e` test ISO boot (require display). There is no headless ISO
-  smoke test in CI yet (tracked: #393). For manual ISO verification on ghost, see knuckle-qa skill.
+  Use `just iso-smoke <iso> <ovmf>` for a headless serial-log ISO boot check (systemd-boot menu,
+  initrd targets, no `xd2root`/`x2dauto` errors). `just boot-iso`/`just e2e` remain the full
+  display-driven ISO paths. CI currently dry-runs the recipe definition; run the real smoke test on
+  ghost when validating release candidates.
 - **Flatcar `.DIGESTS.asc` format** = PGP clearsigned (contains `-----BEGIN PGP SIGNED MESSAGE-----`
   header + content + signature). Verify with `gpg --decrypt asc > verified_content`, not
   `gpg --verify asc data` (detached-signature form — always fails on clearsigned input).
