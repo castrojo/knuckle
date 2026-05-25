@@ -112,6 +112,11 @@ func New(w *wizard.Wizard) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
+	// Test mode: quit immediately after Init for coverage testing
+	if os.Getenv("KNUCKLE_TEST_TUI_AUTO_QUIT") == "1" {
+		m.quitting = true
+		return tea.Quit
+	}
 	var cmds []tea.Cmd
 	if m.activeForm != nil {
 		cmds = append(cmds, m.activeForm.Init())
