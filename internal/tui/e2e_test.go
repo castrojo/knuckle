@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,6 +13,9 @@ import (
 // TestFullFlowE2E simulates the EXACT user journey through all 9 steps.
 // This test failed before the fix and catches the blank screen bug.
 func TestFullFlowE2E(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping TTY test in CI — no /dev/tty available")
+	}
 	w := newTestWizard()
 	w.State.Config.Channel = "stable"
 	w.State.Disks = []model.DiskInfo{
