@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -638,15 +639,15 @@ func TestFetchAllChannels_AllFail(t *testing.T) {
 }
 
 func TestFetchAllChannels_EmptyChannelList(t *testing.T) {
-	called := false
+	var called atomic.Bool
 	urlFn := func(channel string) (string, string) {
-		called = true
+		called.Store(true)
 		return "", ""
 	}
 
 	// With explicit empty slice, function uses default channels
 	results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn)
-	if !called {
+	if !called.Load() {
 		if err != nil {
 			t.Logf("empty channels with failing urlFn: err=%v", err)
 		}
