@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 )
 
@@ -639,20 +638,27 @@ func TestFetchAllChannels_AllFail(t *testing.T) {
 }
 
 func TestFetchAllChannels_EmptyChannelList(t *testing.T) {
-	var called atomic.Bool
+	// When no channels are passed, fetchAllChannelsWithURLFn uses defaults.
+	// Use a server that always fails so all defaults return an error — this
+	// confirms the function iterates the default channel list (urlFn gets called)
+	// without introducing any shared mutable state between goroutines.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
 	urlFn := func(channel string) (string, string) {
-		called.Store(true)
-		return "", ""
+		return srv.URL + "/" + channel + "/version.txt",
+			srv.URL + "/" + channel + "/packages.txt"
 	}
 
-	// With explicit empty slice, function uses default channels
 	results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn)
-	if !called.Load() {
-		if err != nil {
-			t.Logf("empty channels with failing urlFn: err=%v", err)
-		}
+	if err == nil {
+		t.Error("expected error when all default channels fail")
 	}
-	_ = results
+	if len(results) != 0 {
+		t.Errorf("expected no results when all channels fail, got %d", len(results))
+	}
 }
 
 func TestFetchAllChannels_ContextCancelled(t *testing.T) {
