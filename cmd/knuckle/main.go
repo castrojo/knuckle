@@ -58,7 +58,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: --headless requires --config <file>\n")
 			os.Exit(1)
 		}
-		runHeadless(configFile, dryRun, logFile)
+		if err := runHeadless(configFile, dryRun, logFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -160,12 +163,13 @@ func main() {
 }
 
 // runHeadless loads a JSON config and runs the install without TUI.
-func runHeadless(configPath string, dryRun bool, logFile string) {
+// It returns an error instead of calling os.Exit so callers can test
+// the individual error paths without spawning a subprocess.
+func runHeadless(configPath string, dryRun bool, logFile string) error {
 	// Set up logging
 	logWriter, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("opening log file: %w", err)
 	}
 	defer func() { _ = logWriter.Close() }()
 
@@ -176,8 +180,7 @@ func runHeadless(configPath string, dryRun bool, logFile string) {
 	// Load config
 	cfg, err := headless.LoadConfig(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	// Override dry-run from CLI flag
@@ -199,15 +202,14 @@ func runHeadless(configPath string, dryRun bool, logFile string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 	if err := headless.Run(ctx, cfg, installer, logger); err != nil {
-		fmt.Fprintf(os.Stderr, "\n❌ %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("%w", err)
 	}
 
 	// Handle reboot through runner (keeps DryRunner/SpyRunner semantics)
 	if cfg.Reboot && !cfg.DryRun {
 		if _, err := cmdRunner.Run(context.Background(), "systemctl", "reboot"); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: reboot failed: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("reboot failed: %w", err)
 		}
 	}
+	return nil
 }

@@ -316,6 +316,59 @@ func TestMain_TUIRebootFnWiring(t *testing.T) {
 	}
 }
 
+// --- Direct unit tests for runHeadless ---
+// These test the function directly without a subprocess, which was impossible
+// before the os.Exit refactor (the process would have exited).
+
+// TestRunHeadless_LogFileError tests that runHeadless returns an error (not
+// os.Exit) when the log file cannot be opened.
+func TestRunHeadless_LogFileError(t *testing.T) {
+	cfg := writeTempConfig(t, minimalDryRunConfig)
+	badLog := t.TempDir() + "/nonexistent-subdir/knuckle.log"
+	err := runHeadless(cfg, true, badLog)
+	if err == nil {
+		t.Fatal("expected error for unwriteable log file, got nil")
+	}
+	if !strings.Contains(err.Error(), "opening log file") {
+		t.Errorf("expected error to mention 'opening log file'; got: %v", err)
+	}
+}
+
+// TestRunHeadless_ConfigNotFound tests that runHeadless returns an error when
+// the config file does not exist.
+func TestRunHeadless_ConfigNotFound(t *testing.T) {
+	err := runHeadless("/nonexistent-knuckle-config-xyz.json", true, "/dev/null")
+	if err == nil {
+		t.Fatal("expected error for missing config file, got nil")
+	}
+	if !strings.Contains(err.Error(), "loading config") {
+		t.Errorf("expected error to mention 'loading config'; got: %v", err)
+	}
+}
+
+// TestRunHeadless_InvalidJSON tests that runHeadless returns an error when the
+// config file contains invalid JSON.
+func TestRunHeadless_InvalidJSON(t *testing.T) {
+	cfg := writeTempConfig(t, `{not valid json}`)
+	err := runHeadless(cfg, true, "/dev/null")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON config, got nil")
+	}
+	if !strings.Contains(err.Error(), "loading config") {
+		t.Errorf("expected error to mention 'loading config'; got: %v", err)
+	}
+}
+
+// TestRunHeadless_DryRunSuccess tests that runHeadless returns nil for a valid
+// dry-run config, exercising the full happy path without network or disk I/O.
+func TestRunHeadless_DryRunSuccess(t *testing.T) {
+	cfg := writeTempConfig(t, minimalDryRunConfig)
+	err := runHeadless(cfg, true, "/dev/null")
+	if err != nil {
+		t.Fatalf("expected nil error for dry-run, got: %v", err)
+	}
+}
+
 // TestMain_TUIFlatcarVersionFlag verifies that the --flatcar-version flag
 // is correctly passed to the wizard state.
 func TestMain_TUIFlatcarVersionFlag(t *testing.T) {
