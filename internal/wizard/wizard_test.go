@@ -2135,3 +2135,116 @@ func TestProbeHardware_NetworkError(t *testing.T) {
 		t.Errorf("error should mention 'probing network', got: %v", err)
 	}
 }
+
+func TestNext_ValidationErrorDoesNotAdvance(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.CurrentStep = model.StepWelcome
+	w.State.Config.Channel = "nightly"
+
+	err := w.Next()
+	if err == nil {
+		t.Fatal("expected validation error from Next")
+	}
+	if !strings.Contains(err.Error(), "nightly") {
+		t.Errorf("expected channel validation error, got: %v", err)
+	}
+	if w.State.CurrentStep != model.StepWelcome {
+		t.Errorf("expected to remain on StepWelcome, got %v", w.State.CurrentStep)
+	}
+}
+
+func TestFetchChannels_TotalOutageReturnsError(t *testing.T) {
+	old := fetchAllChannelsFn
+	fetchAllChannelsFn = func(_ context.Context) ([]bakery.ChannelInfo, error) {
+		return nil, fmt.Errorf("all channels unavailable")
+	}
+	defer func() { fetchAllChannelsFn = old }()
+
+	w, _, _, _ := newTestWizard()
+	w.State.Channels = []bakery.ChannelInfo{{Channel: "stable", Version: "cached"}}
+
+	err := w.FetchChannels(context.Background())
+	if err == nil {
+		t.Fatal("expected error when all channel fetches fail")
+	}
+	if !strings.Contains(err.Error(), "all channels unavailable") {
+		t.Errorf("expected outage error, got: %v", err)
+	}
+	if len(w.State.Channels) != 1 || w.State.Channels[0].Version != "cached" {
+		t.Errorf("expected cached channels to remain unchanged, got: %+v", w.State.Channels)
+	}
+}
+
+func TestExecuteWithProgress_ErrorAllowsRetry(t *testing.T) {
+	inst := &mockInstaller{err: fmt.Errorf("install failed")}
+	w := New(&mockProber{}, &mockBakery{}, inst)
+	w.State.ProgressMessages = []string{"existing progress"}
+
+	var firstAttempt []string
+	err := w.ExecuteWithProgress(context.Background(), func(msg string) {
+		firstAttempt = append(firstAttempt, msg)
+	})
+	if err == nil {
+		t.Fatal("expected error from ExecuteWithProgress")
+	}
+	if len(firstAttempt) != 1 || firstAttempt[0] != "test progress" {
+		t.Errorf("expected progress callback on failed attempt, got %v", firstAttempt)
+	}
+	if len(w.State.ProgressMessages) != 1 || w.State.ProgressMessages[0] != "existing progress" {
+		t.Errorf("ExecuteWithProgress should not mutate stored progress, got %v", w.State.ProgressMessages)
+	}
+
+	inst.err = nil
+	var retryAttempt []string
+	if err := w.ExecuteWithProgress(context.Background(), func(msg string) {
+		retryAttempt = append(retryAttempt, msg)
+	}); err != nil {
+		t.Fatalf("retry should succeed, got: %v", err)
+	}
+	if len(retryAttempt) != 1 || retryAttempt[0] != "test progress" {
+		t.Errorf("expected progress callback on retry, got %v", retryAttempt)
+	}
+}
+
+func TestPrevious_VisitsTailscaleWhenSelected(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Sysexts = []model.SysextEntry{{Name: "tailscale", Selected: true}}
+	w.State.CurrentStep = model.StepUpdate
+
+	w.Previous()
+	if w.State.CurrentStep != model.StepTailscale {
+		t.Errorf("Previous from Update with tailscale selected should go to Tailscale, got %v", w.State.CurrentStep)
+	}
+}
+
+func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
+	tests := []struct {
+		name     string
+		sysexts  []model.SysextEntry
+		wantStep model.WizardStep
+	}{
+		{
+			name:     "skips nvidia when not selected",
+			sysexts:  []model.SysextEntry{{Name: "tailscale", Selected: true}},
+			wantStep: model.StepSysext,
+		},
+		{
+			name:     "visits nvidia when selected",
+			sysexts:  []model.SysextEntry{{Name: "tailscale", Selected: true}, {Name: "nvidia-runtime", Selected: true}},
+			wantStep: model.StepNvidia,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w, _, _, _ := newTestWizard()
+			w.State.Sysexts = tt.sysexts
+			w.State.CurrentStep = model.StepTailscale
+
+			w.Previous()
+			if w.State.CurrentStep != tt.wantStep {
+				t.Errorf("Previous from Tailscale = %v, want %v", w.State.CurrentStep, tt.wantStep)
+			}
+		})
+	}
+}

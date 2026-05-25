@@ -48,7 +48,7 @@
 | `internal/bakery`    |  85%  | 80%  | ≥ 85%                     |
 | `internal/runner`    |  81%  | 80%  | ≥ 80%                     |
 | `internal/probe`     |  81%  | 80%  | ≥ 85%                     |
-| `internal/wizard`    |  81%  | 70%  | ≥ 85%                     |
+| `internal/wizard`    |  81%  | 80%  | ≥ 85%                     |
 | `internal/install`   |  76%  | 70%  | ≥ 80%                     |
 | `internal/tui`       |  80%  | 70%  | ≥ 85%                     |
 
