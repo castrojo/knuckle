@@ -299,7 +299,7 @@ func TestBuildTailscaleForm(t *testing.T) {
 		{
 			name:       "empty form",
 			authKey:    "",
-			mode:       "",
+			mode:       model.TailscaleModeConnect, // huh.Select initializes to first option
 			routes:     "",
 			wantGroups: 1,
 		},
