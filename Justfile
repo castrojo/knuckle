@@ -114,7 +114,7 @@ cover-check:
     declare -A targets=(
         [model]=90  [validate]=85  [ignition]=85  [github]=90
         [bakery]=80 [probe]=80     [runner]=80    [install]=70
-        [headless]=70 [wizard]=70  [iso]=70       [tui]=70
+        [headless]=70 [wizard]=80  [iso]=70       [tui]=70
         [demo]=100
     )
     fail=0
