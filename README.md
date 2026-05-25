@@ -99,8 +99,13 @@ Minimal example (`install.json`):
   "hostname": "flatcar-01",
   "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "channel": "stable",
-  "ssh_keys": ["ssh-ed25519 AAAA..."],
-  "network": {"dhcp": true}
+  "network": {"mode": "dhcp"},
+  "users": [
+    {
+      "username": "core",
+      "ssh_keys": ["ssh-ed25519 AAAA..."]
+    }
+  ]
 }
 ```
 
@@ -111,8 +116,13 @@ Swap is **enabled by default** (4 GiB `/var/swapfile`). To customise:
   "hostname": "flatcar-01",
   "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "channel": "stable",
-  "ssh_keys": ["ssh-ed25519 AAAA..."],
-  "network": {"dhcp": true},
+  "network": {"mode": "dhcp"},
+  "users": [
+    {
+      "username": "core",
+      "ssh_keys": ["ssh-ed25519 AAAA..."]
+    }
+  ],
   "swap": {"enabled": true, "size_mb": 2048}
 }
 ```
