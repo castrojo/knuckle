@@ -55,8 +55,21 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 
 ## Quick Start
 
+### Install on bare metal (end users)
+
+1. **Download** the installer ISO from the [Releases page](https://github.com/projectbluefin/knuckle/releases) — pick `knuckle-installer-stable.iso` for amd64 or the arm64 variant.
+2. **Write to USB:**
+   ```bash
+   sudo dd if=knuckle-installer-stable.iso of=/dev/sdX bs=4M status=progress
+   ```
+3. **Boot** from the USB on your target machine — the guided wizard starts automatically.
+
+No Go toolchain or build step needed.
+
+### Build from source (developers)
+
 ```bash
-# Build from source (amd64)
+# Build for amd64
 just build
 
 # Cross-compile for arm64
