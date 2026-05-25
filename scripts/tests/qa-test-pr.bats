@@ -1,114 +1,292 @@
 #!/usr/bin/env bats
-# Tests for scripts/qa-test-pr.sh pure helper logic.
+# Tests for scripts/qa-test-pr.sh argument validation, complexity gate, and tier routing.
+# Requires: bats-core (https://github.com/bats-core/bats-core)
+#
+# Run: bats scripts/tests/qa-test-pr.bats
+#
+# Strategy: qa-test-pr.sh is a monolithic script that depends on gh, git, ssh,
+# jq, and a running KubeVirt cluster. We test pure-logic paths by:
+# 1. Mocking external commands via PATH manipulation
+# 2. Testing argument validation (missing PR number)
+# 3. Testing the complexity gate with mock gh output
+# 4. Testing tier routing by varying LABELS
 
 SCRIPT="$BATS_TEST_DIRNAME/../qa-test-pr.sh"
+MOCK_DIR=""
 
 setup() {
-  MOCK_BIN="$BATS_TEST_DIRNAME/.mock-bin-$$"
-  mkdir -p "$MOCK_BIN"
+  MOCK_DIR="$(mktemp -d)"
+  export PATH="$MOCK_DIR:$PATH"
+  export HOME="$MOCK_DIR"
+  mkdir -p "$MOCK_DIR/.ssh"
+  touch "$MOCK_DIR/.ssh/id_ed25519"
 
-  cat > "$MOCK_BIN/gh" <<'GH'
+  # Mock gh: returns configurable PR JSON
+  cat > "$MOCK_DIR/gh" << 'GHEOF'
 #!/usr/bin/env bash
-printf '%s\n' "${MOCK_GH_OUTPUT:-{\"labels\":[]}}"
-GH
+case "$*" in
+  *"pr view"*)
+    echo "${MOCK_GH_PR_JSON:-{}}"
+    ;;
+  *"pr diff"*)
+    echo "${MOCK_GH_DIFF_FILES:-}"
+    ;;
+  *)
+    echo "mock-gh: $*" >&2
+    ;;
+esac
+GHEOF
+  chmod +x "$MOCK_DIR/gh"
 
-  cat > "$MOCK_BIN/kubectl" <<'KUBECTL'
+  # Mock git: fake fetch/rev-parse/worktree
+  cat > "$MOCK_DIR/git" << 'GITEOF'
 #!/usr/bin/env bash
-printf '%s\n' "${MOCK_KUBECTL_OUTPUT:-kubectl stub}"
-KUBECTL
+case "$1" in
+  fetch) exit 0 ;;
+  rev-parse) echo "abcdef123456" ;;
+  worktree) exit 0 ;;
+  *) exit 0 ;;
+esac
+GITEOF
+  chmod +x "$MOCK_DIR/git"
 
-  chmod +x "$MOCK_BIN/gh" "$MOCK_BIN/kubectl"
+  # Mock ssh: return fake OS version
+  cat > "$MOCK_DIR/ssh" << 'SSHEOF'
+#!/usr/bin/env bash
+echo "3815.2.5"
+SSHEOF
+  chmod +x "$MOCK_DIR/ssh"
+
+  # Mock scp
+  cat > "$MOCK_DIR/scp" << 'SCPEOF'
+#!/usr/bin/env bash
+exit 0
+SCPEOF
+  chmod +x "$MOCK_DIR/scp"
+
+  # Mock just: succeed immediately
+  cat > "$MOCK_DIR/just" << 'JUSTEOF'
+#!/usr/bin/env bash
+echo "ok"
+JUSTEOF
+  chmod +x "$MOCK_DIR/just"
+
+  # Mock jq: handle the common -r flag cases
+  cat > "$MOCK_DIR/jq" << 'JQEOF'
+#!/usr/bin/env bash
+# Simple jq mock that parses the filter to return test values
+input=$(cat)
+filter="$2"
+case "$filter" in
+  .title)        echo "${MOCK_PR_TITLE:-test PR}" ;;
+  .headRefName)  echo "${MOCK_PR_BRANCH:-feat/test}" ;;
+  .author.login) echo "testuser" ;;
+  *labels*name*join*) echo "${MOCK_PR_LABELS:-}" ;;
+  *labels*size*) echo "${MOCK_PR_SIZE:-}" ;;
+  *.body*Closes*) echo "" ;;
+  *) echo "" ;;
+esac
+JQEOF
+  chmod +x "$MOCK_DIR/jq"
+
+  # Mock python3 (for swap config injection)
+  cat > "$MOCK_DIR/python3" << 'PYEOF'
+#!/usr/bin/env bash
+exit 0
+PYEOF
+  chmod +x "$MOCK_DIR/python3"
 }
 
 teardown() {
-  rm -rf "$MOCK_BIN"
+  rm -rf "$MOCK_DIR"
 }
 
-run_helper() {
-  run env PATH="$MOCK_BIN:$PATH" SCRIPT="$SCRIPT" bash -c '
-    source "$SCRIPT"
-    "$@"
-  ' bash "$@"
+# ── Argument validation ──────────────────────────────────────────────────────
+
+@test "missing PR number exits with usage error" {
+  run bash "$SCRIPT" 2>&1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"usage"* ]] || [[ "$output" == *"PR_NUMBER"* ]] || [[ "$output" == *"parameter"* ]]
 }
 
-@test "should_skip_qa returns success when ci/skip label is present" {
-  run_helper should_skip_qa "ci/skip, domain:ci"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+# ── Complexity gate ──────────────────────────────────────────────────────────
+
+@test "size:XL triggers complexity gate (exit 2)" {
+  export MOCK_GH_PR_JSON='{"title":"big PR","headRefName":"feat/big","labels":[{"name":"size:XL"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="big PR"
+  export MOCK_PR_BRANCH="feat/big"
+  export MOCK_PR_LABELS="size:XL"
+  export MOCK_PR_SIZE="size:XL"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"NOGO"* ]] || [[ "$output" == *"Complexity"* ]] || [[ "$output" == *"complexity"* ]]
 }
 
-@test "should_skip_qa returns non-zero when skip label is absent" {
-  run_helper should_skip_qa "domain:ci, kind:test"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
+@test "size:XXL triggers complexity gate (exit 2)" {
+  export MOCK_GH_PR_JSON='{"title":"huge PR","headRefName":"feat/huge","labels":[{"name":"size:XXL"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="huge PR"
+  export MOCK_PR_BRANCH="feat/huge"
+  export MOCK_PR_LABELS="size:XXL"
+  export MOCK_PR_SIZE="size:XXL"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"NOGO"* ]] || [[ "$output" == *"Complexity"* ]] || [[ "$output" == *"complexity"* ]]
 }
 
-@test "get_tier routes probe labels to tier 1" {
-  run_helper get_tier "domain:probe"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
+@test ">4 domain labels triggers complexity gate (exit 2)" {
+  export MOCK_GH_PR_JSON='{"title":"multi","headRefName":"feat/m","labels":[{"name":"domain:a"},{"name":"domain:b"},{"name":"domain:c"},{"name":"domain:d"},{"name":"domain:e"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="multi"
+  export MOCK_PR_BRANCH="feat/m"
+  export MOCK_PR_LABELS="domain:a, domain:b, domain:c, domain:d, domain:e"
+  export MOCK_PR_SIZE=""
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"NOGO"* ]] || [[ "$output" == *"Complexity"* ]] || [[ "$output" == *"complexity"* ]]
 }
 
-@test "get_tier routes tui labels to tier 1" {
-  run_helper get_tier "domain:tui"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
+@test "workflow file changes trigger complexity gate (exit 2)" {
+  export MOCK_GH_PR_JSON='{"title":"wf","headRefName":"feat/wf","labels":[],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="wf"
+  export MOCK_PR_BRANCH="feat/wf"
+  export MOCK_PR_LABELS=""
+  export MOCK_PR_SIZE=""
+  export MOCK_GH_DIFF_FILES=".github/workflows/ci.yml"
+  run bash "$SCRIPT" 999 2>&1
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"NOGO"* ]] || [[ "$output" == *"Complexity"* ]] || [[ "$output" == *"complexity"* ]]
 }
 
-@test "get_tier routes install labels to tier 3" {
-  run_helper get_tier "domain:install"
-  [ "$status" -eq 0 ]
-  [ "$output" = "3" ]
+@test "size:M does NOT trigger complexity gate" {
+  export MOCK_GH_PR_JSON='{"title":"small","headRefName":"feat/sm","labels":[{"name":"size:M"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="small"
+  export MOCK_PR_BRANCH="feat/sm"
+  export MOCK_PR_LABELS="size:M"
+  export MOCK_PR_SIZE="size:M"
+  export MOCK_GH_DIFF_FILES=""
+  # Should NOT exit 2 (may fail later due to mock limitations, but not at complexity gate)
+  run bash "$SCRIPT" 999 2>&1
+  [ "$status" -ne 2 ]
 }
 
-@test "get_tier routes iso labels to tier 3" {
-  run_helper get_tier "domain:iso"
-  [ "$status" -eq 0 ]
-  [ "$output" = "3" ]
+# ── Tier routing ─────────────────────────────────────────────────────────────
+
+@test "domain:probe routes to Tier 1" {
+  export MOCK_GH_PR_JSON='{"title":"probe","headRefName":"feat/p","labels":[{"name":"domain:probe"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="probe"
+  export MOCK_PR_BRANCH="feat/p"
+  export MOCK_PR_LABELS="domain:probe, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=1"* ]]
 }
 
-@test "get_tier keeps ci-only labels at tier 0" {
-  run_helper get_tier "domain:ci, kind:test"
-  [ "$status" -eq 0 ]
-  [ "$output" = "0" ]
+@test "domain:tui routes to Tier 1" {
+  export MOCK_GH_PR_JSON='{"title":"tui","headRefName":"feat/t","labels":[{"name":"domain:tui"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="tui"
+  export MOCK_PR_BRANCH="feat/t"
+  export MOCK_PR_LABELS="domain:tui, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=1"* ]]
 }
 
-@test "get_tier defaults to tier 0 when no domain labels are present" {
-  run_helper get_tier "kind:test, docs"
-  [ "$status" -eq 0 ]
-  [ "$output" = "0" ]
+@test "domain:install routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"inst","headRefName":"feat/i","labels":[{"name":"domain:install"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="inst"
+  export MOCK_PR_BRANCH="feat/i"
+  export MOCK_PR_LABELS="domain:install, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
 }
 
-@test "is_complex_pr flags XL PRs" {
-  run_helper is_complex_pr "size:XL" 1 0
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+@test "domain:headless routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"hl","headRefName":"feat/h","labels":[{"name":"domain:headless"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="hl"
+  export MOCK_PR_BRANCH="feat/h"
+  export MOCK_PR_LABELS="domain:headless, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
 }
 
-@test "is_complex_pr flags PRs with more than four domains" {
-  run_helper is_complex_pr "" 5 0
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+@test "domain:ignition routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"ign","headRefName":"feat/ig","labels":[{"name":"domain:ignition"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="ign"
+  export MOCK_PR_BRANCH="feat/ig"
+  export MOCK_PR_LABELS="domain:ignition, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
 }
 
-@test "is_complex_pr flags workflow changes" {
-  run_helper is_complex_pr "" 1 1
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+@test "domain:sysext routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"sx","headRefName":"feat/sx","labels":[{"name":"domain:sysext"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="sx"
+  export MOCK_PR_BRANCH="feat/sx"
+  export MOCK_PR_LABELS="domain:sysext, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
 }
 
-@test "is_complex_pr allows small PRs without workflow changes" {
-  run_helper is_complex_pr "size:M" 2 0
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
+@test "swap label routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"sw","headRefName":"feat/sw","labels":[{"name":"swap"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="sw"
+  export MOCK_PR_BRANCH="feat/sw"
+  export MOCK_PR_LABELS="swap, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
 }
 
-@test "parse_pr_labels extracts label names from gh output" {
-  json='{"labels":[{"name":"domain:probe"},{"name":"size:M"},{"name":"kind:test"}]}'
-  run env PATH="$MOCK_BIN:$PATH" SCRIPT="$SCRIPT" MOCK_GH_OUTPUT="$json" bash -c '
-    source "$SCRIPT"
-    parse_pr_labels "$(gh pr view 427 --json labels)"
-  '
-  [ "$status" -eq 0 ]
-  [ "$output" = "domain:probe, size:M, kind:test" ]
+@test "tailscale label routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"ts","headRefName":"feat/ts","labels":[{"name":"tailscale"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="ts"
+  export MOCK_PR_BRANCH="feat/ts"
+  export MOCK_PR_LABELS="tailscale, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
+}
+
+@test "domain:security routes to Tier 1 with DO_SECURITY=1" {
+  export MOCK_GH_PR_JSON='{"title":"sec","headRefName":"feat/sec","labels":[{"name":"domain:security"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="sec"
+  export MOCK_PR_BRANCH="feat/sec"
+  export MOCK_PR_LABELS="domain:security, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=1"* ]]
+  [[ "$output" == *"security=1"* ]]
+}
+
+@test "no domain labels stays at Tier 0" {
+  export MOCK_GH_PR_JSON='{"title":"doc","headRefName":"docs/readme","labels":[{"name":"size:S"},{"name":"docs"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="doc"
+  export MOCK_PR_BRANCH="docs/readme"
+  export MOCK_PR_LABELS="size:S, docs"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=0"* ]]
+  [[ "$output" == *"needs_boot=0"* ]]
 }
