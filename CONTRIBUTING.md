@@ -92,3 +92,9 @@ Do **not** open a public issue for vulnerabilities. Use [GitHub Security Advisor
 
 - [Flatcar on Discord](https://flatcar.org/discord)
 - [Issues](https://github.com/projectbluefin/knuckle/issues) for bugs and feature requests
+
+## Newcomer guidance
+
+If you are new to the project, start by looking for issues labeled `good first issue`, `help wanted`, or documentation-related tasks. These issues are usually smaller in scope and are a good way to learn the contribution workflow.
+
+Before opening a pull request, please make sure your change is focused, easy to review, and related to the issue you are addressing.
