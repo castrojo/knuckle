@@ -40,14 +40,20 @@ func (m *mockBakery) FetchCatalogArch(ctx context.Context, arch string) ([]model
 }
 
 type mockInstaller struct {
-	called bool
-	cfg    *model.InstallConfig
-	err    error
+	called    bool
+	calls     int
+	cfg       *model.InstallConfig
+	err       error
+	installFn func(context.Context, *model.InstallConfig, func(string)) error
 }
 
 func (m *mockInstaller) Install(ctx context.Context, cfg *model.InstallConfig, progress func(string)) error {
 	m.called = true
+	m.calls++
 	m.cfg = cfg
+	if m.installFn != nil {
+		return m.installFn(ctx, cfg, progress)
+	}
 	progress("test progress")
 	return m.err
 }
@@ -2133,5 +2139,117 @@ func TestProbeHardware_NetworkError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "probing network") {
 		t.Errorf("error should mention 'probing network', got: %v", err)
+	}
+	if len(w.State.Disks) != 1 || w.State.Disks[0].DevPath != "/dev/sda" {
+		t.Fatalf("disk probe result should be retained on network failure, got %+v", w.State.Disks)
+	}
+	if len(w.State.Interfaces) != 0 {
+		t.Fatalf("interfaces should not be populated on network failure, got %+v", w.State.Interfaces)
+	}
+	if len(w.State.SystemChecks) != 0 {
+		t.Fatalf("system checks should not run on probe failure, got %+v", w.State.SystemChecks)
+	}
+}
+
+func TestNext_TailscaleValidationFailureDoesNotAdvance(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.CurrentStep = model.StepTailscale
+	w.State.Sysexts = []model.SysextEntry{{Name: "tailscale", Selected: true}}
+	w.State.Config.Tailscale.AuthKey = "not-a-real-key"
+
+	err := w.Next()
+	if err == nil {
+		t.Fatal("expected Next to return tailscale validation error")
+	}
+	if !strings.Contains(err.Error(), "tailscale auth key") {
+		t.Fatalf("expected tailscale validation error, got: %v", err)
+	}
+	if w.State.CurrentStep != model.StepTailscale {
+		t.Fatalf("wizard advanced on validation failure: got %v", w.State.CurrentStep)
+	}
+}
+
+func TestFetchChannels_TotalFailurePreservesExistingChannels(t *testing.T) {
+	old := fetchAllChannelsFn
+	fetchAllChannelsFn = func(_ context.Context) ([]bakery.ChannelInfo, error) {
+		return nil, fmt.Errorf("channel registry unavailable")
+	}
+	defer func() { fetchAllChannelsFn = old }()
+
+	w, _, _, _ := newTestWizard()
+	w.State.Channels = []bakery.ChannelInfo{{Channel: "stable", Version: "3510.2.0"}}
+
+	err := w.FetchChannels(context.Background())
+	if err == nil {
+		t.Fatal("expected FetchChannels to fail on total outage")
+	}
+	if !strings.Contains(err.Error(), "channel registry unavailable") {
+		t.Fatalf("expected wrapped fetch error, got: %v", err)
+	}
+	if len(w.State.Channels) != 1 || w.State.Channels[0].Channel != "stable" {
+		t.Fatalf("existing channels should be preserved on failure, got %+v", w.State.Channels)
+	}
+}
+
+func TestExecuteWithProgress_ErrorAllowsRecovery(t *testing.T) {
+	attempt := 0
+	inst := &mockInstaller{installFn: func(_ context.Context, _ *model.InstallConfig, progress func(string)) error {
+		attempt++
+		progress(fmt.Sprintf("attempt %d", attempt))
+		if attempt == 1 {
+			return fmt.Errorf("install failed")
+		}
+		return nil
+	}}
+	w := New(&mockProber{}, &mockBakery{}, inst)
+
+	var external []string
+	err := w.ExecuteWithProgress(context.Background(), func(msg string) {
+		external = append(external, msg)
+	})
+	if err == nil {
+		t.Fatal("expected ExecuteWithProgress to return installer error")
+	}
+	if len(external) != 1 || external[0] != "attempt 1" {
+		t.Fatalf("external progress callback should receive failure progress, got %+v", external)
+	}
+	if len(w.State.ProgressMessages) != 0 {
+		t.Fatalf("ExecuteWithProgress should not mutate internal progress state, got %+v", w.State.ProgressMessages)
+	}
+
+	err = w.Execute(context.Background())
+	if err != nil {
+		t.Fatalf("Execute should recover after previous failure: %v", err)
+	}
+	if inst.calls != 2 {
+		t.Fatalf("expected two installer attempts, got %d", inst.calls)
+	}
+	if len(w.State.ProgressMessages) != 1 || w.State.ProgressMessages[0] != "attempt 2" {
+		t.Fatalf("recovery execute should record fresh internal progress, got %+v", w.State.ProgressMessages)
+	}
+}
+
+func TestPrevious_FromTailscaleSkipsNvidiaWhenUnselected(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.CurrentStep = model.StepTailscale
+	w.State.Sysexts = []model.SysextEntry{{Name: "tailscale", Selected: true}}
+
+	w.Previous()
+	if w.State.CurrentStep != model.StepSysext {
+		t.Fatalf("Previous from Tailscale without nvidia should land on Sysext, got %v", w.State.CurrentStep)
+	}
+}
+
+func TestPrevious_FromTailscaleVisitsNvidiaWhenSelected(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.CurrentStep = model.StepTailscale
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "tailscale", Selected: true},
+		{Name: "nvidia-runtime", Selected: true},
+	}
+
+	w.Previous()
+	if w.State.CurrentStep != model.StepNvidia {
+		t.Fatalf("Previous from Tailscale with nvidia selected should land on Nvidia, got %v", w.State.CurrentStep)
 	}
 }
