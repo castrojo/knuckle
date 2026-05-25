@@ -18,7 +18,7 @@ off to `flatcar-install` — knuckle never writes partitions itself.
 
 - **Module:** `github.com/projectbluefin/knuckle` (Go 1.26+)
 - **License:** Apache-2.0
-- **Status:** v0.6.2 released; full install → reboot → SSH verified end-to-end in QEMU; dual-arch ISOs (amd64 + arm64); cosign keyless signing on releases.
+- **Status:** v0.7.0 released; full install → reboot → SSH verified end-to-end in QEMU; dual-arch ISOs (amd64 + arm64); cosign keyless signing on releases.
 - **Distribution:** `knuckle` binary + installer ISO produced from
   `.github/workflows/release.yml` on `v*` tags.
 
@@ -212,6 +212,21 @@ injection method for Flatcar PXE live boot.
   The `ignition.config.data=` kernel cmdline parameter is silently ignored on the QEMU platform.
 - **Build cache:** squashfs is content-addressed on `sha256sum bin/knuckle` — skips repack when
   binary unchanged.
+- **`systemd.gpt_auto=0` is REQUIRED on every BLS entry.** Without it, bare-metal machines
+  with real GPT disks trigger `systemd-gpt-auto-generator`, which creates synthetic device units.
+  Dracut's `xd2root` root-mount hook then can't satisfy its dependencies and is silently skipped
+  → the installer fails to appear on bare metal. Both `knuckle.conf` and `knuckle-serial.conf`
+  must include this parameter. Root cause of the v0.6.2 regression (fixed in v0.7.0).
+- **Pure systemd-boot, no GRUB.** The ESP contains only `EFI/BOOT/BOOTX64.EFI` (systemd-boot
+  binary sourced from the system `systemd-boot-efi` package), `loader/loader.conf`, and two BLS
+  entries. The `.iso-build/` build-cache directory is gitignored; any GRUB artifacts there are
+  stale local artifacts and never included in the ISO.
+- **`just vm-e2e` does NOT test ISO boot.** It deploys knuckle via SSH to a running Flatcar VM.
+  Only `just boot-iso`/`just e2e` test ISO boot (require display). There is no headless ISO
+  smoke test in CI yet (tracked: #393). For manual ISO verification on ghost, see knuckle-qa skill.
+- **Flatcar `.DIGESTS.asc` format** = PGP clearsigned (contains `-----BEGIN PGP SIGNED MESSAGE-----`
+  header + content + signature). Verify with `gpg --decrypt asc > verified_content`, not
+  `gpg --verify asc data` (detached-signature form — always fails on clearsigned input).
 
 ### All agents
 
