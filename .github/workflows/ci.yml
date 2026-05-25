@@ -85,6 +85,21 @@ jobs:
           severity: warning
           scandir: scripts
 
+  bats:
+    name: bats script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: run BATS tests
+        run: bats scripts/tests/
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
