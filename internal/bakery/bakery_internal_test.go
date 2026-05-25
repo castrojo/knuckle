@@ -120,3 +120,60 @@ func TestFetchSHA256ForAsset_MalformedHash_WhiteBox(t *testing.T) {
 		t.Errorf("error should mention 'malformed SHA256', got: %v", err)
 	}
 }
+
+// ── truncateDescription: boundary edge cases ─────────────────────────────────
+
+func TestTruncateDescription_MaxLenThree(t *testing.T) {
+	// When maxLen == 3, the entire budget is the "..." suffix
+	got := truncateDescription("hello world", 3)
+	if got != "..." {
+		t.Errorf("maxLen=3: got %q, want %q", got, "...")
+	}
+}
+
+func TestTruncateDescription_MaxLenLessThanThree_ShortInput(t *testing.T) {
+	// When input is shorter than maxLen, no truncation happens regardless of maxLen value
+	got := truncateDescription("hi", 2)
+	if got != "hi" {
+		t.Errorf("maxLen=2 short input: got %q, want %q", got, "hi")
+	}
+}
+
+func TestTruncateDescription_MaxLenFour(t *testing.T) {
+	// maxLen=4 with long input: should give 1 rune + "..."
+	got := truncateDescription("hello world", 4)
+	if got != "h..." {
+		t.Errorf("maxLen=4: got %q, want %q", got, "h...")
+	}
+	if len([]rune(got)) != 4 {
+		t.Errorf("maxLen=4: rune count = %d, want 4", len([]rune(got)))
+	}
+}
+
+func TestTruncateDescription_WhitespaceOnly(t *testing.T) {
+	got := truncateDescription("   \t  ", 80)
+	if got != "" {
+		t.Errorf("whitespace-only: got %q, want empty", got)
+	}
+}
+
+func TestTruncateDescription_CRLFNewline(t *testing.T) {
+	got := truncateDescription("first\r\nsecond", 80)
+	// \r should be trimmed from the first line
+	if strings.Contains(got, "\r") {
+		t.Errorf("CRLF handling: got %q, should not contain \\r", got)
+	}
+	if got != "first" {
+		t.Errorf("CRLF handling: got %q, want %q", got, "first")
+	}
+}
+
+func TestTruncateDescription_ZeroWidthJoiner(t *testing.T) {
+	// Emoji with ZWJ sequences - should count runes, not grapheme clusters
+	input := "\U0001f468\u200D\U0001f469\u200D\U0001f467 family"
+	got := truncateDescription(input, 8)
+	runeCount := len([]rune(got))
+	if runeCount > 8 {
+		t.Errorf("ZWJ: rune count %d > maxLen 8; got %q", runeCount, got)
+	}
+}

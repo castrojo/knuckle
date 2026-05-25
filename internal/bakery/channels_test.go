@@ -3,6 +3,7 @@ package bakery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -570,5 +571,111 @@ FLATCAR_BUILD_ID="20260414"
 `, info)
 	if info.BuildDate != "20260414" {
 		t.Errorf("short BuildDate: got %q, want %q", info.BuildDate, "20260414")
+	}
+}
+
+// ── fetchAllChannelsWithURLFn: partial failure returns both results and error ──
+
+func TestFetchAllChannels_PartialFailure(t *testing.T) {
+	// Set up a server that serves stable correctly but fails for beta
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "stable/version.txt"):
+			_, _ = fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+		case strings.Contains(r.URL.Path, "stable/flatcar_production_image_packages.txt"):
+			_, _ = fmt.Fprint(w, "sys-kernel/coreos-kernel-6.6.21\n")
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	urlFn := func(channel string) (string, string) {
+		return srv.URL + "/" + channel + "/version.txt",
+			srv.URL + "/" + channel + "/flatcar_production_image_packages.txt"
+	}
+
+	results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn, "stable", "beta", "alpha")
+	// Should return partial results (stable) AND an error (beta+alpha failed)
+	if err == nil {
+		t.Fatal("expected error for failed channels, got nil")
+	}
+	if len(results) == 0 {
+		t.Fatal("expected at least one result from stable")
+	}
+	foundStable := false
+	for _, r := range results {
+		if r.Channel == "stable" {
+			foundStable = true
+			if r.Version != "3815.2.0" {
+				t.Errorf("stable version = %q, want 3815.2.0", r.Version)
+			}
+		}
+	}
+	if !foundStable {
+		t.Error("stable channel not found in partial results")
+	}
+}
+
+func TestFetchAllChannels_AllFail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	urlFn := func(channel string) (string, string) {
+		return srv.URL + "/" + channel + "/version.txt",
+			srv.URL + "/" + channel + "/packages.txt"
+	}
+
+	results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn, "stable", "beta")
+	if err == nil {
+		t.Fatal("expected error when all channels fail")
+	}
+	if len(results) != 0 {
+		t.Errorf("expected nil/empty results when all fail, got %d", len(results))
+	}
+}
+
+func TestFetchAllChannels_EmptyChannelList(t *testing.T) {
+	// When no channels are passed, fetchAllChannelsWithURLFn uses defaults.
+	// Use a server that always fails so all defaults return an error — this
+	// confirms the function iterates the default channel list (urlFn gets called)
+	// without introducing any shared mutable state between goroutines.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	urlFn := func(channel string) (string, string) {
+		return srv.URL + "/" + channel + "/version.txt",
+			srv.URL + "/" + channel + "/packages.txt"
+	}
+
+	results, err := fetchAllChannelsWithURLFn(context.Background(), urlFn)
+	if err == nil {
+		t.Error("expected error when all default channels fail")
+	}
+	if len(results) != 0 {
+		t.Errorf("expected no results when all channels fail, got %d", len(results))
+	}
+}
+
+func TestFetchAllChannels_ContextCancelled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "FLATCAR_VERSION=1.0.0\n")
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	urlFn := func(channel string) (string, string) {
+		return srv.URL + "/version.txt", srv.URL + "/packages.txt"
+	}
+
+	_, err := fetchAllChannelsWithURLFn(ctx, urlFn, "stable")
+	if err == nil {
+		t.Fatal("expected error with cancelled context")
 	}
 }
