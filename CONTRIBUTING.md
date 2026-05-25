@@ -2,6 +2,27 @@
 
 Thanks for contributing! Knuckle is early and pre-alpha — all feedback and PRs are welcome.
 
+## Where to Start
+
+New to knuckle? Good places to start:
+
+- Issues labeled [`good first issue`](https://github.com/projectbluefin/knuckle/issues?q=is%3Aopen+label%3A%22good+first+issue%22) — curated for newcomers
+- **`internal/validate/`** — hostname, CIDR, SSH key, timezone validators; well-isolated, no QEMU needed
+- **Test coverage** — `just cover` shows packages under threshold; adding tests is always welcome
+- **Doc improvements** — typos, clarifications, example fixes (no build tools needed)
+
+For larger changes, open an issue first to align on scope before writing code.
+
+### ARM64 development
+
+Cross-compile for arm64 with `just build-arm64` — no arm64 hardware needed for compilation or unit tests.
+
+For VM testing on arm64:
+- **Native arm64 hardware** with KVM: `KNUCKLE_ARCH=arm64 just vm`
+- **QEMU TCG** (slow, x86_64 host): `sudo apt install qemu-system-arm` then `KNUCKLE_ARCH=arm64 just vm`
+
+CI uses native `ubuntu-24.04-arm` runners. TCG emulation is functional but significantly slower.
+
 ## Prerequisites
 
 | Tool | Version | Notes |
