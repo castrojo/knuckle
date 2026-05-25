@@ -36,7 +36,7 @@
 ## Coverage Gate
 
 `just cover-check` enforces per-package thresholds. Current numbers as of
-2026-05-20:
+2026-05-25:
 
 | Package              | Now   | Gate | Aspiration (TEST-PLAN.md) |
 | -------------------- | ----- | ---- | ------------------------- |
@@ -45,13 +45,13 @@
 | `internal/validate`  |  97%  | 85%  | ≥ 95%                     |
 | `internal/ignition`  |  93%  | 85%  | ≥ 90%                     |
 | `internal/github`    |  90%  | 85%  | (n/a)                     |
-| `internal/headless`  |  87%  | 70%  | (n/a)                     |
-| `internal/bakery`    |  85%  | 80%  | ≥ 85%                     |
+| `internal/headless`  | 98.5% | 98%  | (n/a)                     |
+| `internal/bakery`    | 97.8% | 97%  | ≥ 85%                     |
 | `internal/runner`    |  81%  | 80%  | ≥ 80%                     |
 | `internal/probe`     |  81%  | 80%  | ≥ 85%                     |
-| `internal/wizard`    |  81%  | 80%  | ≥ 85%                     |
-| `internal/install`   |  76%  | 70%  | ≥ 80%                     |
-| `internal/tui`       |  80%  | 70%  | ≥ 85%                     |
+| `internal/wizard`    | 99.5% | 99%  | ≥ 85%                     |
+| `internal/install`   | 98.8% | 98%  | ≥ 80%                     |
+| `internal/tui`       | 94.1% | 94%  | ≥ 85%                     |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
