@@ -55,21 +55,8 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 
 ## Quick Start
 
-### Install on bare metal (end users)
-
-1. **Download** the installer ISO from the [Releases page](https://github.com/projectbluefin/knuckle/releases) — pick `knuckle-installer-stable.iso` for amd64 or the arm64 variant.
-2. **Write to USB:**
-   ```bash
-   sudo dd if=knuckle-installer-stable.iso of=/dev/sdX bs=4M status=progress
-   ```
-3. **Boot** from the USB on your target machine — the guided wizard starts automatically.
-
-No Go toolchain or build step needed.
-
-### Build from source (developers)
-
 ```bash
-# Build for amd64
+# Build from source (amd64)
 just build
 
 # Cross-compile for arm64
@@ -77,9 +64,6 @@ just build-arm64
 
 # Run the installer (on a Flatcar live environment)
 ./bin/knuckle
-
-# Explore the full TUI with mocked hardware and catalog data
-./bin/knuckle --demo
 
 # Dry-run mode (no disk writes)
 ./bin/knuckle --dry-run
@@ -113,15 +97,13 @@ Minimal example (`install.json`):
 ```json
 {
   "hostname": "flatcar-01",
-  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "channel": "stable",
+  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "network": {"mode": "dhcp"},
   "users": [
-    {
-      "username": "core",
-      "ssh_keys": ["ssh-ed25519 AAAA..."]
-    }
-  ]
+    {"username": "core", "ssh_keys": ["ssh-ed25519 AAAA..."]}
+  ],
+  "update_strategy": "reboot"
 }
 ```
 
@@ -130,15 +112,13 @@ Swap is **enabled by default** (4 GiB `/var/swapfile`). To customise:
 ```json
 {
   "hostname": "flatcar-01",
-  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "channel": "stable",
+  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
   "network": {"mode": "dhcp"},
   "users": [
-    {
-      "username": "core",
-      "ssh_keys": ["ssh-ed25519 AAAA..."]
-    }
+    {"username": "core", "ssh_keys": ["ssh-ed25519 AAAA..."]}
   ],
+  "update_strategy": "reboot",
   "swap": {"enabled": true, "size_mb": 2048}
 }
 ```
@@ -147,9 +127,19 @@ To disable swap entirely:
 
 ```json
 {
+  "hostname": "flatcar-01",
+  "channel": "stable",
+  "disk": "/dev/disk/by-id/ata-SomeSeagate_1TB",
+  "network": {"mode": "dhcp"},
+  "users": [
+    {"username": "core", "ssh_keys": ["ssh-ed25519 AAAA..."]}
+  ],
+  "update_strategy": "reboot",
   "swap": {"enabled": false}
 }
 ```
+
+For the full field reference see [docs/HEADLESS-CONFIG.md](docs/HEADLESS-CONFIG.md).
 
 Valid `swap.size_mb` range: 1–32768 (MiB). Omitting `swap` or setting `size_mb: 0` uses the 4 GiB default.
 
@@ -166,8 +156,6 @@ just cover        # coverage profile + summary
 just cover-check  # per-package coverage threshold gate
 just headless-test  # build + canned JSON config (CI gate, runs on host)
 ```
-
-Tip: use `./bin/knuckle --demo` to run the full wizard with mocked hardware and catalog data. No QEMU, network, or real disks required.
 
 ### VM Testing
 
