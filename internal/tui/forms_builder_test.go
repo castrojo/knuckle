@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -10,9 +9,6 @@ import (
 
 // TestBuildNetworkForm tests the buildNetworkForm function with various configurations
 func TestBuildNetworkForm(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	tests := []struct {
 		name       string
 		interfaces []model.NetworkInterface
@@ -57,9 +53,6 @@ func TestBuildNetworkForm(t *testing.T) {
 
 // TestBuildNetworkFormStaticValidation tests the inline validators for static network config
 func TestBuildNetworkFormStaticValidation(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -78,9 +71,6 @@ func TestBuildNetworkFormStaticValidation(t *testing.T) {
 
 // TestBuildNetworkFormDHCPMode tests DHCP mode selection
 func TestBuildNetworkFormDHCPMode(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -100,9 +90,6 @@ func TestBuildNetworkFormDHCPMode(t *testing.T) {
 
 // TestBuildNetworkFormStaticMode tests static mode selection
 func TestBuildNetworkFormStaticMode(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -124,9 +111,6 @@ func TestBuildNetworkFormStaticMode(t *testing.T) {
 
 // TestBuildUserForm tests the buildUserForm function with various configurations
 func TestBuildUserForm(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	tests := []struct {
 		name       string
 		hostname   string
@@ -231,9 +215,6 @@ func TestBuildUserForm(t *testing.T) {
 
 // TestBuildUserFormValidationHostname tests hostname validation
 func TestBuildUserFormValidationHostname(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 
@@ -248,9 +229,6 @@ func TestBuildUserFormValidationHostname(t *testing.T) {
 
 // TestBuildUserFormValidationUsername tests username validation
 func TestBuildUserFormValidationUsername(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.usernameInput = "testuser"
@@ -267,9 +245,6 @@ func TestBuildUserFormValidationUsername(t *testing.T) {
 
 // TestBuildUserFormValidationTimezone tests timezone validation
 func TestBuildUserFormValidationTimezone(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.Wizard.State.Config.Timezone = "America/New_York"
@@ -286,9 +261,6 @@ func TestBuildUserFormValidationTimezone(t *testing.T) {
 
 // TestBuildTailscaleForm tests the buildTailscaleForm function with various configurations
 func TestBuildTailscaleForm(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	tests := []struct {
 		name       string
 		authKey    string
@@ -362,9 +334,6 @@ func TestBuildTailscaleForm(t *testing.T) {
 
 // TestBuildTailscaleFormModes tests all three Tailscale modes
 func TestBuildTailscaleFormModes(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	modes := []string{
 		model.TailscaleModeConnect,
 		model.TailscaleModeExitNode,
@@ -391,9 +360,6 @@ func TestBuildTailscaleFormModes(t *testing.T) {
 
 // TestBuildTailscaleFormAuthKeyValidation tests auth key validation
 func TestBuildTailscaleFormAuthKeyValidation(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.tailscaleAuthKeyIn = "tskey-auth-test-validkey"
@@ -411,9 +377,6 @@ func TestBuildTailscaleFormAuthKeyValidation(t *testing.T) {
 
 // TestBuildTailscaleFormSubnetRoutes tests subnet router with routes
 func TestBuildTailscaleFormSubnetRoutes(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.tailscaleModeIn = model.TailscaleModeSubnetRouter
@@ -435,9 +398,6 @@ func TestBuildTailscaleFormSubnetRoutes(t *testing.T) {
 
 // TestLocalKeysSummary tests the localKeysSummary helper function
 func TestLocalKeysSummary(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 
@@ -454,9 +414,6 @@ func TestLocalKeysSummary(t *testing.T) {
 
 // TestBuildNetworkFormInterfaceOptions tests interface option generation
 func TestBuildNetworkFormInterfaceOptions(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -478,9 +435,6 @@ func TestBuildNetworkFormInterfaceOptions(t *testing.T) {
 
 // TestBuildUserFormPasswordEchoMode tests password field is masked
 func TestBuildUserFormPasswordEchoMode(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.passwordInput = "secret"
@@ -498,9 +452,6 @@ func TestBuildUserFormPasswordEchoMode(t *testing.T) {
 
 // TestBuildTailscaleFormEmptyAuthKey tests form with empty auth key
 func TestBuildTailscaleFormEmptyAuthKey(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.tailscaleAuthKeyIn = ""
@@ -518,9 +469,6 @@ func TestBuildTailscaleFormEmptyAuthKey(t *testing.T) {
 
 // TestBuildNetworkFormAutoInterface tests auto DHCP option
 func TestBuildNetworkFormAutoInterface(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -540,9 +488,6 @@ func TestBuildNetworkFormAutoInterface(t *testing.T) {
 
 // TestBuildUserFormMultipleSSHKeys tests SSH key field with multiple keys
 func TestBuildUserFormMultipleSSHKeys(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.sshKeyInput = "ssh-rsa KEY1;ssh-ed25519 KEY2"
@@ -559,9 +504,6 @@ func TestBuildUserFormMultipleSSHKeys(t *testing.T) {
 
 // TestBuildUserFormGitHubUsernameWithAt tests GitHub username with @ prefix
 func TestBuildUserFormGitHubUsernameWithAt(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.githubUserInput = "@octocat"
@@ -578,9 +520,6 @@ func TestBuildUserFormGitHubUsernameWithAt(t *testing.T) {
 
 // TestBuildNetworkFormDNSInput tests DNS input field
 func TestBuildNetworkFormDNSInput(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	w.State.Interfaces = []model.NetworkInterface{
 		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
@@ -600,9 +539,6 @@ func TestBuildNetworkFormDNSInput(t *testing.T) {
 
 // TestBuildTailscaleFormWithRoutesNoAuthKey tests routes without auth key
 func TestBuildTailscaleFormWithRoutesNoAuthKey(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
 	w := newTestWizard()
 	m := New(w)
 	m.tailscaleAuthKeyIn = ""
