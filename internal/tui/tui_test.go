@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/probe"
@@ -33,7 +33,7 @@ func TestViewWelcome(t *testing.T) {
 	if m.activeForm != nil {
 		m.activeForm.Init()
 	}
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "K N U C K L E") && !strings.Contains(view, "knuckle") && !strings.Contains(view, "Knuckle") {
 		t.Error("view should contain title")
 	}
@@ -56,7 +56,7 @@ func TestViewReview(t *testing.T) {
 	if m.activeForm != nil {
 		m.activeForm.Init()
 	}
-	view := m.View()
+	view := m.render()
 	// The review form shows a confirm dialog with summary
 	if !strings.Contains(view, "stable") && !strings.Contains(view, "install") {
 		t.Errorf("review should show install confirmation, got:\n%s", view[:min(300, len(view))])
@@ -67,7 +67,7 @@ func TestHandleQuit(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
 	// First Ctrl+C triggers confirmation
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	tuiModel := newModel.(*Model)
 	if tuiModel.quitting {
 		t.Error("should not quit on first ctrl+c")
@@ -79,7 +79,7 @@ func TestHandleQuit(t *testing.T) {
 		t.Error("should not return quit cmd on first press")
 	}
 	// Second Ctrl+C quits
-	newModel, cmd = tuiModel.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, cmd = tuiModel.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	tuiModel = newModel.(*Model)
 	if !tuiModel.quitting {
 		t.Error("should be quitting after second ctrl+c")
@@ -95,14 +95,14 @@ func TestQuitRequiresDoublePress(t *testing.T) {
 	m := New(w)
 
 	// First Ctrl+C
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	tuiModel := newModel.(*Model)
 	if !tuiModel.confirmQuit {
 		t.Error("first ctrl+c should set confirmQuit")
 	}
 
 	// Any other key cancels
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	tuiModel = newModel.(*Model)
 	if tuiModel.confirmQuit {
 		t.Error("other key should cancel quit confirmation")
@@ -119,7 +119,7 @@ func TestHandleEnterAdvancesNonFormStep(t *testing.T) {
 	w.State.Config.SSHKeys = []string{"ssh-ed25519 AAAA"}
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tuiModel := newModel.(*Model)
 	if tuiModel.Wizard.State.CurrentStep != model.StepUpdate {
 		t.Errorf("expected StepUpdate after Enter on Sysext, got %v", tuiModel.Wizard.State.CurrentStep)
@@ -177,7 +177,7 @@ func TestSystemChecksDisplayInWelcome(t *testing.T) {
 	w.State.CurrentStep = model.StepNetwork // dots show on non-Welcome steps
 	m := New(w)
 	m.initForm()
-	view := m.View()
+	view := m.render()
 	// Zen chrome shows system status as colored dots (●) on non-Welcome steps
 	if !strings.Contains(view, "●") {
 		t.Error("non-welcome step should display system check status dots")
@@ -190,7 +190,7 @@ func TestButanePreviewToggle(t *testing.T) {
 	m := New(w)
 	// Note: Butane preview only works on Review step, which is now a form
 	// This test verifies the ctrl+b key doesn't crash on non-review steps
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	_ = newModel.(*Model) // no panic = pass
 }
 
@@ -227,7 +227,7 @@ func TestRebootRequiresDoublePress(t *testing.T) {
 	m := New(w)
 
 	// First 'r' press should ask for confirmation, not quit
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyPressMsg{Code: 'r', Text: string('r')}
 	newModel, cmd := m.Update(msg)
 	updatedModel := newModel.(*Model)
 
@@ -251,7 +251,7 @@ func TestRebootDryRunDoesNotReboot(t *testing.T) {
 	w.State.Config.DryRun = true
 	m := New(w)
 
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyPressMsg{Code: 'r', Text: string('r')}
 	newModel, cmd := m.Update(msg)
 	updatedModel := newModel.(*Model)
 
@@ -286,7 +286,7 @@ func TestViewSysextEmpty(t *testing.T) {
 	w.State.CurrentStep = model.StepSysext
 	w.State.Sysexts = nil
 	m := New(w)
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "No extensions available") {
 		t.Errorf("empty sysext view should show 'No extensions available', got: %q", view)
 	}
@@ -301,7 +301,7 @@ func TestViewSysextWithEntries(t *testing.T) {
 		{Name: "btop", Version: "1.4.0", Description: "btop monitor", Category: "Utilities", SupportTier: "Bakery Maintained", URL: "https://example.com/btop.raw"},
 	}
 	m := New(w)
-	view := m.View()
+	view := m.render()
 
 	// Version must be visible in the list row.
 	if !strings.Contains(view, "v1.36.1") {
@@ -344,7 +344,7 @@ func TestViewSysextSelectedCount(t *testing.T) {
 		{Name: "btop", Version: "1.4.0", Category: "Utilities", SupportTier: "Bakery Maintained", Selected: false},
 	}
 	m := New(w)
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "1 selected") {
 		t.Errorf("expected '1 selected' in header, got view: %q", view)
 	}
@@ -359,7 +359,7 @@ func TestViewSysextDetailPanelOnCursor(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 	m.width = 120 // wide enough for panel
-	view := m.View()
+	view := m.render()
 
 	// Detail panel must show version and support tier.
 	if !strings.Contains(view, "Version:") {
@@ -388,7 +388,7 @@ func TestViewSysextCursorIndexSafety(t *testing.T) {
 
 	// cursor=0 → kubernetes; space should toggle kubernetes
 	m.cursor = 0
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: string(' ')})
 	if !w.State.Sysexts[0].Selected {
 		t.Error("space on cursor=0 should select Sysexts[0] (kubernetes)")
 	}
@@ -398,7 +398,7 @@ func TestViewSysextCursorIndexSafety(t *testing.T) {
 
 	// cursor=2 → wasmtime (across tier boundary); space should toggle wasmtime
 	m.cursor = 2
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: string(' ')})
 	if !w.State.Sysexts[2].Selected {
 		t.Error("space on cursor=2 should select Sysexts[2] (wasmtime)")
 	}
@@ -421,7 +421,7 @@ func TestNvidiaAutoSelectShownInView(t *testing.T) {
 	w.State.Config.NvidiaDriverVersion = model.DefaultNvidiaDriverSeries
 	m := New(w)
 	m.width = 120
-	view := m.View()
+	view := m.render()
 
 	if !strings.Contains(view, "NVIDIA GPU detected") {
 		t.Error("sysext view should show GPU auto-detect notice when NvidiaGPUDetected=true")
@@ -438,7 +438,7 @@ func TestViewNvidiaScreen(t *testing.T) {
 	m.cursor = 0
 	m.width = 120
 
-	view := m.View()
+	view := m.render()
 
 	// Header.
 	if !strings.Contains(view, "NVIDIA GPU Setup") {
@@ -478,7 +478,7 @@ func TestViewNvidiaNoGPUDetected(t *testing.T) {
 	m := New(w)
 	m.width = 120
 
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "No NVIDIA GPU detected") {
 		t.Error("should show warning when no GPU was detected")
 	}
@@ -534,7 +534,7 @@ func TestNvidiaDriverVersionSetOnToggle(t *testing.T) {
 	m.cursor = 0
 
 	// Space to select nvidia-runtime — driver version should be set to default.
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: string(' ')})
 	if !w.State.Sysexts[0].Selected {
 		t.Error("nvidia-runtime should be selected after space")
 	}
@@ -543,7 +543,7 @@ func TestNvidiaDriverVersionSetOnToggle(t *testing.T) {
 	}
 
 	// Space again to deselect — driver version should be cleared.
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: string(' ')})
 	if w.State.Sysexts[0].Selected {
 		t.Error("nvidia-runtime should be deselected after second space")
 	}
@@ -566,7 +566,7 @@ func TestNvidiaCursorClampOnDownKey(t *testing.T) {
 	max := len(model.NvidiaDriverOptions)
 	// Press down more times than there are options.
 	for i := 0; i < max+5; i++ {
-		_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		_, _ = m.Update(tea.KeyPressMsg{Code: 'j', Text: string('j')})
 	}
 	if m.cursor >= max {
 		t.Errorf("cursor should be clamped to %d, got %d", max-1, m.cursor)
@@ -585,7 +585,7 @@ func TestNvidiaCursorCannotGoNegative(t *testing.T) {
 	m.initStepFields()
 	m.cursor = 0
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'k', Text: string('k')})
 	if m.cursor != 0 {
 		t.Errorf("cursor should stay at 0 when pressing up at top, got %d", m.cursor)
 	}
@@ -635,7 +635,7 @@ func TestNvidiaSpaceKeyIsNoOp(t *testing.T) {
 	m := New(w)
 	m.initStepFields()
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	_, _ = m.Update(tea.KeyPressMsg{Code: ' ', Text: string(' ')})
 	// Should remain unchanged.
 	if w.State.Config.NvidiaDriverVersion != model.DefaultNvidiaDriverSeries {
 		t.Errorf("space on nvidia step should not change driver version, got %q",
@@ -661,7 +661,7 @@ func TestNvidiaBackNavigationPreservesCursorOnReentry(t *testing.T) {
 	}
 
 	// Press esc — goes back to sysext.
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if w.State.CurrentStep != model.StepSysext {
 		t.Fatalf("esc from nvidia should go to sysext, got %v", w.State.CurrentStep)
 	}
@@ -686,7 +686,7 @@ func TestNvidiaCharacterKeysAreNoOp(t *testing.T) {
 
 	// Type random characters.
 	for _, ch := range "hello123" {
-		_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		_, _ = m.Update(tea.KeyPressMsg{Code: ch, Text: string(ch)})
 	}
 	if w.State.Config.NvidiaDriverVersion != model.DefaultNvidiaDriverSeries {
 		t.Errorf("character keys should not change driver version, got %q",
@@ -705,7 +705,7 @@ func TestViewUpdateReboot(t *testing.T) {
 	m.cursor = 0
 	m.width = 120
 
-	view := m.View()
+	view := m.render()
 
 	if !strings.Contains(view, "Update Strategy") {
 		t.Error("view should contain 'Update Strategy' header")
@@ -726,7 +726,7 @@ func TestViewUpdateOff(t *testing.T) {
 	m.cursor = 1
 	m.width = 120
 
-	view := m.View()
+	view := m.render()
 
 	if !strings.Contains(view, "▸ off") {
 		t.Error("off option should be highlighted at cursor 1")
@@ -744,7 +744,7 @@ func TestViewUpdateEtcdLock(t *testing.T) {
 	m.cursor = 2
 	m.width = 120
 
-	view := m.View()
+	view := m.render()
 
 	if !strings.Contains(view, "▸ etcd-lock") {
 		t.Error("etcd-lock option should be highlighted at cursor 2")

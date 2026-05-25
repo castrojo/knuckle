@@ -20,8 +20,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -87,7 +87,7 @@ func TestKeyboard_ShiftTab_FormStep_GlobalIntercept(t *testing.T) {
 		t.Skip("form not initialised — precondition not met")
 	}
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
 	if got != model.StepWelcome {
@@ -100,7 +100,7 @@ func TestKeyboard_ShiftTab_FormStep_GlobalIntercept(t *testing.T) {
 func TestKeyboard_ShiftTab_NetworkToWelcome(t *testing.T) {
 	m := networkModel(false)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
 	if got != model.StepWelcome {
@@ -112,7 +112,7 @@ func TestKeyboard_ShiftTab_NetworkToWelcome(t *testing.T) {
 func TestKeyboard_ShiftTab_UserToStorage(t *testing.T) {
 	m := userModel(false)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
 	if got != model.StepStorage {
@@ -128,7 +128,7 @@ func TestKeyboard_ShiftTab_UserWithForm_GlobalIntercept(t *testing.T) {
 		t.Skip("form not initialised")
 	}
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
 	if got != model.StepStorage {
@@ -144,7 +144,7 @@ func TestKeyboard_ShiftTab_WelcomeIsNoOp(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepWelcome {
@@ -160,7 +160,7 @@ func TestKeyboard_ShiftTab_ClearsError(t *testing.T) {
 	m := networkModel(false)
 	m.err = errTest
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.err != nil {
@@ -173,7 +173,7 @@ func TestKeyboard_ShiftTab_ResetsCursor(t *testing.T) {
 	m := networkModel(false)
 	m.cursor = 3
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 0 {
@@ -192,7 +192,7 @@ func TestKeyboard_Esc_WelcomeIsNoOp(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	// Wizard.Previous() at step 0 is clamped; step must remain Welcome.
@@ -208,7 +208,7 @@ func TestKeyboard_Esc_StorageGoesBack(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepNetwork {
@@ -223,7 +223,7 @@ func TestKeyboard_Esc_UpdateGoesBack(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepSysext {
@@ -239,7 +239,7 @@ func TestKeyboard_Esc_ClearsError(t *testing.T) {
 	m.activeForm = nil
 	m.err = errTest
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.err != nil {
@@ -253,7 +253,7 @@ func TestKeyboard_Esc_SysextFiltering_ClearsFilterNotBack(t *testing.T) {
 	m := newSysextModel()
 
 	// Send "/" to enter filter mode.
-	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	slashMsg := tea.KeyPressMsg{Code: '/', Text: string('/')}
 	newModel, _ := m.Update(slashMsg)
 	m = newModel.(*Model)
 
@@ -267,7 +267,7 @@ func TestKeyboard_Esc_SysextFiltering_ClearsFilterNotBack(t *testing.T) {
 
 	// Now press esc — must clear filter, not navigate back.
 	prevStep := m.Wizard.State.CurrentStep
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != prevStep {
@@ -292,7 +292,7 @@ func TestKeyboard_Tab_ListStep_IncrementsCursor(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 1 {
@@ -308,7 +308,7 @@ func TestKeyboard_J_ListStep_IncrementsCursor(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'j', Text: string('j')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 1 {
@@ -323,7 +323,7 @@ func TestKeyboard_Down_ListStep_IncrementsCursor(t *testing.T) {
 	m := New(w)
 	m.cursor = 1
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 2 {
@@ -338,7 +338,7 @@ func TestKeyboard_Tab_ListStep_Clamped(t *testing.T) {
 	m := New(w)
 	m.cursor = 2 // last item
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 2 {
@@ -355,7 +355,7 @@ func TestKeyboard_J_FieldMode_AdvancesFieldIdx(t *testing.T) {
 	}
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'j', Text: string('j')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fieldIdx != 1 {
@@ -373,7 +373,7 @@ func TestKeyboard_Tab_FieldMode_WrapsToFirst(t *testing.T) {
 	m.fieldIdx = lastIdx
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fieldIdx != 0 {
@@ -394,7 +394,7 @@ func TestKeyboard_K_ListStep_DecrementsCursor(t *testing.T) {
 	m.initStepFields()
 	m.cursor = 2
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: string('k')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 1 {
@@ -409,7 +409,7 @@ func TestKeyboard_Up_ListStep_DecrementsCursor(t *testing.T) {
 	m := New(w)
 	m.cursor = 2
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 1 {
@@ -424,7 +424,7 @@ func TestKeyboard_K_ListStep_ClampedAtZero(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: string('k')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.cursor != 0 {
@@ -440,7 +440,7 @@ func TestKeyboard_K_FieldMode_GoesBackward(t *testing.T) {
 	}
 	m.fieldIdx = 1
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: string('k')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fieldIdx != 0 {
@@ -458,7 +458,7 @@ func TestKeyboard_K_FieldMode_WrapsToLast(t *testing.T) {
 	m.fieldIdx = 0
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'k', Text: string('k')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fieldIdx != lastIdx {
@@ -484,7 +484,7 @@ func TestKeyboard_Enter_ClearsConfirmQuit(t *testing.T) {
 	m.confirmQuit = true
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.confirmQuit {
@@ -504,7 +504,7 @@ func TestKeyboard_Enter_ListStep_AdvancesStep(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepReview {
@@ -526,7 +526,7 @@ func TestKeyboard_Space_EmptySysextIsNoOp(t *testing.T) {
 	m.cursor = 0
 
 	// Must not panic.
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 
 	// Sysexts slice remains nil/empty.
@@ -547,7 +547,7 @@ func TestKeyboard_Space_OutOfBoundsCursorIsNoOp(t *testing.T) {
 	m := New(w)
 	m.cursor = 99 // far out of bounds
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 
 	// docker must remain unselected.
@@ -563,7 +563,7 @@ func TestKeyboard_Space_FieldMode_AppendsSpace(t *testing.T) {
 	m.fields[0].value = "eth"
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fields[0].value != "eth " {
@@ -579,7 +579,7 @@ func TestKeyboard_Space_NoFieldsNoSysext_IsNoOp(t *testing.T) {
 	m := New(w)
 	prev := m.cursor
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 
 	// Nothing crashed, cursor unchanged.
@@ -599,7 +599,7 @@ func TestKeyboard_Q_FieldMode_AppendsChar(t *testing.T) {
 	m.fields[0].value = "eth"
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fields[0].value != "ethq" {
@@ -617,7 +617,7 @@ func TestKeyboard_Q_SinglePress_SetsConfirmQuit(t *testing.T) {
 	w.State.CurrentStep = model.StepUpdate
 	m := New(w)
 
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	tuiModel := newModel.(*Model)
 
 	if !tuiModel.confirmQuit {
@@ -641,14 +641,14 @@ func TestKeyboard_Q_DoublePress_Exits(t *testing.T) {
 	m := New(w)
 
 	// First q
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	m = newModel.(*Model)
 
 	// Second q — Update goes through handleKey again; confirmQuit is NOT reset
 	// because it is reset by the non-'q' path.  But wait: the code resets
 	// confirmQuit unconditionally for any KeyMsg *after* the ctrl+c check.
 	// So we use handleKey directly for the second press to bypass that reset.
-	newModel2, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel2, cmd := m.handleKey(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	tuiModel := newModel2.(*Model)
 
 	if !tuiModel.quitting {
@@ -667,7 +667,7 @@ func TestKeyboard_AnyKey_CancelsQuitConfirmation(t *testing.T) {
 	m := New(w)
 	m.confirmQuit = true
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.confirmQuit {
@@ -686,7 +686,7 @@ func TestKeyboard_R_NonDoneStep_WithFields_AppendsChar(t *testing.T) {
 	m.fields[0].value = "eth"
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fields[0].value != "ethr" {
@@ -702,7 +702,7 @@ func TestKeyboard_R_NonDoneStep_WithoutFields_IsNoOp(t *testing.T) {
 	w.State.Disks = []model.DiskInfo{{DevPath: "/dev/vda"}}
 	m := New(w)
 
-	newModel, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, cmd := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.quitting {
@@ -722,14 +722,14 @@ func TestKeyboard_R_Done_DoublePress_Reboots(t *testing.T) {
 	m := New(w)
 
 	// First r
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	m = newModel.(*Model)
 	if !m.confirmReboot {
 		t.Fatal("first 'r': expected confirmReboot=true")
 	}
 
 	// Second r
-	newModel2, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel2, cmd := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel2.(*Model)
 
 	if !tuiModel.quitting {
@@ -749,7 +749,7 @@ func TestKeyboard_R_Done_ViaUpdate_SetsConfirmReboot(t *testing.T) {
 	w.State.Config.DryRun = false
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel.(*Model)
 
 	if !tuiModel.confirmReboot {
@@ -769,7 +769,7 @@ func TestKeyboard_R_OtherKey_ClearsConfirmReboot(t *testing.T) {
 	m.confirmReboot = true
 
 	// Press 'q' (not 'r')
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.confirmReboot {
@@ -787,13 +787,13 @@ func TestKeyboard_CtrlA_Welcome_TogglesToggles(t *testing.T) {
 	m := New(w)
 	initial := m.showAdvanced
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = newModel.(*Model)
 	if m.showAdvanced == initial {
 		t.Error("first ctrl+a: showAdvanced should have changed")
 	}
 
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = newModel.(*Model)
 	if m.showAdvanced != initial {
 		t.Error("second ctrl+a: showAdvanced should be restored to initial value")
@@ -817,7 +817,7 @@ func TestKeyboard_CtrlA_NonWelcome_IsNoOp(t *testing.T) {
 		m := New(w)
 		m.activeForm = nil
 
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+		newModel, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 		tuiModel := newModel.(*Model)
 
 		if tuiModel.showAdvanced {
@@ -842,7 +842,7 @@ func TestKeyboard_CtrlB_ReviewTogglesShowButane(t *testing.T) {
 	}
 
 	// First ctrl+b → on
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	m = newModel.(*Model)
 	if !m.showButane {
 		t.Error("first ctrl+b on Review: expected showButane=true")
@@ -850,7 +850,7 @@ func TestKeyboard_CtrlB_ReviewTogglesShowButane(t *testing.T) {
 
 	// Second ctrl+b → off
 	m.activeForm = nil
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	m = newModel.(*Model)
 	if m.showButane {
 		t.Error("second ctrl+b on Review: expected showButane=false")
@@ -874,7 +874,7 @@ func TestKeyboard_CtrlB_NonReview_IsNoOp(t *testing.T) {
 		m := New(w)
 		m.activeForm = nil
 
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+		newModel, _ := m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 		tuiModel := newModel.(*Model)
 
 		if tuiModel.showButane {
@@ -899,7 +899,7 @@ func TestKeyboard_Slash_SysextListReady_DelegatesToList(t *testing.T) {
 	prevCursor := m.cursor
 
 	// "/" is not a tea.Key constant; use KeyRunes.
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: string('/')})
 	tuiModel := newModel.(*Model)
 
 	// Cursor must remain valid (≥0 and < len(sysexts)).
@@ -924,7 +924,7 @@ func TestKeyboard_Slash_NonSysextStep_IsNoOp(t *testing.T) {
 	m := New(w)
 	prev := m.cursor
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: string('/')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepUpdate {
@@ -944,7 +944,7 @@ func TestKeyboard_Backspace_EmptyField_IsNoOp(t *testing.T) {
 	m.fields[0].value = "" // explicitly empty
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.fields[0].value != "" {
@@ -961,7 +961,7 @@ func TestKeyboard_Backspace_MultipleDeletes(t *testing.T) {
 
 	for i, want := range []string{"ab", "a", ""} {
 		m.activeForm = nil // keep it bypassed after each Update
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 		m = newModel.(*Model)
 		m.activeForm = nil
 		if m.fields[0].value != want {
@@ -978,7 +978,7 @@ func TestKeyboard_Backspace_NoFields_IsNoOp(t *testing.T) {
 	m := New(w)
 
 	// Must not panic.
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepUpdate {
@@ -999,7 +999,7 @@ func TestKeyboard_CharInput_MultiByte(t *testing.T) {
 
 	for _, ch := range "eth0" {
 		m.activeForm = nil
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+		newModel, _ := m.Update(tea.KeyPressMsg{Code: ch, Text: string(ch)})
 		m = newModel.(*Model)
 		m.activeForm = nil
 	}
@@ -1017,7 +1017,7 @@ func TestKeyboard_CharInput_NoFields_IsNoOp(t *testing.T) {
 	w.State.Disks = []model.DiskInfo{{DevPath: "/dev/vda"}}
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'x', Text: string('x')})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepStorage {

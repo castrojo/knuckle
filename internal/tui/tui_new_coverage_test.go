@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -21,7 +21,7 @@ func TestUpdate_CtrlC_SecondPress_CallsInstallCancel(t *testing.T) {
 	m.confirmQuit = true
 	m.installCancel = func() { cancelled = true }
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 
 	if !got.quitting {
@@ -92,7 +92,7 @@ func TestHandleKey_CtrlC_Direct_CallsInstallCancel(t *testing.T) {
 	m.confirmQuit = true
 	m.installCancel = func() { cancelled = true }
 
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 
 	if !got.quitting {
@@ -115,7 +115,7 @@ func TestHandleKey_Q_Direct_CallsInstallCancel(t *testing.T) {
 	m.installCancel = func() { cancelled = true }
 	// No fields so 'q' goes to quit confirmation path, not character insertion.
 
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	got := newModel.(*Model)
 
 	if !got.quitting {
@@ -140,7 +140,7 @@ func TestHandleKey_Reboot_WithRebootFn_Direct(t *testing.T) {
 		return nil
 	}
 
-	newModel, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, cmd := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	got := newModel.(*Model)
 
 	if !got.quitting {
@@ -172,7 +172,7 @@ func TestHandleKey_Tab_SysextListReady_Delegates(t *testing.T) {
 	}
 
 	// Tab via Update (no activeForm, not ctrl+c/ctrl+a so passes to handleKey).
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	got := newModel.(*Model)
 
 	// The list delegate was called — cursor should still be valid.
@@ -196,7 +196,7 @@ func TestHandleKey_Up_SysextListReady_Delegates(t *testing.T) {
 		t.Skip("sysext list not initialized")
 	}
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	got := newModel.(*Model)
 
 	if got.cursor < 0 {
@@ -219,7 +219,7 @@ func TestHandleKey_Default_SysextListReady_Delegates(t *testing.T) {
 	}
 
 	// Send a regular character that hits the default case.
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'd', Text: string('d')})
 	_ = newModel // should not panic
 }
 
@@ -241,7 +241,7 @@ func TestHandleKey_Esc_SysextList_Filtering(t *testing.T) {
 	// Drive the list into filtering state by sending "/" then check esc.
 	// First enable filtering with a forward-slash (search trigger).
 	m.sysextList.SetFilteringEnabled(true)
-	slashMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	slashMsg := tea.KeyPressMsg{Code: '/', Text: string('/')}
 	m.sysextList, _ = m.sysextList.Update(slashMsg)
 
 	if m.sysextList.FilterState() != list.Filtering {
@@ -249,7 +249,7 @@ func TestHandleKey_Esc_SysextList_Filtering(t *testing.T) {
 	}
 
 	// Now esc should clear the filter, not go back a step.
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	got := newModel.(*Model)
 
 	// Should still be on StepSysext (esc cleared filter, not navigated back).
@@ -268,7 +268,7 @@ func TestHandleEnter_Storage_IgnitionURL_ValidationFails(t *testing.T) {
 	w.State.Disks = nil
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := newModel.(*Model)
 
 	if got.err == nil {
@@ -292,7 +292,7 @@ func TestHandleEnter_Storage_IgnitionURL_JumpsToReview(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := newModel.(*Model)
 
 	if got.err != nil {
@@ -386,7 +386,7 @@ func TestView_Quitting_ShowsCancelled(t *testing.T) {
 	m := New(w)
 	m.quitting = true
 
-	out := m.View()
+	out := m.render()
 	if !strings.Contains(out, "cancelled") {
 		t.Errorf("quitting view should show cancellation message, got: %q", out)
 	}
@@ -449,7 +449,7 @@ func TestHandleEnter_StepInstall_WhileInstalling_IsNoop(t *testing.T) {
 	m := New(w)
 	m.installing = true // already installing
 
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := newModel.(*Model)
 
 	if !got.installing {
@@ -560,7 +560,7 @@ func TestHandleEnter_User_GitHubField_TriggersAsyncFetch(t *testing.T) {
 	}
 	m.fetching = false
 
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := newModel.(*Model)
 
 	if !got.fetching {
@@ -625,7 +625,7 @@ func TestHandleEnter_StepInstall_StartsInstall(t *testing.T) {
 	m := New(w)
 	m.installing = false // not yet installing
 
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	got := newModel.(*Model)
 
 	if !got.installing {

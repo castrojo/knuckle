@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/github"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -94,7 +94,7 @@ func New(w *wizard.Wizard) *Model {
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	p := progress.New(
-		progress.WithGradient("#50fa7b", "#ff79c6"),
+		progress.WithColors(lipgloss.Color("#50fa7b"), lipgloss.Color("#ff79c6")),
 		progress.WithWidth(40),
 	)
 
@@ -127,7 +127,7 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Global keys override form
 		switch msg.String() {
 		case "ctrl+c":
@@ -177,8 +177,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case progress.FrameMsg:
-		newProgress, cmd := m.progress.Update(msg)
-		m.progress = newProgress.(progress.Model)
+		var cmd tea.Cmd
+		m.progress, cmd = m.progress.Update(msg)
 		return m, cmd
 	case installDoneMsg:
 		m.installing = false
@@ -221,7 +221,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Intercept shift+tab before huh form — always means "go back a step"
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.Type == tea.KeyShiftTab {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "shift+tab" {
 		if m.Wizard.State.CurrentStep > model.StepWelcome {
 			m.Wizard.Previous()
 			m.err = nil
@@ -259,13 +259,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Non-form steps: handle keys
-	if msg, ok := msg.(tea.KeyMsg); ok {
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
 		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
-func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Only allow 'q' to quit when NOT editing text fields
 	switch msg.String() {
 	case "ctrl+c":
@@ -382,7 +382,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.initStepFields()
 		return m, nil
-	case " ":
+	case "space":
 		if m.Wizard.State.CurrentStep == model.StepSysext {
 			idx := m.cursor
 			if idx < len(m.Wizard.State.Sysexts) {
@@ -417,8 +417,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cursor = m.sysextListCursorIdx()
 			return m, cmd
 		}
-		if len(m.fields) > 0 && len(msg.String()) == 1 {
-			m.fields[m.fieldIdx].value += msg.String()
+		if len(m.fields) > 0 && msg.Text != "" {
+			m.fields[m.fieldIdx].value += msg.Text
 		}
 		return m, nil
 	}
@@ -756,7 +756,13 @@ func (m *Model) initStepFields() {
 	}
 }
 
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
+	view := tea.NewView(m.render())
+	view.AltScreen = true
+	return view
+}
+
+func (m *Model) render() string {
 	if m.quitting {
 		return "Installation cancelled.\n"
 	}
@@ -1263,7 +1269,7 @@ func (m *Model) viewDone() string {
 func Run(w *wizard.Wizard, rebootFn func(context.Context) error) error {
 	m := New(w)
 	m.rebootFn = rebootFn
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
 }

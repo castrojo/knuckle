@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
+	"charm.land/bubbles/v2/list"
 	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/model"
 )

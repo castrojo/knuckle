@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/validate"
@@ -78,7 +78,7 @@ func (m *Model) buildNetworkForm() *huh.Form {
 		huh.NewGroup(fields...),
 		huh.NewGroup(staticFields...).Title("Static IP Configuration").
 			Description("Only needed if you chose Static mode above"),
-	).WithTheme(huh.ThemeDracula()).WithShowHelp(true).WithWidth(80)
+	).WithTheme(huh.ThemeFunc(huh.ThemeDracula)).WithShowHelp(true).WithWidth(80)
 }
 
 // buildUserForm creates the huh form for the User step.
@@ -140,7 +140,7 @@ func (m *Model) buildUserForm() *huh.Form {
 				Title("").
 				Description(m.localKeysSummary()),
 		),
-	).WithTheme(huh.ThemeDracula()).WithShowHelp(true).WithWidth(80)
+	).WithTheme(huh.ThemeFunc(huh.ThemeDracula)).WithShowHelp(true).WithWidth(80)
 }
 
 // localKeysSummary returns a description showing detected local SSH keys.
@@ -188,7 +188,7 @@ func (m *Model) buildTailscaleForm() *huh.Form {
 				Placeholder("10.0.0.0/24").
 				Value(&m.tailscaleRoutesIn),
 		),
-	).WithTheme(huh.ThemeDracula()).WithShowHelp(true).WithWidth(80)
+	).WithTheme(huh.ThemeFunc(huh.ThemeDracula)).WithShowHelp(true).WithWidth(80)
 }
 
 // buildReviewForm creates the huh confirm for the Review step.
@@ -202,7 +202,7 @@ func (m *Model) buildReviewForm() *huh.Form {
 				Negative("Go back").
 				Value(&m.Wizard.State.Confirmed),
 		),
-	).WithTheme(huh.ThemeDracula()).WithShowHelp(true).WithWidth(80)
+	).WithTheme(huh.ThemeFunc(huh.ThemeDracula)).WithShowHelp(true).WithWidth(80)
 }
 
 func (m *Model) reviewSummary() string {

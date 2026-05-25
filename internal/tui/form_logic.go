@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/github"
 	"github.com/projectbluefin/knuckle/internal/model"

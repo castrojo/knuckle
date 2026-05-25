@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -42,7 +42,7 @@ func TestFullWizardNavigation(t *testing.T) {
 
 	// Storage is non-form: press Enter to advance
 	m.cursor = 0
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	if m.Wizard.State.CurrentStep != model.StepUser {
 		t.Fatalf("after Storage: expected User, got %v", m.Wizard.State.CurrentStep)
@@ -57,14 +57,14 @@ func TestFullWizardNavigation(t *testing.T) {
 	}
 
 	// Sysext is non-form: press Enter
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	if m.Wizard.State.CurrentStep != model.StepUpdate {
 		t.Fatalf("after Sysext: expected Update, got %v", m.Wizard.State.CurrentStep)
 	}
 
 	// Update is non-form: press Enter
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	if m.Wizard.State.CurrentStep != model.StepReview {
 		t.Fatalf("after Update: expected Review, got %v", m.Wizard.State.CurrentStep)
@@ -77,7 +77,7 @@ func TestBackNavigation(t *testing.T) {
 	m := New(w)
 
 	// Press Esc on non-form step
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepNetwork {
