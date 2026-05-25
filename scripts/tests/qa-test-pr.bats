@@ -105,10 +105,7 @@ run_helper() {
 
 @test "parse_pr_labels extracts label names from gh output" {
   json='{"labels":[{"name":"domain:probe"},{"name":"size:M"},{"name":"kind:test"}]}'
-  run env PATH="$MOCK_BIN:$PATH" SCRIPT="$SCRIPT" MOCK_GH_OUTPUT="$json" bash -c '
-    source "$SCRIPT"
-    parse_pr_labels "$(gh pr view 427 --json labels)"
-  '
+  run_helper parse_pr_labels "$json"
   [ "$status" -eq 0 ]
   [ "$output" = "domain:probe, size:M, kind:test" ]
 }
