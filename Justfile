@@ -19,6 +19,7 @@ default:
     @echo "Quickstart:"
     @echo "  just vm        — install in a VM, boots into installed system after"
     @echo "  just vm-e2e    — automated: headless install → boot → verify SSH"
+    @echo "  just iso-smoke <iso> <ovmf> — headless ISO boot smoke via serial log"
     @echo "  just hardware-repro — boot installer ISO in a hardware-like VM and capture install logs"
     @echo "  just e2e       — full end-to-end: build ISO → boot → install → verify"
     @echo ""
@@ -842,6 +843,14 @@ boot-iso-ssh:
     done
     echo "VM ready."
     exec ssh -t {{SSH_OPTS}} -p 2222 core@127.0.0.1
+
+# Headless ISO boot smoke test (amd64 only). Verifies systemd-boot serial output,
+# initrd boot targets, and absence of xd2root/x2dauto errors.
+iso-smoke ISO OVMF TIMEOUT='120':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "{{KNUCKLE_ARCH}}" = "amd64" ] || { echo "iso-smoke currently supports amd64 only"; exit 1; }
+    QEMU_BIN="{{QEMU}}" bash ./scripts/iso-smoke.sh "{{ISO}}" "{{OVMF}}" "{{TIMEOUT}}"
 
 # Boot the installer ISO in a hardware-like VM and capture install failure artifacts.
 hardware-repro:

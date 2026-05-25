@@ -24,13 +24,14 @@
         └───────────────────────────────────────────────────────┘
 ```
 
-| Layer       | Runs in CI? | What it covers                                                 |
-| ----------- | :---------: | -------------------------------------------------------------- |
-| Unit        |     ✅      | All packages, race-clean                                       |
-| Golden      |     ✅      | Ignition output stability (regenerate with `-update`)          |
-| Headless e2e|     ✅      | `just headless-test` — build + canned JSON, validates config generation |
-| Integration |     ❌      | Tagged `//go:build integration`. Real HTTP to GitHub + Flatcar |
-| VM e2e      |     ❌      | Requires QEMU + KVM; dev-machine only; automated 4-pass recipe |
+| Layer          | Runs in CI? | What it covers                                                          |
+| -------------- | :---------: | ----------------------------------------------------------------------- |
+| Unit           |     ✅      | All packages, race-clean                                                |
+| Golden         |     ✅      | Ignition output stability (regenerate with `-update`)                   |
+| Headless e2e   |     ✅      | `just headless-test` — build + canned JSON, validates config generation |
+| ISO smoke      |     ⚠️      | `just iso-smoke <iso> <ovmf>` — headless serial-log ISO boot assertions |
+| Integration    |     ❌      | Tagged `//go:build integration`. Real HTTP to GitHub + Flatcar          |
+| VM e2e         |     ❌      | Requires QEMU + KVM; dev-machine only; automated 4-pass recipe          |
 
 ## Coverage Gate
 
@@ -60,13 +61,14 @@ rises and stays there, raise the gate in `Justfile :: cover-check`.
 
 ### `.github/workflows/ci.yml`
 
-| Job            | What it does                                                            | Required to merge |
-| -------------- | ----------------------------------------------------------------------- | :---------------: |
-| `build-test`   | `go mod tidy` (clean), `gofmt`, `go vet`, `go build`, `go test -race`  |        ✅         |
-| `lint`         | `golangci-lint run` (v2.11.4 via GHA action)                           |        ✅         |
-| `vuln`         | `go tool govulncheck ./...` (version pinned in `go.mod`)               |        ✅         |
-| `coverage`     | `just cover-check` + uploads `cover.out` artifact (14-day retention)   |        ✅         |
-| `headless-e2e` | `just headless-test` — build + canned JSON config, validates config generation |        ✅         |
+| Job                 | What it does                                                                  | Required to merge |
+| ------------------- | ----------------------------------------------------------------------------- | :---------------: |
+| `build-test`        | `go mod tidy` (clean), `gofmt`, `go vet`, `go build`, `go test -race`        |        ✅         |
+| `lint`              | `golangci-lint run` (v2.11.4 via GHA action)                                 |        ✅         |
+| `vuln`              | `go tool govulncheck ./...` (version pinned in `go.mod`)                     |        ✅         |
+| `coverage`          | `just cover-check` + uploads `cover.out` artifact (14-day retention)         |        ✅         |
+| `headless-e2e`      | `just headless-test` — build + canned JSON config, validates config generation |        ✅         |
+| `iso-smoke recipe`  | `just --dry-run iso-smoke …` — keeps the headless ISO smoke recipe wired into CI |        ✅         |
 
 **Tool version pinning:** `govulncheck` is pinned in `go.mod` via `go tool`.
 `golangci-lint` is pinned in `Justfile::GOLANGCI_LINT_VERSION` (local) and
