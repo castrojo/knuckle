@@ -10,24 +10,65 @@
 
 set -euo pipefail
 
-PR=${1:?usage: qa-test-pr.sh <PR_NUMBER>}
-
 # QA_HOST: set to user@hostname to run on a remote machine.
 # Leave unset (or set to localhost) to run entirely on this machine.
 # Example: export QA_HOST=jorge@192.168.1.102
 # See docs/GHOST-LAB.md for lab setup instructions.
-GHOST=${QA_HOST:-localhost}
-GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519"
-WORK_REMOTE="/var/tmp/knuckle-qa-pr-${PR}"
-RUN_ID="pr-${PR}-$(date +%Y%m%d-%H%M%S)"
-RUNDIR="$(pwd)/.qa/runs/${RUN_ID}"
-REPORT="${RUNDIR}/report.md"
-START=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 _ghost()     { ssh $GOPTS "$GHOST" "$@"; }
 _scp_to()    { scp $GOPTS "$@"; }
 _scp_from()  { scp $GOPTS "$@"; }
 log()        { echo "  [qa ${RUN_ID}] $*" >&2; }
+
+parse_pr_labels() {
+  local pr_json="${1:-}"
+  if [[ -n "$pr_json" ]]; then
+    printf '%s' "$pr_json" | jq -r '(.labels // []) | map(.name) | join(", ")'
+  else
+    jq -r '(.labels // []) | map(.name) | join(", ")'
+  fi
+}
+
+_has() {
+  local needle="$1"
+  local labels="${2:-${LABELS:-}}"
+  printf '%s\n' "$labels" \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+    | grep -Fxq "$needle"
+}
+
+should_skip_qa() {
+  local labels="${1:-${LABELS:-}}"
+  _has "ci/skip" "$labels" || _has "qa/skip" "$labels"
+}
+
+get_tier() {
+  local labels="${1:-${LABELS:-}}"
+  local tier=0
+
+  _has "domain:probe" "$labels" && tier=1
+  _has "domain:tui" "$labels" && tier=1
+  _has "domain:security" "$labels" && tier=1
+
+  _has "domain:install" "$labels" && tier=3
+  _has "domain:ignition" "$labels" && tier=3
+  _has "domain:headless" "$labels" && tier=3
+  _has "domain:sysext" "$labels" && tier=3
+  _has "domain:iso" "$labels" && tier=3
+  echo "$labels" | grep -qi "swap" && tier=3 || true
+  echo "$labels" | grep -qi "tailscale" && tier=3 || true
+
+  printf '%s\n' "$tier"
+}
+
+is_complex_pr() {
+  local size="${1:-}"
+  local domain_count="${2:-0}"
+  local workflow_changed="${3:-0}"
+
+  [[ "$size" == "size:XL" || "$size" == "size:XXL" ]]     || [[ "$domain_count" -gt 4 ]]     || [[ "$workflow_changed" -gt 0 ]]
+}
 
 _fetch_artifacts() {
   log "Fetching artifacts from ghost..."
@@ -60,12 +101,8 @@ ISSUE_EOF
   log "Issue body: ${issue_file}"
 }
 
-# Source KubeVirt helpers
-# shellcheck source=scripts/lib/vm-kubevirt.sh
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/lib/vm-kubevirt.sh"
-
 VM_NAME=""  # set when VM is allocated; trap uses this
+WORKTREE=""
 _cleanup_kv() {
   local exit_code=$?
   [[ -n "${VM_NAME:-}" ]] && kv_delete "${VM_NAME}" 2>/dev/null || true
@@ -73,29 +110,44 @@ _cleanup_kv() {
   [[ -n "${WORKTREE:-}" ]] && git worktree remove "$WORKTREE" --force 2>/dev/null || true
   exit "$exit_code"
 }
-trap '_cleanup_kv' EXIT INT TERM
 
-mkdir -p "$RUNDIR"
+main() {
+  PR=${1:?usage: qa-test-pr.sh <PR_NUMBER>}
 
-# ── 1. PR metadata ────────────────────────────────────────────────────────────
-log "Fetching PR #${PR}..."
-PR_JSON=$(gh pr view "$PR" --repo projectbluefin/knuckle \
-  --json title,headRefName,labels,body,author 2>/dev/null)
-TITLE=$(  echo "$PR_JSON" | jq -r '.title')
-BRANCH=$( echo "$PR_JSON" | jq -r '.headRefName')
-AUTHOR=$( echo "$PR_JSON" | jq -r '.author.login')
-LABELS=$( echo "$PR_JSON" | jq -r '[.labels[].name] | join(", ")')
-SIZE=$(   echo "$PR_JSON" | jq -r '[.labels[] | select(.name|startswith("size:")) | .name] | first // ""')
-CLOSES=$( echo "$PR_JSON" | jq -r '.body' | grep -oP 'Closes #\K\d+' | tr '\n' ',' | sed 's/,$//' || echo "")
-DOMAIN_COUNT=$(echo "$LABELS" | tr ',' '\n' | grep -c "domain:" || true)
-WF_CHANGED=$(gh pr diff "$PR" --repo projectbluefin/knuckle --name-only 2>/dev/null \
-  | grep -c "^\.github/workflows/" || true)
+  GHOST=${QA_HOST:-localhost}
+  GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519"
+  WORK_REMOTE="/var/tmp/knuckle-qa-pr-${PR}"
+  RUN_ID="pr-${PR}-$(date +%Y%m%d-%H%M%S)"
+  RUNDIR="$(pwd)/.qa/runs/${RUN_ID}"
+  REPORT="${RUNDIR}/report.md"
+  START=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# ── 2. Complexity gate ────────────────────────────────────────────────────────
-if [[ "$SIZE" == "size:XL" || "$SIZE" == "size:XXL" ]] || [[ $DOMAIN_COUNT -gt 4 ]] || [[ $WF_CHANGED -gt 0 ]]; then
-  log "SKIP: complexity gate (size=${SIZE} domains=${DOMAIN_COUNT} wf=${WF_CHANGED})"
-  VM_HOSTNAME="flatcar-vm-skipped"
-  cat > "$REPORT" << EOF
+  # Source KubeVirt helpers
+  # shellcheck source=scripts/lib/vm-kubevirt.sh
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  source "${SCRIPT_DIR}/lib/vm-kubevirt.sh"
+
+  trap '_cleanup_kv' EXIT INT TERM
+
+  mkdir -p "$RUNDIR"
+
+  # ── 1. PR metadata ──────────────────────────
+  log "Fetching PR #${PR}..."
+  PR_JSON=$(gh pr view "$PR" --repo projectbluefin/knuckle     --json title,headRefName,labels,body,author 2>/dev/null)
+  TITLE=$(  echo "$PR_JSON" | jq -r '.title')
+  BRANCH=$( echo "$PR_JSON" | jq -r '.headRefName')
+  AUTHOR=$( echo "$PR_JSON" | jq -r '.author.login')
+  LABELS=$(parse_pr_labels "$PR_JSON")
+  SIZE=$(   echo "$PR_JSON" | jq -r '[.labels[] | select(.name|startswith("size:")) | .name] | first // ""')
+  CLOSES=$( echo "$PR_JSON" | jq -r '.body' | grep -oP 'Closes #\K\d+' | tr '\n' ',' | sed 's/,$//' || echo "")
+  DOMAIN_COUNT=$(printf '%s\n' "$LABELS" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -c '^domain:' || true)
+  WF_CHANGED=$(gh pr diff "$PR" --repo projectbluefin/knuckle --name-only 2>/dev/null     | grep -c "^\.github/workflows/" || true)
+
+  # ── 2. Complexity gate ──────
+  if is_complex_pr "$SIZE" "$DOMAIN_COUNT" "$WF_CHANGED"; then
+    log "SKIP: complexity gate (size=${SIZE} domains=${DOMAIN_COUNT} wf=${WF_CHANGED})"
+    VM_HOSTNAME="flatcar-vm-skipped"
+    cat > "$REPORT" << EOF
 ## ⚡ Vanguard Lab Strike Report: ${VM_HOSTNAME}
 **Alpha**: Blue Universal CI Companion · Warmind Vanguard · Strike Protocol K-01
 **Guardian on Duty**: \`castrojo\` on Ghost Homelab
@@ -107,32 +159,23 @@ if [[ "$SIZE" == "size:XL" || "$SIZE" == "size:XXL" ]] || [[ $DOMAIN_COUNT -gt 4
 
 <!-- status:SKIP target:knuckle label:pr-${PR} digest:none -->
 EOF
-  cat "$REPORT"; exit 2
-fi
+    cat "$REPORT"; exit 2
+  fi
 
-# ── 3. What to test ───────────────────────────────────────────────────────────
-# Tier 0: unit tests (dev machine only)
-# Tier 1: installer VM + tool check + --dry-run + security bad-input tests
-# Tier 3: Tier 1 + real headless install + BOOT installed Flatcar + assertions
-#   (Tier 3 is the default for any PR touching the installed system)
+  # ── 3. What to test ───────────────────────────────────────────────────────────
+  # Tier 0: unit tests (dev machine only)
+  # Tier 1: installer VM + tool check + --dry-run + security bad-input tests
+  # Tier 3: Tier 1 + real headless install + BOOT installed Flatcar + assertions
+  #   (Tier 3 is the default for any PR touching the installed system)
 
-TIER=0
-NEEDS_BOOT=0
-DO_SECURITY=0
+  TIER=$(get_tier "$LABELS")
+  NEEDS_BOOT=0
+  DO_SECURITY=0
 
-_has() { echo "$LABELS" | grep -q "$1"; }
+  [[ $TIER -ge 3 ]] && NEEDS_BOOT=1
+  _has "domain:security" "$LABELS" && DO_SECURITY=1
 
-_has "domain:probe"      && TIER=1
-_has "domain:tui"        && TIER=1
-_has "domain:security"   && TIER=1 && DO_SECURITY=1
-_has "domain:install"    && TIER=3 && NEEDS_BOOT=1
-_has "domain:ignition"   && TIER=3 && NEEDS_BOOT=1
-_has "domain:headless"   && TIER=3 && NEEDS_BOOT=1
-_has "domain:sysext"     && TIER=3 && NEEDS_BOOT=1
-echo "$LABELS" | grep -qi "swap"      && TIER=3 && NEEDS_BOOT=1
-echo "$LABELS" | grep -qi "tailscale" && TIER=3 && NEEDS_BOOT=1
-
-log "tier=${TIER} needs_boot=${NEEDS_BOOT} security=${DO_SECURITY}"
+  log "tier=${TIER} needs_boot=${NEEDS_BOOT} security=${DO_SECURITY}"
 
 # ── 4. Build ──────────────────────────────────────────────────────────────────
 git fetch upstream "pull/${PR}/head:pr${PR}-qa" -q 2>/dev/null
@@ -780,3 +823,9 @@ fi
 log "Artifacts: ${RUNDIR}/"
 cat "$REPORT"
 [[ $ASSERT_OK -gt 0 ]] && exit 0 || exit 1
+
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
