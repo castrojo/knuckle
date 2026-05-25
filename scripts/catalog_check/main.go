@@ -13,8 +13,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -22,7 +24,16 @@ import (
 	"time"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/model"
 )
+
+// CatalogFetcher abstracts catalog retrieval so tests can inject a mock.
+type CatalogFetcher interface {
+	FetchCatalogArch(ctx context.Context, arch string) ([]model.SysextEntry, error)
+}
+
+// errStrictViolation is returned by run when --strict is set and entries are missing.
+var errStrictViolation = errors.New("strict mode: missing curated descriptions")
 
 func main() {
 	strict := flag.Bool("strict", false, "exit 1 if any extensions are missing curated descriptions")
@@ -32,19 +43,31 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	fmt.Println("catalog_check — verifying descriptions.go against live Flatcar Bakery")
-	fmt.Println(strings.Repeat("─", 70))
-	fmt.Println()
-
 	client := bakery.NewHTTPClient()
 
-	fmt.Printf("Fetching live bakery catalog (%s)... ", *arch)
-	entries, err := client.FetchCatalogArch(ctx, *arch)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nERROR fetching catalog: %v\n", err)
+	if err := run(ctx, os.Stdout, os.Stderr, client, *arch, *strict); err != nil {
+		if errors.Is(err, errStrictViolation) {
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "\nERROR: %v\n", err)
 		os.Exit(2)
 	}
-	fmt.Printf("%d extensions found\n\n", len(entries))
+}
+
+// run executes the catalog check logic, writing output to w and errors to errW.
+// It returns errStrictViolation if strict is true and entries are missing,
+// or a wrapped error if the catalog fetch fails.
+func run(ctx context.Context, w io.Writer, errW io.Writer, fetcher CatalogFetcher, arch string, strict bool) error {
+	fmt.Fprintln(w, "catalog_check — verifying descriptions.go against live Flatcar Bakery")
+	fmt.Fprintln(w, strings.Repeat("─", 70))
+	fmt.Fprintln(w)
+
+	fmt.Fprintf(w, "Fetching live bakery catalog (%s)... ", arch)
+	entries, err := fetcher.FetchCatalogArch(ctx, arch)
+	if err != nil {
+		return fmt.Errorf("fetching catalog: %w", err)
+	}
+	fmt.Fprintf(w, "%d extensions found\n\n", len(entries))
 
 	// Sort by name for stable output.
 	sort.Slice(entries, func(i, j int) bool {
@@ -55,30 +78,30 @@ func main() {
 
 	for _, e := range entries {
 		if meta, ok := bakery.Lookup(e.Name); ok {
-			fmt.Printf("  ok       %-22s  v%-12s  %s · %s\n",
+			fmt.Fprintf(w, "  ok       %-22s  v%-12s  %s · %s\n",
 				e.Name, e.Version, meta.SupportTier, meta.Category)
 		} else {
-			fmt.Printf("  MISSING  %-22s  v%s\n", e.Name, e.Version)
+			fmt.Fprintf(w, "  MISSING  %-22s  v%s\n", e.Name, e.Version)
 		}
 	}
 
-	fmt.Println()
-	fmt.Printf("Result: %d covered, %d missing\n", covered, len(missing))
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "Result: %d covered, %d missing\n", covered, len(missing))
 
 	if len(missing) == 0 {
-		fmt.Println()
-		fmt.Println("✓ All live bakery extensions have curated descriptions.")
-		fmt.Println("  No action needed.")
-		return
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "✓ All live bakery extensions have curated descriptions.")
+		fmt.Fprintln(w, "  No action needed.")
+		return nil
 	}
 
-	fmt.Println()
-	fmt.Println("─── Missing entries ────────────────────────────────────────────────────")
-	fmt.Printf("Add the following to extensionCatalog in internal/bakery/descriptions.go:\n\n")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "─── Missing entries ────────────────────────────────────────────────────")
+	fmt.Fprintf(w, "Add the following to extensionCatalog in internal/bakery/descriptions.go:\n\n")
 
 	for _, m := range missing {
-		fmt.Printf("// %s v%s — source: %s\n", m.Name, m.Version, m.URL)
-		fmt.Printf(`"%s": {
+		fmt.Fprintf(w, "// %s v%s — source: %s\n", m.Name, m.Version, m.URL)
+		fmt.Fprintf(w, `"%s": {
 	Category:    "TODO", // e.g. "Container Runtime", "Networking", "Orchestration"
 	SupportTier: bakery.TierMaintained, // or TierIntegrated, TierExperimental
 	Short:       "TODO: one-line description (~80 chars)",
@@ -86,21 +109,22 @@ func main() {
 	Caveats:     nil,
 },
 `, m.Name)
-		fmt.Println()
+		fmt.Fprintln(w)
 	}
 
-	fmt.Println("─── Checklist ──────────────────────────────────────────────────────────")
-	fmt.Println("1. Add the entry/entries above to internal/bakery/descriptions.go")
-	fmt.Printf("2. Add %-22q to allKnownExtensions in internal/bakery/descriptions_test.go\n", missing[0].Name)
-	fmt.Println("3. Add a row to docs/SYSEXTS.md under the appropriate category")
-	fmt.Println("4. Run: just ci")
-	fmt.Println()
+	fmt.Fprintln(w, "─── Checklist ──────────────────────────────────────────────────────────")
+	fmt.Fprintln(w, "1. Add the entry/entries above to internal/bakery/descriptions.go")
+	fmt.Fprintf(w, "2. Add %-22q to allKnownExtensions in internal/bakery/descriptions_test.go\n", missing[0].Name)
+	fmt.Fprintln(w, "3. Add a row to docs/SYSEXTS.md under the appropriate category")
+	fmt.Fprintln(w, "4. Run: just ci")
+	fmt.Fprintln(w)
 
-	if *strict {
-		fmt.Fprintf(os.Stderr, "FAIL: %d extension(s) missing curated descriptions (--strict)\n", len(missing))
-		os.Exit(1)
+	if strict {
+		fmt.Fprintf(errW, "FAIL: %d extension(s) missing curated descriptions (--strict)\n", len(missing))
+		return errStrictViolation
 	}
 
-	fmt.Printf("⚠ %d extension(s) are missing curated descriptions.\n", len(missing))
-	fmt.Println("  Run 'just catalog-check-strict' to enforce as a hard gate.")
+	fmt.Fprintf(w, "⚠ %d extension(s) are missing curated descriptions.\n", len(missing))
+	fmt.Fprintln(w, "  Run 'just catalog-check-strict' to enforce as a hard gate.")
+	return nil
 }
