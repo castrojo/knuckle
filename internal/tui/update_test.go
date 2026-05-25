@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -141,13 +141,13 @@ func TestUpdate_CtrlA_TogglesAdvancedOnWelcome(t *testing.T) {
 		t.Error("showAdvanced should start false")
 	}
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	tuiModel := newModel.(*Model)
 	if !tuiModel.showAdvanced {
 		t.Error("expected showAdvanced=true after Ctrl+A")
 	}
 
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	tuiModel = newModel.(*Model)
 	if tuiModel.showAdvanced {
 		t.Error("expected showAdvanced=false after second Ctrl+A")
@@ -159,7 +159,7 @@ func TestUpdate_CtrlA_NoOpOnOtherSteps(t *testing.T) {
 	w.State.CurrentStep = model.StepStorage
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	tuiModel := newModel.(*Model)
 	if tuiModel.showAdvanced {
 		t.Error("Ctrl+A should not toggle advanced on non-Welcome steps")
@@ -234,14 +234,14 @@ func TestHandleKey_CursorClamp(t *testing.T) {
 	m.cursor = 2
 
 	// Press down — should clamp at max-1
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	tuiModel := newModel.(*Model)
 	if tuiModel.cursor != 2 {
 		t.Errorf("cursor should clamp at 2, got %d", tuiModel.cursor)
 	}
 
 	// Press up
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	tuiModel = newModel.(*Model)
 	if tuiModel.cursor != 1 {
 		t.Errorf("cursor should be 1 after up, got %d", tuiModel.cursor)
@@ -255,7 +255,7 @@ func TestHandleKey_CursorUp_AtZero(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	tuiModel := newModel.(*Model)
 	if tuiModel.cursor != 0 {
 		t.Errorf("cursor should stay at 0, got %d", tuiModel.cursor)
@@ -273,14 +273,14 @@ func TestHandleKey_SpaceTogglesSysext(t *testing.T) {
 	m.cursor = 0
 
 	// Space toggles first sysext
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 	if !tuiModel.Wizard.State.Sysexts[0].Selected {
 		t.Error("expected sysext[0] to be selected")
 	}
 
 	// Second space un-toggles
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel = newModel.(*Model)
 	if tuiModel.Wizard.State.Sysexts[0].Selected {
 		t.Error("expected sysext[0] to be deselected")
@@ -297,14 +297,14 @@ func TestHandleKey_SpaceNvidiaSync(t *testing.T) {
 	m.cursor = 0
 
 	// Toggle nvidia-runtime ON
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel := newModel.(*Model)
 	if tuiModel.Wizard.State.Config.NvidiaDriverVersion == "" {
 		t.Error("expected NvidiaDriverVersion to be set when nvidia-runtime selected")
 	}
 
 	// Toggle nvidia-runtime OFF
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeySpace})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	tuiModel = newModel.(*Model)
 	if tuiModel.Wizard.State.Config.NvidiaDriverVersion != "" {
 		t.Error("expected NvidiaDriverVersion cleared when nvidia-runtime deselected")
@@ -319,7 +319,7 @@ func TestHandleKey_CtrlB_TogglesButane(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	tuiModel := newModel.(*Model)
 	if !tuiModel.showButane {
 		t.Error("expected showButane=true after Ctrl+B on Review")
@@ -332,7 +332,7 @@ func TestHandleKey_Reboot_DryRun(t *testing.T) {
 	w.State.Config.DryRun = true
 	m := New(w)
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel.(*Model)
 	if tuiModel.err == nil {
 		t.Error("expected dry-run reboot message")
@@ -353,14 +353,14 @@ func TestHandleKey_Reboot_Confirmation_Direct(t *testing.T) {
 	m := New(w)
 
 	// First 'r' via handleKey directly
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel := newModel.(*Model)
 	if !tuiModel.confirmReboot {
 		t.Error("expected confirmReboot=true after first r")
 	}
 
 	// Second 'r' via handleKey (bypasses Update's clear)
-	newModel, cmd := tuiModel.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, cmd := tuiModel.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	tuiModel = newModel.(*Model)
 	if !tuiModel.quitting {
 		t.Error("expected quitting=true after double r")
@@ -379,7 +379,7 @@ func TestHandleKey_Backspace_DeletesFieldChar(t *testing.T) {
 	m.fields[0].value = "eth0"
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	tuiModel := newModel.(*Model)
 	if tuiModel.fields[0].value != "eth" {
 		t.Errorf("expected 'eth' after backspace, got %q", tuiModel.fields[0].value)
@@ -395,7 +395,7 @@ func TestHandleKey_CharInput_AppendsToField(t *testing.T) {
 	m.fields[0].value = "et"
 	m.fieldIdx = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'h', Text: string('h')})
 	tuiModel := newModel.(*Model)
 	if tuiModel.fields[0].value != "eth" {
 		t.Errorf("expected 'eth' after typing h, got %q", tuiModel.fields[0].value)
@@ -411,7 +411,7 @@ func TestHandleKey_TabCyclesFields(t *testing.T) {
 	m.fieldIdx = 0
 
 	// Tab should advance
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	tuiModel := newModel.(*Model)
 	if tuiModel.fieldIdx != 1 {
 		t.Errorf("expected fieldIdx=1, got %d", tuiModel.fieldIdx)
@@ -420,7 +420,7 @@ func TestHandleKey_TabCyclesFields(t *testing.T) {
 	// Tab cycles around
 	tuiModel.fieldIdx = len(tuiModel.fields) - 1
 	tuiModel.activeForm = nil // keep bypassed after Update
-	newModel, _ = tuiModel.Update(tea.KeyMsg{Type: tea.KeyTab})
+	newModel, _ = tuiModel.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	tuiModel = newModel.(*Model)
 	if tuiModel.fieldIdx != 0 {
 		t.Errorf("expected fieldIdx=0 (wrap), got %d", tuiModel.fieldIdx)
@@ -434,7 +434,7 @@ func TestHandleKey_ShiftTabGoesBack(t *testing.T) {
 	m.activeForm = nil
 
 	// Shift+Tab goes back to previous step
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	tuiModel := newModel.(*Model)
 	if tuiModel.Wizard.State.CurrentStep != model.StepNetwork {
 		t.Errorf("expected StepNetwork after shift+tab, got %v", tuiModel.Wizard.State.CurrentStep)
@@ -447,7 +447,7 @@ func TestHandleKey_ShiftTabOnWelcomeIsNoOp(t *testing.T) {
 	m := New(w)
 	m.activeForm = nil
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	tuiModel := newModel.(*Model)
 	if tuiModel.Wizard.State.CurrentStep != model.StepWelcome {
 		t.Errorf("shift+tab on Welcome should be no-op, got %v", tuiModel.Wizard.State.CurrentStep)
@@ -460,7 +460,7 @@ func TestHandleKey_EscGoesBack(t *testing.T) {
 	m := New(w)
 	m.err = errTest // set an error to verify it clears
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	tuiModel := newModel.(*Model)
 	if tuiModel.err != nil {
 		t.Error("expected error cleared on Esc")
@@ -528,7 +528,7 @@ func TestUpdate_WindowSizeMsg_WithActiveForm(t *testing.T) {
 func TestUpdate_CtrlC_FirstPress_SetsConfirm(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 	if !got.confirmQuit {
 		t.Error("first ctrl+c should set confirmQuit")
@@ -539,7 +539,7 @@ func TestUpdate_CtrlC_SecondPress_Quits(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
 	m.confirmQuit = true
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 	if !got.quitting {
 		t.Error("second ctrl+c should set quitting")

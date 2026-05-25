@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
@@ -24,7 +24,7 @@ func TestStorageToUserTransition(t *testing.T) {
 	m.cursor = 0
 
 	// Press Enter on Storage step — should advance to User
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 
 	if m.Wizard.State.CurrentStep != model.StepUser {
@@ -55,7 +55,7 @@ func TestStorageToUserTransition(t *testing.T) {
 	}
 
 	// Now the View should contain actual form content, not just whitespace
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "Hostname") && !strings.Contains(view, "System Identity") {
 		t.Errorf("User step should render form fields after init.\nGot view (%d chars):\n%s", len(view), view[:min(500, len(view))])
 	}
@@ -85,7 +85,7 @@ func TestFormStepTransitionsAlwaysInitForm(t *testing.T) {
 			m := New(w)
 			m.cursor = 0
 
-			newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 			m = newModel.(*Model)
 
 			if m.Wizard.State.CurrentStep != tt.to {

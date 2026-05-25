@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
@@ -49,7 +49,7 @@ func TestFullFlowE2E(t *testing.T) {
 
 	// Step 3: Storage (non-form) - press Enter
 	m.cursor = 0
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	m = runCmds(t, m, cmd, 10)
 	steps = append(steps, captureStep(t, m, "User"))
@@ -58,7 +58,7 @@ func TestFullFlowE2E(t *testing.T) {
 	if m.activeForm == nil {
 		t.Fatal("BLANK SCREEN BUG: activeForm is nil at User step")
 	}
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "Hostname") && !strings.Contains(view, "System Identity") {
 		t.Fatalf("User step renders blank. View:\n%s", view)
 	}
@@ -73,13 +73,13 @@ func TestFullFlowE2E(t *testing.T) {
 	steps = append(steps, captureStep(t, m, "Sysext"))
 
 	// Step 5: Sysext (non-form) - press Enter
-	newModel, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	m = runCmds(t, m, cmd, 10)
 	steps = append(steps, captureStep(t, m, "Update"))
 
 	// Step 6: Update (non-form) - press Enter
-	newModel, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(*Model)
 	m = runCmds(t, m, cmd, 10)
 	steps = append(steps, captureStep(t, m, "Review"))
@@ -112,7 +112,7 @@ func runCmds(t *testing.T, m *Model, cmd tea.Cmd, maxRounds int) *Model {
 func captureStep(t *testing.T, m *Model, expected string) string {
 	t.Helper()
 	step := m.Wizard.State.CurrentStep.String()
-	view := m.View()
+	view := m.render()
 	hasContent := len(strings.TrimSpace(view)) > 100
 	status := "✓"
 	if !hasContent {

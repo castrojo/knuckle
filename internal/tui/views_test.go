@@ -346,7 +346,7 @@ func TestView_QuittingReturnsCancel(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
 	m.quitting = true
-	out := m.View()
+	out := m.render()
 	if out != "Installation cancelled.\n" {
 		t.Errorf("quitting View() = %q, want %q", out, "Installation cancelled.\n")
 	}
@@ -357,7 +357,7 @@ func TestView_StepUpdate_RendersContent(t *testing.T) {
 	w.State.CurrentStep = model.StepUpdate
 	m := New(w)
 	// StepUpdate is a non-form step — no activeForm, so View() goes to the switch.
-	out := m.View()
+	out := m.render()
 	if len(out) == 0 {
 		t.Error("View() for StepUpdate returned empty string")
 	}
@@ -368,7 +368,7 @@ func TestView_NonFormStep_WithError_ShowsError(t *testing.T) {
 	w.State.CurrentStep = model.StepStorage
 	m := New(w)
 	m.err = fmt.Errorf("unique-storage-error-xyz")
-	out := m.View()
+	out := m.render()
 	if !strings.Contains(out, "unique-storage-error-xyz") {
 		t.Errorf("View() should render m.err in non-form path, got: %q", out)
 	}

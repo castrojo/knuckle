@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -84,7 +84,7 @@ func TestHandleEnter_StorageWithIgnitionURL_SkipsToReview(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tuiModel := newModel.(*Model)
 
 	if tuiModel.Wizard.State.CurrentStep != model.StepReview {
@@ -106,7 +106,7 @@ func TestHandleEnter_StorageWithIgnitionURL_ValidationError(t *testing.T) {
 	m := New(w)
 	m.cursor = 0
 
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	tuiModel := newModel.(*Model)
 
 	// Should stay on Storage with an error

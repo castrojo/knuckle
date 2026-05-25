@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -61,7 +61,7 @@ func TestMergeKeysPreservesManualOnGitHubFetch(t *testing.T) {
 func TestHandleKey_CtrlC_FirstPress(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 	if !got.confirmQuit {
 		t.Error("first ctrl+c in handleKey should set confirmQuit")
@@ -75,7 +75,7 @@ func TestHandleKey_CtrlC_SecondPress_Quits(t *testing.T) {
 	w := newTestWizard()
 	m := New(w)
 	m.confirmQuit = true
-	newModel, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newModel, cmd := m.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	got := newModel.(*Model)
 	if !got.quitting {
 		t.Error("second ctrl+c in handleKey should set quitting")
@@ -90,7 +90,7 @@ func TestHandleKey_Q_NoFields_FirstPress(t *testing.T) {
 	w.State.CurrentStep = model.StepWelcome
 	m := New(w)
 	m.fields = nil // no fields → q triggers confirm-quit
-	newModel, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, _ := m.handleKey(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	got := newModel.(*Model)
 	if !got.confirmQuit {
 		t.Error("first q with no fields should set confirmQuit")
@@ -102,7 +102,7 @@ func TestHandleKey_Q_NoFields_SecondPress_Quits(t *testing.T) {
 	m := New(w)
 	m.fields = nil
 	m.confirmQuit = true
-	newModel, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	newModel, cmd := m.handleKey(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	got := newModel.(*Model)
 	if !got.quitting {
 		t.Error("second q with no fields should set quitting")
@@ -118,7 +118,7 @@ func TestHandleKey_Q_WithFields_AppendsChar(t *testing.T) {
 	m := New(w)
 	m.fields = []field{{label: "Disk", value: ""}}
 	m.fieldIdx = 0
-	m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	m.handleKey(tea.KeyPressMsg{Code: 'q', Text: string('q')})
 	if m.fields[0].value != "q" {
 		t.Errorf("q in field mode should append 'q', got %q", m.fields[0].value)
 	}
@@ -129,7 +129,7 @@ func TestHandleKey_R_NonDoneStep_NoFields(t *testing.T) {
 	w.State.CurrentStep = model.StepWelcome // not Done
 	m := New(w)
 	m.fields = nil // no field → r falls through to return nil
-	newModel, cmd := m.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	newModel, cmd := m.handleKey(tea.KeyPressMsg{Code: 'r', Text: string('r')})
 	if newModel == nil {
 		t.Fatal("handleKey returned nil model")
 	}
@@ -143,7 +143,7 @@ func TestHandleKey_Up_WithFields_WrapsIndex(t *testing.T) {
 	m := New(w)
 	m.fields = []field{{label: "A"}, {label: "B"}, {label: "C"}}
 	m.fieldIdx = 0 // already at top
-	m.handleKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.handleKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	if m.fieldIdx != len(m.fields)-1 {
 		t.Errorf("up at fieldIdx=0 should wrap to %d, got %d", len(m.fields)-1, m.fieldIdx)
 	}
