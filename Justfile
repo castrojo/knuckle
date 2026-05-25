@@ -1120,3 +1120,13 @@ _write-ignition:
       ]}
     }
     EOF
+
+# Run BATS shell tests for scripts/
+bats-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v bats &>/dev/null; then
+        echo "bats-core not found. Install: npm i -g bats or apt install bats" >&2
+        exit 1
+    fi
+    bats scripts/tests/
