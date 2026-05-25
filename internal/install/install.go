@@ -26,6 +26,19 @@ type FlatcarInstaller struct {
 	ignitionPath string // dynamically set temp file path
 }
 
+type ignitionTempFile interface {
+	Name() string
+	WriteString(s string) (n int, err error)
+	Close() error
+}
+
+// Test seams for exercising WriteIgnitionFile cleanup paths.
+var newIgnitionTempFile = func() (ignitionTempFile, error) {
+	return os.CreateTemp("", "knuckle-ignition-*.json")
+}
+
+var removeIgnitionFile = os.Remove
+
 // NewFlatcarInstaller creates a FlatcarInstaller with the given runner and logger.
 func NewFlatcarInstaller(r runner.Runner, logger *slog.Logger) *FlatcarInstaller {
 	return &FlatcarInstaller{
@@ -169,7 +182,7 @@ func installDiskPath(cfg *model.InstallConfig) string {
 // the file is never readable by other users, even between creation and content write.
 // Returns the path to the created temp file.
 func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error) {
-	f, err := os.CreateTemp("", "knuckle-ignition-*.json")
+	f, err := newIgnitionTempFile()
 	if err != nil {
 		return "", fmt.Errorf("creating temp ignition file: %w", err)
 	}
@@ -177,12 +190,12 @@ func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error
 
 	if _, err := f.WriteString(ignitionJSON); err != nil {
 		_ = f.Close()
-		_ = os.Remove(path)
+		_ = removeIgnitionFile(path)
 		return "", fmt.Errorf("writing ignition content: %w", err)
 	}
 
 	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
+		_ = removeIgnitionFile(path)
 		return "", fmt.Errorf("closing ignition file: %w", err)
 	}
 
@@ -195,7 +208,7 @@ func (i *FlatcarInstaller) cleanupIgnitionFile() {
 	if i.ignitionPath == "" {
 		return
 	}
-	if err := os.Remove(i.ignitionPath); err != nil && !os.IsNotExist(err) {
+	if err := removeIgnitionFile(i.ignitionPath); err != nil && !os.IsNotExist(err) {
 		i.Logger.Warn("failed to clean up ignition file", "path", i.ignitionPath, "error", err)
 	}
 	i.ignitionPath = ""
