@@ -35,6 +35,12 @@ type CatalogFetcher interface {
 // errStrictViolation is returned by run when --strict is set and entries are missing.
 var errStrictViolation = errors.New("strict mode: missing curated descriptions")
 
+var newCatalogFetcher = func() CatalogFetcher {
+	return bakery.NewHTTPClient()
+}
+
+var exitFunc = os.Exit
+
 func writef(w io.Writer, format string, a ...any) error {
 	_, err := fmt.Fprintf(w, format, a...)
 	if err != nil {
@@ -52,22 +58,31 @@ func writeln(w io.Writer, a ...any) error {
 }
 
 func main() {
-	strict := flag.Bool("strict", false, "exit 1 if any extensions are missing curated descriptions")
-	arch := flag.String("arch", runtime.GOARCH, "architecture to query (default: host arch)")
-	flag.Parse()
+	exitFunc(mainWithArgs(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func mainWithArgs(args []string, stdout io.Writer, stderr io.Writer) int {
+	fs := flag.NewFlagSet("catalog_check", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	strict := fs.Bool("strict", false, "exit 1 if any extensions are missing curated descriptions")
+	arch := fs.String("arch", runtime.GOARCH, "architecture to query (default: host arch)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	client := bakery.NewHTTPClient()
-
-	if err := run(ctx, os.Stdout, os.Stderr, client, *arch, *strict); err != nil {
+	if err := run(ctx, stdout, stderr, newCatalogFetcher(), *arch, *strict); err != nil {
 		if errors.Is(err, errStrictViolation) {
-			os.Exit(1)
+			return 1
 		}
-		fmt.Fprintf(os.Stderr, "\nERROR: %v\n", err)
-		os.Exit(2)
+		_, _ = fmt.Fprintf(stderr, "\nERROR: %v\n", err)
+		return 2
 	}
+
+	return 0
 }
 
 // run executes the catalog check logic, writing output to w and errors to errW.

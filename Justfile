@@ -135,6 +135,20 @@ cover-check:
             echo "ok    internal/${pkg}  ${pct}%  (target ${targets[$pkg]}%)"
         fi
     done
+    script_pkg=scripts/catalog_check
+    script_target=50
+    script_pct=$(go test -count=1 -cover ./${script_pkg} 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    script_pct=${script_pct%.*}
+    if [[ -z "$script_pct" ]]; then
+        echo "FAIL  ${script_pkg}   no coverage reported"
+        fail=1
+    elif (( script_pct < script_target )); then
+        echo "FAIL  ${script_pkg}  ${script_pct}%  (target ${script_target}%)"
+        fail=1
+    else
+        echo "ok    ${script_pkg}  ${script_pct}%  (target ${script_target}%)"
+    fi
     # Skip cmd packages (main functions can't be unit tested)
     echo "ok    cmd/*  (skipped — main functions untestable)"
     exit $fail
