@@ -22,6 +22,12 @@ echo ""
 
 # ── Fetch Flatcar docs ────────────────────────────────────────────────────────
 echo "Fetching Flatcar NVIDIA docs..."
+if ! command -v curl >/dev/null 2>&1; then
+  echo "ERROR: Could not fetch Flatcar NVIDIA docs from GitHub." >&2
+  echo "  Check network or try: curl -sf '$DOCS_URL'" >&2
+  exit 2
+fi
+
 DOC_CONTENT=$(curl -sf "$DOCS_URL" | python3 -c "
 import sys, json, base64
 data = json.load(sys.stdin)
@@ -33,7 +39,7 @@ print(base64.b64decode(data['content']).decode())
 }
 
 # Extract all nvidia-drivers-* patterns mentioned in the docs.
-DOC_SERIES=$(echo "$DOC_CONTENT" | grep -oE 'nvidia-drivers-[a-z0-9-]+' | sort -u)
+DOC_SERIES=$(printf '%s\n' "$DOC_CONTENT" | grep -oE 'nvidia-drivers-[a-z0-9-]+' | sort -u || true)
 
 echo ""
 echo "Driver series mentioned in Flatcar NVIDIA docs:"
