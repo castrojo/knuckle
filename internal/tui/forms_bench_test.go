@@ -10,7 +10,7 @@ import (
 func BenchmarkReviewSummary(b *testing.B) {
 	m := &Model{
 		Wizard: &wizard.Wizard{
-			State: wizard.State{
+			State: &wizard.State{
 				Config: model.InstallConfig{
 					Hostname: "flatcar-benchmark",
 					Channel:  "stable",
@@ -60,12 +60,12 @@ func BenchmarkReviewSummary(b *testing.B) {
 func BenchmarkRenderZenChrome(b *testing.B) {
 	m := &Model{
 		Wizard: &wizard.Wizard{
-			State: wizard.State{
+			State: &wizard.State{
 				CurrentStep: model.StepNetwork,
 				Config: model.InstallConfig{
 					Channel: "stable",
 				},
-				Channels: []model.ChannelInfo{
+				Channels: []bakery.ChannelInfo{
 					{
 						Channel: "stable",
 						Version: "3815.2.0",
@@ -74,7 +74,7 @@ func BenchmarkRenderZenChrome(b *testing.B) {
 						Docker:  "26.0.0",
 					},
 				},
-				SystemChecks: []model.SystemCheck{
+				SystemChecks: []wizard.SystemCheck{
 					{Name: "disk", Status: "ok"},
 					{Name: "network", Status: "ok"},
 					{Name: "memory", Status: "warn"},
@@ -92,8 +92,8 @@ func BenchmarkRenderZenChrome(b *testing.B) {
 func BenchmarkGetChannelMeta(b *testing.B) {
 	m := &Model{
 		Wizard: &wizard.Wizard{
-			State: wizard.State{
-				Channels: []model.ChannelInfo{
+			State: &wizard.State{
+				Channels: []bakery.ChannelInfo{
 					{Channel: "stable", Version: "3815.2.0", Kernel: "6.6.21", Systemd: "255.4", Docker: "26.0.0"},
 					{Channel: "lts", Version: "3760.2.1", Kernel: "6.1.96", Systemd: "252.22", Docker: "24.0.9"},
 					{Channel: "beta", Version: "3850.0.0", Kernel: "6.7.5", Systemd: "255.4", Docker: "26.0.1"},
@@ -113,8 +113,8 @@ func BenchmarkViewChannelCards(b *testing.B) {
 	m := &Model{
 		cursor: 0,
 		Wizard: &wizard.Wizard{
-			State: wizard.State{
-				Channels: []model.ChannelInfo{
+			State: &wizard.State{
+				Channels: []bakery.ChannelInfo{
 					{Channel: "stable", Version: "3815.2.0", Kernel: "6.6.21", Systemd: "255.4", Docker: "26.0.0"},
 					{Channel: "lts", Version: "3760.2.1", Kernel: "6.1.96", Systemd: "252.22", Docker: "24.0.9"},
 					{Channel: "beta", Version: "3850.0.0", Kernel: "6.7.5", Systemd: "255.4", Docker: "26.0.1"},
