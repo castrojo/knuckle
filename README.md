@@ -238,6 +238,50 @@ internal/wizard/     → step state machine, navigation, validation gates
 - **Security** (`security.yml`) — CodeQL (Go), OSSF Scorecard, dependency-review
 - **Release** (`release.yml`) — triggered on `v*` tags; builds amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`; produces binaries + installer ISOs + cosign bundles
 
+## After Install
+
+Once knuckle finishes, the machine reboots into a running Flatcar system. Here's what to do next.
+
+**Log in** — SSH as the `core` user with the key(s) you provided during setup:
+
+```bash
+ssh core@<ip-or-hostname>
+```
+
+No password login by default; the key you entered (or fetched from GitHub) is the only way in.
+
+**Check the system** — Flatcar is an immutable OS. The root filesystem is read-only; user state lives under `/var`, `/etc`, and `/home`. To see what's running:
+
+```bash
+systemctl list-units --type=service
+journalctl -b          # boot logs
+cat /etc/os-release    # OS version
+```
+
+**System extensions (sysexts)** — if you installed Docker, Kubernetes, or other sysexts, they land in `/etc/extensions/` and activate on the next boot (or immediately via `systemd-sysext refresh`). Check status:
+
+```bash
+systemd-sysext status
+docker version          # if docker sysext was installed
+```
+
+**Updates** — Flatcar auto-updates by default. The update strategy you chose controls how reboots happen:
+
+| Strategy | Behaviour |
+|---|---|
+| `reboot` | Reboots automatically when an update lands |
+| `etcd-lock` | Co-ordinates reboots across a cluster via locksmith |
+| `off` | Downloads updates but never reboots — you reboot manually |
+
+Check update status: `update_engine_client -status`
+
+**Install more software** — the read-only root means traditional package managers don't apply. Options:
+- **Sysexts** — system-level tools (Docker, Kubernetes, Tailscale, NVIDIA) via the [Flatcar Bakery](https://flatcar.github.io/sysext-bakery/)
+- **Containers** — run workloads with Docker or another container runtime
+- **Toolbox / distrobox** — `toolbox enter` drops you into a mutable Fedora container for ad-hoc CLI work
+
+**Reprovisioning** — to change config (add users, switch update strategy, add sysexts), edit the Ignition/Butane source and re-run knuckle. Flatcar is designed for reprovisioning rather than in-place mutation.
+
 ## Community
 
 - [Flatcar on Discord](https://flatcar.org/discord) — chat with the Flatcar community
