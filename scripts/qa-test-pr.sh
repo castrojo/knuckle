@@ -178,15 +178,16 @@ EOF
   log "tier=${TIER} needs_boot=${NEEDS_BOOT} security=${DO_SECURITY}"
 
 # ── 4. Build ──────────────────────────────────────────────────────────────────
+git branch -D "pr${PR}-qa" 2>/dev/null || true
 git fetch upstream "pull/${PR}/head:pr${PR}-qa" -q 2>/dev/null
 SHA=$(git rev-parse "pr${PR}-qa" | head -c 12)
 
 # Use git worktree to isolate PR checkout (avoid mutating dev working tree)
 WORKTREE="/tmp/knuckle-qa-wt-${PR}"
-git worktree add "$WORKTREE" "pr${PR}-qa" 2>/dev/null || {
-  rm -rf "$WORKTREE" 2>/dev/null || true
-  git worktree add "$WORKTREE" "pr${PR}-qa"
-}
+if [[ -e "$WORKTREE" ]]; then
+  git worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
+fi
+git worktree add "$WORKTREE" "pr${PR}-qa"
 
 log "Building ${SHA}..."
 (cd "$WORKTREE" && just build > "${RUNDIR}/build.log" 2>&1) && BUILD_OK=1 || BUILD_OK=0
