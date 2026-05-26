@@ -75,6 +75,9 @@ _fetch_artifacts() {
   _scp_from -r "$GHOST:${WORK_REMOTE}/" "${RUNDIR}/ghost/" 2>/dev/null || true
 }
 
+# _file_issue_on_fail: writes a local issue body file for the operator to review.
+# Does NOT auto-file issues — projectbluefin/knuckle is public; infra/lab failures
+# belong in the private testlab repo, filed manually by the operator.
 _file_issue_on_fail() {
   local report="$1" rundir="$2" summary="$3"
   local issue_file="${rundir}/issue-body.md"
