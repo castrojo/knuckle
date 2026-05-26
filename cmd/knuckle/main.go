@@ -166,6 +166,12 @@ func main() {
 // It returns an error instead of calling os.Exit so callers can test
 // the individual error paths without spawning a subprocess.
 func runHeadless(configPath string, dryRun bool, logFile string) error {
+	return runHeadlessWithRunner(configPath, dryRun, logFile, nil)
+}
+
+// runHeadlessWithRunner is the injectable version of runHeadless.
+// If cmdRunner is nil, a runner is created based on the config's DryRun flag.
+func runHeadlessWithRunner(configPath string, dryRun bool, logFile string, cmdRunner runner.Runner) error {
 	// Set up logging
 	logWriter, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
@@ -188,12 +194,13 @@ func runHeadless(configPath string, dryRun bool, logFile string) error {
 		cfg.DryRun = true
 	}
 
-	// Set up runner
-	var cmdRunner runner.Runner
-	if cfg.DryRun {
-		cmdRunner = runner.NewDryRunner(logger)
-	} else {
-		cmdRunner = runner.NewRealRunner(logger)
+	// Set up runner if not injected
+	if cmdRunner == nil {
+		if cfg.DryRun {
+			cmdRunner = runner.NewDryRunner(logger)
+		} else {
+			cmdRunner = runner.NewRealRunner(logger)
+		}
 	}
 
 	installer := install.NewFlatcarInstaller(cmdRunner, logger)
