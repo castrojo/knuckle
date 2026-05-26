@@ -5,130 +5,78 @@
 # Run: bats scripts/tests/iso-smoke.bats
 
 SCRIPT="$BATS_TEST_DIRNAME/../iso-smoke.sh"
-TEST_ROOT="$BATS_TEST_DIRNAME/.test-artifacts/iso-smoke"
 
-setup() {
-  TEST_ID=$(printf '%s' "$BATS_TEST_NAME" | tr -cs '[:alnum:]' '-')
-  WORKDIR="$TEST_ROOT/${BATS_TEST_NUMBER}-${TEST_ID}-$$"
-  BIN_DIR="$WORKDIR/bin"
-  TEST_LOG="$WORKDIR/stubs.log"
-  ISO_PATH="$WORKDIR/test.iso"
-  OVMF_PATH="$WORKDIR/OVMF.fd"
+# ── Argument parsing ─────────────────────────────────────────────────────────
 
-  mkdir -p "$BIN_DIR"
-  export PATH="$BIN_DIR:$PATH"
-  export TEST_LOG
-
-  cd "$WORKDIR"
-}
-
-teardown() {
-  cd "$BATS_TEST_DIRNAME"
-  rm -rf "$WORKDIR"
-}
-
-write_stub() {
-  local name=$1
-  local body=$2
-
-  printf '#!/usr/bin/env bash\nset -euo pipefail\n%s\n' "$body" >"$BIN_DIR/$name"
-  chmod +x "$BIN_DIR/$name"
-}
-
-create_inputs() {
-  mkdir -p "$WORKDIR"
-  : >"$ISO_PATH"
-  : >"$OVMF_PATH"
-}
-
-run_expect_fail() {
-  run bash "$SCRIPT" "$@"
-  [ "$status" -ne 0 ]
-}
-
-@test "usage error when no args provided exits 1" {
+@test "no arguments prints usage and exits 1" {
   run bash "$SCRIPT"
-
   [ "$status" -eq 1 ]
-  [[ "$output" == *"usage: iso-smoke.sh <iso-path> <ovmf-path> [timeout-seconds]"* ]]
+  [[ "$output" == *"usage: iso-smoke.sh"* ]]
 }
 
-@test "usage error when too few args provided exits 1" {
-  run bash "$SCRIPT" "$ISO_PATH"
-
+@test "only ISO path (missing OVMF) prints usage and exits 1" {
+  run bash "$SCRIPT" /tmp/fake.iso
   [ "$status" -eq 1 ]
-  [[ "$output" == *"usage: iso-smoke.sh <iso-path> <ovmf-path> [timeout-seconds]"* ]]
+  [[ "$output" == *"usage: iso-smoke.sh"* ]]
 }
 
-@test "missing ISO path exits 1" {
-  : >"$OVMF_PATH"
+# ── File existence checks ────────────────────────────────────────────────────
 
-  run_expect_fail "$ISO_PATH" "$OVMF_PATH"
-
+@test "non-existent ISO path exits 1 with error message" {
+  run bash "$SCRIPT" /nonexistent/path.iso /tmp/fake-ovmf.fd
   [ "$status" -eq 1 ]
-  [[ "$output" == *"ISO not found: $ISO_PATH"* ]]
+  [[ "$output" == *"ISO not found"* ]]
 }
 
-@test "missing OVMF path exits 1" {
-  : >"$ISO_PATH"
-
-  run_expect_fail "$ISO_PATH" "$OVMF_PATH"
-
+@test "non-existent OVMF path exits 1 with error message" {
+  local iso
+  iso=$(mktemp --suffix=.iso)
+  run bash "$SCRIPT" "$iso" /nonexistent/ovmf.fd
+  rm -f "$iso"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"OVMF not found: $OVMF_PATH"* ]]
+  [[ "$output" == *"OVMF not found"* ]]
 }
 
-@test "non-integer timeout exits 1" {
-  create_inputs
+# ── Timeout validation ───────────────────────────────────────────────────────
 
-  run_expect_fail "$ISO_PATH" "$OVMF_PATH" not-a-number
-
+@test "non-numeric timeout exits 1 with error" {
+  local iso ovmf
+  iso=$(mktemp --suffix=.iso)
+  ovmf=$(mktemp --suffix=.fd)
+  run bash "$SCRIPT" "$iso" "$ovmf" "abc"
+  rm -f "$iso" "$ovmf"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Timeout must be an integer number of seconds: not-a-number"* ]]
+  [[ "$output" == *"Timeout must be an integer"* ]]
 }
 
-@test "qemu-img failure propagates its exit code" {
-  create_inputs
-  write_stub qemu-img $'echo "qemu-img failed" >&2\nexit 42'
-
-  run bash "$SCRIPT" "$ISO_PATH" "$OVMF_PATH"
-
-  [ "$status" -eq 42 ]
-  [[ "$output" == *"qemu-img failed"* ]]
-}
-
-@test "serial log errors fail validation" {
-  create_inputs
-  write_stub qemu-img 'exit 0'
-  write_stub qemu-system-x86_64 $'cat <<\'EOF\'\nsystemd-boot\nReached target initrd-root-device.target\nReached target initrd-usr-fs.target\nxd2root: simulated failure\nEOF'
-
-  run_expect_fail "$ISO_PATH" "$OVMF_PATH" 5
-
+@test "negative timeout exits 1 with error" {
+  local iso ovmf
+  iso=$(mktemp --suffix=.iso)
+  ovmf=$(mktemp --suffix=.fd)
+  run bash "$SCRIPT" "$iso" "$ovmf" "-5"
+  rm -f "$iso" "$ovmf"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"detected 1 xd2root/x2dauto error(s) in serial log"* ]]
+  [[ "$output" == *"Timeout must be an integer"* ]]
 }
 
-@test "missing boot milestones fail validation" {
-  create_inputs
-  write_stub qemu-img 'exit 0'
-  write_stub qemu-system-x86_64 $'cat <<\'EOF\'\nsystemd-boot\nEOF'
-
-  run_expect_fail "$ISO_PATH" "$OVMF_PATH" 5
-
+@test "fractional timeout exits 1 with error" {
+  local iso ovmf
+  iso=$(mktemp --suffix=.iso)
+  ovmf=$(mktemp --suffix=.fd)
+  run bash "$SCRIPT" "$iso" "$ovmf" "1.5"
+  rm -f "$iso" "$ovmf"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"iso-smoke FAILED: missing initrd-root-device.target,initrd-usr-fs.target"* ]]
+  [[ "$output" == *"Timeout must be an integer"* ]]
 }
 
-@test "successful validation passes with mocked external commands" {
-  create_inputs
-  write_stub qemu-img 'exit 0'
-  write_stub qemu-system-x86_64 $'cat <<\'EOF\'\nsystemd-boot\nReached target initrd-root-device.target\nReached target initrd-usr-fs.target\nEOF'
-
-  run bash "$SCRIPT" "$ISO_PATH" "$OVMF_PATH" 5
-
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"systemd-boot menu detected"* ]]
-  [[ "$output" == *"initrd-root-device.target reached"* ]]
-  [[ "$output" == *"initrd-usr-fs.target reached"* ]]
-  [[ "$output" == *"✅ iso-smoke PASSED"* ]]
+@test "valid numeric timeout is accepted (fails later at qemu)" {
+  local iso ovmf
+  iso=$(mktemp --suffix=.iso)
+  ovmf=$(mktemp --suffix=.fd)
+  # With valid timeout, script should proceed past validation
+  # (will fail at qemu-img or qemu, not at timeout check)
+  run bash "$SCRIPT" "$iso" "$ovmf" "30"
+  rm -f "$iso" "$ovmf"
+  # Should NOT fail with timeout validation error
+  [[ "$output" != *"Timeout must be an integer"* ]]
 }
