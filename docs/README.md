@@ -23,10 +23,10 @@ This directory contains supplementary documentation for knuckle. Files are organ
 
 ## Internal / research
 
-| File | Description |
-|------|-------------|
-| [TUI-WIZARD-PATTERNS.md](TUI-WIZARD-PATTERNS.md) | Internal research on TUI wizard UX patterns from analogous projects. Background for the current wizard design. |
-| [SUBIQUITY-TUI-ANALYSIS.md](SUBIQUITY-TUI-ANALYSIS.md) | Internal analysis of the Ubuntu Subiquity installer TUI. Historical design reference. |
-| [internal/REVIEW-2026-05-19.md](internal/REVIEW-2026-05-19.md) | Principal-engineer review notes — 2026-05-19. |
-| [internal/REVIEW-2026-05-19b.md](internal/REVIEW-2026-05-19b.md) | Principal-engineer review notes — 2026-05-19 (follow-up). |
-| [internal/REVIEW-2026-05-20.md](internal/REVIEW-2026-05-20.md) | Principal-engineer review notes — 2026-05-20. |
+| File | Description | Maintained by |
+|------|-------------|---|
+| [TUI-WIZARD-PATTERNS.md](TUI-WIZARD-PATTERNS.md) | Internal research on TUI wizard UX patterns from analogous projects. Background for the current wizard design. | Human |
+| [SUBIQUITY-TUI-ANALYSIS.md](SUBIQUITY-TUI-ANALYSIS.md) | Internal analysis of the Ubuntu Subiquity installer TUI. Historical design reference. | Human |
+| [internal/REVIEW-2026-05-19.md](internal/REVIEW-2026-05-19.md) | Principal-engineer review notes — 2026-05-19. | Human (guide agent pass) |
+| [internal/REVIEW-2026-05-19b.md](internal/REVIEW-2026-05-19b.md) | Principal-engineer review notes — 2026-05-19 (follow-up). | Human (guide agent pass) |
+| [internal/REVIEW-2026-05-20.md](internal/REVIEW-2026-05-20.md) | Principal-engineer review notes — 2026-05-20. | Human (guide agent pass) |
