@@ -95,8 +95,9 @@ Weekly cron is Mondays at 06:37 UTC — odd minute on purpose, avoids the
 ### `.github/workflows/release.yml`
 
 Builds the binary + installer ISO on `v*` tags, publishes a GitHub Release
-with SHA256 sidecars. See `scripts/build-iso-ci.sh` for the ISO recipe used
-in CI (`grub-mkstandalone` path). Local builds use `scripts/build-iso.sh`.
+with SHA256 sidecars and cosign `.bundle` files (keyless Sigstore signing).
+See `scripts/build-iso-ci.sh` for the ISO recipe used in CI
+(`grub-mkstandalone` path). Local builds use `scripts/build-iso.sh`.
 
 ## Local Reproduction
 

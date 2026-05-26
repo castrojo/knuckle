@@ -53,6 +53,11 @@ This document covers each.
   using GitHub Actions OIDC (keyless). Signatures are recorded in the Sigstore
   Rekor transparency log. Bundles (`.bundle` files) are published alongside
   release artifacts.
+- **Flatcar release GPG signatures.** `channels.go` downloads `.DIGESTS.asc`
+  and `verify.go` validates the signature against the embedded Flatcar signing
+  key (`internal/bakery/keys/flatcar-signing.asc`). If verification fails,
+  `SignedDigest` is set to `false` and a warning is logged. This is separate
+  from knuckle's own release artifact signing (cosign keyless via Sigstore).
 
 ### Verifying a release (users)
 
@@ -80,12 +85,6 @@ The same pattern applies to `knuckle-installer-stable.iso` / `knuckle-installer-
   `{stable,beta,alpha,lts}.release.flatcar-linux.net` but only verifies TLS; no
   hostname pinning beyond the certificate chain. Acceptable for the threat model
   but worth noting.
-- **Flatcar release GPG signatures are cryptographically verified.**
-  `channels.go` downloads `.DIGESTS.asc` and `verify.go` validates the
-  signature against the embedded Flatcar signing key
-  (`internal/bakery/keys/flatcar-signing.asc`). If verification fails,
-  `SignedDigest` is set to false and a warning is logged. This is separate
-  from knuckle’s own release artifact signing (cosign keyless via Sigstore).
 - **Sysext bakery downloads are unverified.** `internal/bakery/bakery.go`
   reads the GitHub Releases API but does not validate the `.sha256` or `.sig`
   alongside each `.raw` artifact. Tracked MEDIUM.
