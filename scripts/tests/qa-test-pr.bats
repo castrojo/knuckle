@@ -146,9 +146,9 @@ teardown() {
   [ -f "$MOCK_GIT_LOG" ]
   run grep -F "worktree prune" "$MOCK_GIT_LOG"
   [ "$status" -eq 0 ]
-  run grep -F "worktree remove /tmp/knuckle-qa-wt-999 --force" "$MOCK_GIT_LOG"
+  run grep -F "worktree remove --force /tmp/knuckle-qa-wt-999" "$MOCK_GIT_LOG"
   [ "$status" -eq 0 ]
-  run grep -F "update-ref -d refs/heads/pr999-qa" "$MOCK_GIT_LOG"
+  run grep -F "branch -D pr999-qa" "$MOCK_GIT_LOG"
   [ "$status" -eq 0 ]
   run grep -F "fetch upstream +pull/999/head:refs/heads/pr999-qa -q" "$MOCK_GIT_LOG"
   [ "$status" -eq 0 ]
