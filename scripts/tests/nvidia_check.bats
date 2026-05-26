@@ -76,12 +76,14 @@ EOF
   [[ "$output" == *"✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs."* ]]
 }
 
-@test "single matching doc series exits 0 and prints the detected series" {
+@test "single matching doc series exits 0, prints the detected series, and notes model-only entries" {
   mock_curl_json $'Use `nvidia-drivers-570-open` for modern GPUs.'
 
   run_script
   [ "$status" -eq 0 ]
   [[ "$output" == *"570-open  (nvidia-drivers-570-open)"* ]]
+  [[ "$output" == *"NOTE: 550-open is in model.go but not mentioned in current Flatcar docs"* ]]
+  [[ "$output" == *"(This is normal — docs typically only show the recommended series)"* ]]
   [[ "$output" == *"✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs."* ]]
   [[ "$output" != *"ACTION REQUIRED"* ]]
 }
