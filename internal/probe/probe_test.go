@@ -119,6 +119,40 @@ func TestListDisksError(t *testing.T) {
 	}
 }
 
+func TestListDisksFiltersRemovableAndSmallDisks(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	spy.StubResponse("lsblk --json --bytes --output NAME,PATH,MODEL,SERIAL,SIZE,TRAN,RM,TYPE,FSTYPE,LABEL,MOUNTPOINT", &runner.Result{
+		Stdout: `{"blockdevices":[
+			{"name":"sdb","path":"/dev/sdb","size":17179869184,"rm":true,"type":"disk"},
+			{"name":"sdc","path":"/dev/sdc","size":4294967296,"rm":false,"type":"disk"},
+			{"name":"sdd","path":"/dev/sdd","model":"Test Disk","serial":"disk-123","size":34359738368,"tran":"sata","rm":false,"type":"disk"}
+		]}`,
+	})
+
+	prober := NewSystemProber(spy)
+	disks, err := prober.ListDisks(context.Background())
+	if err != nil {
+		t.Fatalf("ListDisks() error: %v", err)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected only valid disk to remain, got %d disks: %#v", len(disks), disks)
+	}
+
+	disk := disks[0]
+	if disk.DevPath != "/dev/sdd" {
+		t.Fatalf("valid disk DevPath = %q, want /dev/sdd", disk.DevPath)
+	}
+	if disk.Path != "/dev/sdd" {
+		t.Fatalf("valid disk Path = %q, want /dev/sdd fallback", disk.Path)
+	}
+	if disk.Removable {
+		t.Error("valid disk should not be marked removable")
+	}
+	if disk.Size != 34359738368 {
+		t.Errorf("valid disk Size = %d, want %d", disk.Size, uint64(34359738368))
+	}
+}
+
 func TestListNetworkInterfacesInvalidJSON(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	spy.StubResponse("ip -j addr show", &runner.Result{
