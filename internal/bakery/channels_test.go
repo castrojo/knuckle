@@ -100,6 +100,83 @@ func TestFetchChannelInfoHTTPError(t *testing.T) {
 	}
 }
 
+func TestFetchChannelInfo_Issue487SuccessPath(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stable/current/version.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("FLATCAR_VERSION=\"4593.2.0\"\nFLATCAR_BUILD_ID=\"2026-04-14-0806\"\n"))
+	})
+	mux.HandleFunc("/stable/current/flatcar_production_image_sbom.json", func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("/stable/current/flatcar_production_image_packages.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Join([]string{
+			"sys-kernel/coreos-kernel-6.12.81::coreos-overlay",
+			"sys-apps/systemd-257.9::coreos-overlay",
+			"sys-apps/ignition-2.24.0-r1::coreos-overlay",
+			"dev-db/etcd-3.5.18::coreos-overlay",
+		}, "\n")))
+	})
+	mux.HandleFunc("/stable/current/rootfs-included-sysexts/docker-flatcar_packages.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("app-containers/docker-28.0.4::coreos-overlay\n"))
+	})
+	mux.HandleFunc("/stable/current/rootfs-included-sysexts/containerd-flatcar_packages.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("app-containers/containerd-2.1.5::coreos-overlay\n"))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldClient := channelHTTPClient
+	channelHTTPClient = srv.Client()
+	defer func() { channelHTTPClient = oldClient }()
+
+	info, err := fetchChannelInfoFromURLs(
+		context.Background(),
+		"stable",
+		srv.URL+"/stable/current/version.txt",
+		srv.URL+"/stable/current/flatcar_production_image_packages.txt",
+	)
+	if err != nil {
+		t.Fatalf("fetchChannelInfoFromURLs() error = %v", err)
+	}
+	if info.Version != "4593.2.0" || info.BuildDate != "2026-04-14" {
+		t.Fatalf("unexpected version metadata: %+v", info)
+	}
+	if info.Kernel != "6.12.81" || info.Systemd != "257.9" || info.Ignition != "2.24.0" || info.Etcd != "3.5.18" {
+		t.Fatalf("unexpected base package metadata: %+v", info)
+	}
+	if info.Docker != "28.0.4" || info.Containerd != "2.1.5" {
+		t.Fatalf("unexpected sysext package metadata: %+v", info)
+	}
+}
+
+func TestFetchChannelInfo_Issue487HTTPErrorIncludesStatus(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stable/current/version.txt", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldClient := channelHTTPClient
+	channelHTTPClient = srv.Client()
+	defer func() { channelHTTPClient = oldClient }()
+
+	_, err := fetchChannelInfoFromURLs(
+		context.Background(),
+		"stable",
+		srv.URL+"/stable/current/version.txt",
+		srv.URL+"/stable/current/flatcar_production_image_packages.txt",
+	)
+	if err == nil {
+		t.Fatal("fetchChannelInfoFromURLs() error = nil, want HTTP 500")
+	}
+	if !strings.Contains(err.Error(), "HTTP 500") {
+		t.Fatalf("fetchChannelInfoFromURLs() error = %v, want HTTP 500", err)
+	}
+}
+
 func TestParseVersionTxt(t *testing.T) {
 	info := &ChannelInfo{}
 	parseVersionTxt(mockVersionTxt, info)
