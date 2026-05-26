@@ -15,6 +15,10 @@ func forceInterface(v reflect.Value) any {
 	if v.CanInterface() {
 		return v.Interface()
 	}
+	// SAFETY: v is a reflect.Value of an unexported struct field that is not
+	// addressable via CanInterface(). UnsafeAddr() is valid because we checked
+	// the field exists via reflection on a non-nil, addressable struct pointer.
+	// This pattern is test-only; it is never called in production code.
 	return reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem().Interface()
 }
 
