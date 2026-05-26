@@ -276,4 +276,4 @@ jobs:
       - name: Install bats
         run: sudo apt-get update -qq && sudo apt-get install -y bats
       - name: Run BATS tests
-        run: bats scripts/tests/
+        run: bats scripts/tests/*.bats
