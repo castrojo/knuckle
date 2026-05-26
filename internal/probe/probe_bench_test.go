@@ -87,12 +87,12 @@ func BenchmarkDetectNvidiaGPUs(b *testing.B) {
 
 func BenchmarkHumanSize(b *testing.B) {
 	sizes := []uint64{
-		512,                    // bytes
-		2048,                   // KB
-		5 * 1024 * 1024,        // MB
-		100 * 1024 * 1024,      // MB
-		1024 * 1024 * 1024,     // GB
-		500 * 1024 * 1024 * 1024, // GB
+		512,                           // bytes
+		2048,                          // KB
+		5 * 1024 * 1024,               // MB
+		100 * 1024 * 1024,             // MB
+		1024 * 1024 * 1024,            // GB
+		500 * 1024 * 1024 * 1024,      // GB
 		2 * 1024 * 1024 * 1024 * 1024, // TB
 	}
 
