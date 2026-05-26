@@ -31,7 +31,7 @@ func TestBuildNetworkForm_StateCoverageAndValidators(t *testing.T) {
 		{
 			name:             "empty interfaces slice",
 			interfaces:       []model.NetworkInterface{},
-			networkMode:      model.NetworkDHCP,
+			networkMode:      model.NetworkDHCP.String(),
 			wantGroupCount:   2,
 			wantInterfaceOps: 1,
 		},
@@ -41,7 +41,7 @@ func TestBuildNetworkForm_StateCoverageAndValidators(t *testing.T) {
 				{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
 				{Name: "wlan0", MAC: "AA:BB:CC:DD:EE:FF", State: "down"},
 			},
-			networkMode:      model.NetworkStatic,
+			networkMode:      model.NetworkStatic.String(),
 			address:          "192.168.1.100/24",
 			gateway:          "192.168.1.1",
 			dns:              "1.1.1.1,8.8.8.8",
