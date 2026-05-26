@@ -21,8 +21,8 @@ func TestWordWrap_Empty(t *testing.T) {
 
 func TestWordWrap_ZeroWidth(t *testing.T) {
 	lines := wordWrap("hello world", 0)
-	if len(lines) != 1 {
-		t.Errorf("zero width: want 1 line, got %d", len(lines))
+	if len(lines) != 1 || lines[0] != "hello world" {
+		t.Errorf("zero width: want [\"hello world\"], got %v", lines)
 	}
 }
 
@@ -47,8 +47,8 @@ func TestWordWrap_BreaksOnBoundary(t *testing.T) {
 func TestWordWrap_WhitespaceOnly(t *testing.T) {
 	lines := wordWrap("   ", 80)
 	// strings.Fields on whitespace-only → empty slice → return [""]
-	if len(lines) != 1 {
-		t.Errorf("whitespace-only: want 1 line, got %d: %v", len(lines), lines)
+	if len(lines) != 1 || lines[0] != "" {
+		t.Errorf("whitespace-only: want [\"\"], got %v", lines)
 	}
 }
 

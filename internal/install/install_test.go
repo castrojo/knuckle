@@ -63,6 +63,7 @@ func TestInstallWithGeneratedConfig(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	// Check basic structure: -d /dev/sda -C stable -i <some-temp-path>
 	if len(installCall.Args) < 6 {
@@ -115,6 +116,7 @@ func TestInstallWithExternalURL(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	wantArgs := []string{"-d", "/dev/vda", "-C", "beta", "-I", "https://example.com/config.ign"}
 	if len(installCall.Args) != len(wantArgs) {
@@ -548,6 +550,7 @@ func TestInstallWithSysexts(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	// The ignition file passed to -i must have been generated (sysext URLs included)
 	if len(installCall.Args) < 5 || installCall.Args[4] != "-i" {
@@ -613,8 +616,31 @@ func TestCleanupIgnitionFile_AlreadyRemoved(t *testing.T) {
 	// cleanupIgnitionFile on a path that no longer exists should be silent.
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
-	installer.ignitionPath = "/tmp/knuckle-test-nonexistent-file-xyz"
+	installer.ignitionPath = "/nonexistent-path-that-does-not-exist-xyz"
 	installer.cleanupIgnitionFile() // os.IsNotExist → no warning
+	if installer.ignitionPath != "" {
+		t.Error("ignitionPath should be cleared after cleanup")
+	}
+}
+
+func TestCleanupIgnitionFile_RemovesCreateTempFile(t *testing.T) {
+	file, err := os.CreateTemp(".", "ignition-cleanup-*.json")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	path := file.Name()
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	installer := NewFlatcarInstaller(runner.NewSpyRunner(), testLogger())
+	installer.ignitionPath = path
+	installer.cleanupIgnitionFile()
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected %q to be removed, stat err = %v", path, err)
+	}
 	if installer.ignitionPath != "" {
 		t.Error("ignitionPath should be cleared after cleanup")
 	}

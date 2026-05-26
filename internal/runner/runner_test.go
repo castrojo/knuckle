@@ -3,8 +3,10 @@ package runner
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -120,6 +122,31 @@ func TestSpyRunnerRecordsCalls(t *testing.T) {
 	}
 }
 
+func TestSpyRunnerAllErrorAppliesToRunWithInput(t *testing.T) {
+	spy := NewSpyRunner()
+	ctx := context.Background()
+	wantErr := errors.New("all commands fail")
+	spy.AllError = wantErr
+
+	result, err := spy.RunWithInput(ctx, "payload", "tee", "out.txt")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("RunWithInput() error = %v, want %v", err, wantErr)
+	}
+	if result == nil {
+		t.Fatal("RunWithInput() result = nil, want non-nil result")
+		return
+	}
+	if result.ExitCode != 1 {
+		t.Errorf("RunWithInput() exit code = %d, want 1", result.ExitCode)
+	}
+	if len(spy.Calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(spy.Calls))
+	}
+	if spy.Calls[0].Input != "payload" {
+		t.Errorf("RunWithInput() recorded input = %q, want %q", spy.Calls[0].Input, "payload")
+	}
+}
+
 func TestRealRunnerExecutes(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	rr := NewRealRunner(logger)
@@ -146,5 +173,42 @@ func TestRealRunnerExecutes(t *testing.T) {
 	}
 	if res.Stdout != "from stdin" {
 		t.Errorf("expected stdout %q, got %q", "from stdin", res.Stdout)
+	}
+}
+
+func TestRealRunnerRunNonexistentCommand(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rr := NewRealRunner(logger)
+
+	result, err := rr.Run(context.Background(), "/nonexistent-command")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !strings.Contains(err.Error(), `command "/nonexistent-command" failed:`) {
+		t.Fatalf("error = %q, want wrapped command failure", err)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("error = %v, want fs.ErrNotExist", err)
+	}
+}
+
+func TestRealRunnerRunContextCanceled(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	rr := NewRealRunner(logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := rr.Run(ctx, "sleep", "1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
 	}
 }

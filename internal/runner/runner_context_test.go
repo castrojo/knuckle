@@ -33,6 +33,7 @@ func TestRealRunner_ContextTimeout(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected result on timeout, got nil")
+		return
 	}
 	if result.ExitCode == 0 {
 		t.Errorf("expected non-zero exit code on timeout, got 0")
