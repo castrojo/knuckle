@@ -75,7 +75,11 @@ SCRIPT="$BATS_TEST_DIRNAME/../iso-smoke.sh"
   ovmf=$(mktemp --suffix=.fd)
   # With valid timeout, script should proceed past validation
   # (will fail at qemu-img or qemu, not at timeout check)
-  run bash "$SCRIPT" "$iso" "$ovmf" "30"
+  if command -v qemu-img >/dev/null 2>&1 && command -v qemu-system-x86_64 >/dev/null 2>&1; then
+    run bash "$SCRIPT" "$iso" "$ovmf" "30"
+  else
+    run -127 bash "$SCRIPT" "$iso" "$ovmf" "30"
+  fi
   rm -f "$iso" "$ovmf"
   # Should NOT fail with timeout validation error
   [[ "$output" != *"Timeout must be an integer"* ]]
