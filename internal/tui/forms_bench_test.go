@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/wizard"
 )
