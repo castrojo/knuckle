@@ -44,14 +44,14 @@
 | `internal/iso`       | 100%  | 70%  | (n/a)                     |
 | `internal/validate`  |  97%  | 85%  | ≥ 95%                     |
 | `internal/ignition`  |  93%  | 85%  | ≥ 90%                     |
-| `internal/github`    |  90%  | 85%  | (n/a)                     |
+| `internal/github`    |  94%  | 85%  | (n/a)                     |
 | `internal/headless`  | 98.5% | 98%  | (n/a)                     |
 | `internal/bakery`    | 97.8% | 97%  | ≥ 85%                     |
 | `internal/runner`    |  81%  | 80%  | ≥ 80%                     |
 | `internal/probe`     |  81%  | 80%  | ≥ 85%                     |
 | `internal/wizard`    | 99.5% | 99%  | ≥ 85%                     |
 | `internal/install`   | 98.8% | 98%  | ≥ 80%                     |
-| `internal/tui`       | 94.1% | 94%  | ≥ 85%                     |
+| `internal/tui`       | 94.3% | 94%  | ≥ 85%                     |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
@@ -124,6 +124,62 @@ If `just ci` passes locally but fails in CI, the gap is one of:
 - Don't reach for the network in a unit test. Use `httptest.NewServer` or a
   `SpyRunner` stub. Integration tests that hit real APIs go behind
   `//go:build integration`.
+
+### Test Scaffold Patterns
+
+**Bubble Tea TUI — `noopMsg{}` to reach form-state delegation**
+
+`tui.Update()` has a `case tea.WindowSizeMsg:` that returns early when
+`m.activeForm != nil`, bypassing form-state lines 244-256. A sentinel message
+type that falls through all switch arms forces delegation to the active form:
+
+```go
+type noopMsg struct{}
+
+m := newTestModel(t)
+m.activeForm = buildTestForm() // set form with pre-configured State
+m, _ = m.Update(noopMsg{})    // reaches form delegation path
+```
+
+**Bubble Tea TUI — testing `huh` form state transitions**
+
+`huh.Form.State` is an exported field; `huh.StateCompleted` and
+`huh.StateAborted` are exported constants. No mocking required:
+
+```go
+f := huh.NewForm(huh.NewGroup(huh.NewNote().Title("test")))
+f.State = huh.StateCompleted
+m.activeForm = f
+m, _ = m.Update(noopMsg{})
+// assert m.activeForm == nil (form cleared after completion)
+```
+
+**`internal/github` — `io.ReadAll` error path via custom transport**
+
+Inject a failing `http.RoundTripper` to exercise the `io.ReadAll` error branch
+(github.go line 66-68) without touching any real network:
+
+```go
+type errReader struct{}
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("injected read error") }
+
+type brokenBodyTransport struct{}
+func (brokenBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+    return &http.Response{
+        StatusCode: http.StatusOK,
+        Header:     make(http.Header),
+        Body:       io.NopCloser(errReader{}),
+    }, nil
+}
+
+client := &http.Client{Transport: brokenBodyTransport{}}
+```
+
+**Dead code note — `panelWidth < 20` in `renderDetailPanel` (tui.go:984-986)**
+
+This guard is unreachable. `effectiveWidth < 60` returns early first; when
+`effectiveWidth >= 60`, `panelWidth = min(52, effectiveWidth-32) >= 28 > 20`
+always. The `panelWidth < 20` block is dead code and can be removed if desired.
 
 ## Adding a CI Job
 
@@ -232,5 +288,6 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
 - Verify `ens3` vs `eth0` interface name in static-network vm-e2e pass.
 - Add fixture gaps: `lsblk-empty.json`, `lsblk-all-removable.json`,
   `ip_addr-ipv6-only.json`, `bakery-malformed-digests` (from QA review).
-- Raise `tui` coverage (currently 52%) by extracting more pure logic into
-  `wizard` / `validate`.
+- ~~Raise `tui` coverage (currently 52%) by extracting more pure logic into
+  `wizard` / `validate`~~ — **progress** (2026-05-26, quality agent raised tui
+  to 94.3% via `quality_coverage_test.go`; PR #521 adds form-state and render tests).
