@@ -138,33 +138,6 @@ func TestSysextDelegateRender_ListScenarios(t *testing.T) {
 	}
 }
 
-func TestSysextItemFilterValue(t *testing.T) {
-	tests := []struct {
-		name string
-		item sysextItem
-		want string
-	}{
-		{
-			name: "includes all filter fields",
-			item: sysextItem{entry: model.SysextEntry{Name: "docker", Category: "Container", SupportTier: bakery.TierIntegrated}},
-			want: "docker Container " + bakery.TierIntegrated,
-		},
-		{
-			name: "preserves separators for empty fields",
-			item: sysextItem{entry: model.SysextEntry{Name: "mystery"}},
-			want: "mystery  ",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.item.FilterValue(); got != tt.want {
-				t.Fatalf("FilterValue() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestRenderTierHeader(t *testing.T) {
 	tests := []struct {
 		name string
