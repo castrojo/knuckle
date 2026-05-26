@@ -217,11 +217,11 @@ internal/wizard/     → step state machine, navigation, validation gates
 ## Tech Stack
 
 - [Go](https://go.dev) 1.26+ (CGO_ENABLED=0, static binary)
-- [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) — TUI framework
-- [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) — styling
-- [Huh v2](https://github.com/charmbracelet/huh) — form inputs (Dracula theme)
-- [Bubbles v2](https://github.com/charmbracelet/bubbles) — reusable components
-- [Butane v0.27](https://github.com/coreos/butane) — Ignition config compilation (in-process)
+- [Bubble Tea v2.0.6](https://charm.land/bubbletea/v2) — TUI framework
+- [Lip Gloss v2.0.3](https://charm.land/lipgloss/v2) — styling
+- [Huh v2.0.3](https://charm.land/huh/v2) — form inputs (Dracula theme)
+- [Bubbles v2.1.0](https://charm.land/bubbles/v2) — reusable components
+- [Butane v0.28](https://github.com/coreos/butane) — Ignition config compilation (in-process)
 - [ProtonMail/go-crypto](https://github.com/ProtonMail/go-crypto) — GPG signature verification
 - [flatcar-install](https://www.flatcar.org/docs/latest/installing/bare-metal/installing-to-disk/) — disk provisioning
 
