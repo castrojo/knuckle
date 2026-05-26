@@ -118,7 +118,7 @@ remove_worktree_path() {
     git worktree remove "$path" --force 2>/dev/null || true
   fi
 
-  [[ -e "$path" ]] && rm -rf "$path"
+  if [[ -e "$path" ]]; then rm -rf "$path"; fi
 }
 
 cleanup_pr_checkout() {
