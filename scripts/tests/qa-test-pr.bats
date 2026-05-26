@@ -290,3 +290,131 @@ teardown() {
   [[ "$output" == *"tier=0"* ]]
   [[ "$output" == *"needs_boot=0"* ]]
 }
+
+# ── Worktree self-heal (commit b16d36a) ──────────────────────────────────────
+
+@test "stale branch is deleted before fetch" {
+  # Replace git mock with one that logs invocations
+  GIT_LOG="$MOCK_DIR/git_invocations.log"
+  cat > "$MOCK_DIR/git" << 'GITEOF'
+#!/usr/bin/env bash
+echo "$*" >> "${GIT_LOG:-/dev/null}"
+case "$1" in
+  branch)   exit 0 ;;
+  fetch)    exit 0 ;;
+  rev-parse) echo "abcdef123456" ;;
+  worktree) exit 0 ;;
+  *)        exit 0 ;;
+esac
+GITEOF
+  chmod +x "$MOCK_DIR/git"
+  export GIT_LOG
+
+  export MOCK_GH_PR_JSON='{"title":"doc","headRefName":"docs/readme","labels":[{"name":"size:S"},{"name":"docs"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="doc"
+  export MOCK_PR_BRANCH="docs/readme"
+  export MOCK_PR_LABELS="size:S, docs"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+
+  run bash "$SCRIPT" 999 2>&1
+
+  # Verify branch -D is called before fetch
+  [ -f "$GIT_LOG" ]
+  grep -q "branch -D pr999-qa" "$GIT_LOG"
+  # branch -D must appear before fetch
+  branch_line=$(grep -n "branch -D" "$GIT_LOG" | head -1 | cut -d: -f1)
+  fetch_line=$(grep -n "fetch upstream" "$GIT_LOG" | head -1 | cut -d: -f1)
+  [ "$branch_line" -lt "$fetch_line" ]
+}
+
+@test "stale worktree directory triggers cleanup before add" {
+  # Pre-create the worktree path to trigger the self-heal branch
+  WORKTREE_PATH="/tmp/knuckle-qa-wt-999"
+  mkdir -p "$WORKTREE_PATH"
+
+  GIT_LOG="$MOCK_DIR/git_invocations.log"
+  cat > "$MOCK_DIR/git" << 'GITEOF'
+#!/usr/bin/env bash
+echo "$*" >> "${GIT_LOG:-/dev/null}"
+case "$1" in
+  branch)   exit 0 ;;
+  fetch)    exit 0 ;;
+  rev-parse) echo "abcdef123456" ;;
+  worktree)
+    if [[ "$2" == "remove" ]]; then
+      # Simulate successful removal
+      rm -rf "$3" 2>/dev/null || true
+      exit 0
+    fi
+    exit 0
+    ;;
+  *)        exit 0 ;;
+esac
+GITEOF
+  chmod +x "$MOCK_DIR/git"
+  export GIT_LOG
+
+  export MOCK_GH_PR_JSON='{"title":"doc","headRefName":"docs/readme","labels":[{"name":"size:S"},{"name":"docs"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="doc"
+  export MOCK_PR_BRANCH="docs/readme"
+  export MOCK_PR_LABELS="size:S, docs"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+
+  run bash "$SCRIPT" 999 2>&1
+
+  # Verify worktree remove --force was invoked
+  [ -f "$GIT_LOG" ]
+  grep -q "worktree remove --force /tmp/knuckle-qa-wt-999" "$GIT_LOG"
+  # worktree remove must appear before worktree add
+  remove_line=$(grep -n "worktree remove" "$GIT_LOG" | head -1 | cut -d: -f1)
+  add_line=$(grep -n "worktree add" "$GIT_LOG" | head -1 | cut -d: -f1)
+  [ "$remove_line" -lt "$add_line" ]
+
+  # Cleanup
+  rm -rf "$WORKTREE_PATH" 2>/dev/null || true
+}
+
+@test "worktree fallback to rm -rf when git worktree remove fails" {
+  # Pre-create the worktree path
+  WORKTREE_PATH="/tmp/knuckle-qa-wt-999"
+  mkdir -p "$WORKTREE_PATH"
+  touch "$WORKTREE_PATH/sentinel"
+
+  GIT_LOG="$MOCK_DIR/git_invocations.log"
+  cat > "$MOCK_DIR/git" << 'GITEOF'
+#!/usr/bin/env bash
+echo "$*" >> "${GIT_LOG:-/dev/null}"
+case "$1" in
+  branch)   exit 0 ;;
+  fetch)    exit 0 ;;
+  rev-parse) echo "abcdef123456" ;;
+  worktree)
+    if [[ "$2" == "remove" ]]; then
+      # Simulate failure — rm -rf fallback should clean up
+      exit 1
+    fi
+    exit 0
+    ;;
+  *)        exit 0 ;;
+esac
+GITEOF
+  chmod +x "$MOCK_DIR/git"
+  export GIT_LOG
+
+  export MOCK_GH_PR_JSON='{"title":"doc","headRefName":"docs/readme","labels":[{"name":"size:S"},{"name":"docs"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="doc"
+  export MOCK_PR_BRANCH="docs/readme"
+  export MOCK_PR_LABELS="size:S, docs"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+
+  run bash "$SCRIPT" 999 2>&1
+
+  # The rm -rf fallback should have removed the directory
+  [ ! -d "$WORKTREE_PATH" ]
+
+  # Cleanup (in case test logic changes)
+  rm -rf "$WORKTREE_PATH" 2>/dev/null || true
+}
