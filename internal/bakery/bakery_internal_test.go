@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestTruncateDescription_Short(t *testing.T) {
@@ -175,5 +176,41 @@ func TestTruncateDescription_ZeroWidthJoiner(t *testing.T) {
 	runeCount := len([]rune(got))
 	if runeCount > 8 {
 		t.Errorf("ZWJ: rune count %d > maxLen 8; got %q", runeCount, got)
+	}
+}
+
+func TestTruncateDescription_Issue486RegressionCases(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		input  string
+		maxLen int
+		want   string
+	}{
+		{name: "ascii exact max", input: strings.Repeat("a", 8), maxLen: 8, want: strings.Repeat("a", 8)},
+		{name: "ascii exceeding max", input: "abcdefghij", maxLen: 8, want: "abcde..."},
+		{name: "empty string", input: "", maxLen: 8, want: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := truncateDescription(tc.input, tc.maxLen)
+			if got != tc.want {
+				t.Fatalf("truncateDescription(%q, %d) = %q, want %q", tc.input, tc.maxLen, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTruncateDescription_Issue486Regression_UTF8Boundary(t *testing.T) {
+	t.Parallel()
+
+	got := truncateDescription("🙂🙂🙂🙂🙂🙂🙂", 6)
+	if got != "🙂🙂🙂..." {
+		t.Fatalf("truncateDescription UTF-8 boundary = %q, want %q", got, "🙂🙂🙂...")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateDescription returned invalid UTF-8: %q", got)
 	}
 }
