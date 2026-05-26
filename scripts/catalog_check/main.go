@@ -35,6 +35,22 @@ type CatalogFetcher interface {
 // errStrictViolation is returned by run when --strict is set and entries are missing.
 var errStrictViolation = errors.New("strict mode: missing curated descriptions")
 
+func writef(w io.Writer, format string, a ...any) error {
+	_, err := fmt.Fprintf(w, format, a...)
+	if err != nil {
+		return fmt.Errorf("writing report: %w", err)
+	}
+	return nil
+}
+
+func writeln(w io.Writer, a ...any) error {
+	_, err := fmt.Fprintln(w, a...)
+	if err != nil {
+		return fmt.Errorf("writing report: %w", err)
+	}
+	return nil
+}
+
 func main() {
 	strict := flag.Bool("strict", false, "exit 1 if any extensions are missing curated descriptions")
 	arch := flag.String("arch", runtime.GOARCH, "architecture to query (default: host arch)")
@@ -58,16 +74,26 @@ func main() {
 // It returns errStrictViolation if strict is true and entries are missing,
 // or a wrapped error if the catalog fetch fails.
 func run(ctx context.Context, w io.Writer, errW io.Writer, fetcher CatalogFetcher, arch string, strict bool) error {
-	fmt.Fprintln(w, "catalog_check — verifying descriptions.go against live Flatcar Bakery")
-	fmt.Fprintln(w, strings.Repeat("─", 70))
-	fmt.Fprintln(w)
+	if err := writeln(w, "catalog_check — verifying descriptions.go against live Flatcar Bakery"); err != nil {
+		return err
+	}
+	if err := writeln(w, strings.Repeat("─", 70)); err != nil {
+		return err
+	}
+	if err := writeln(w); err != nil {
+		return err
+	}
 
-	fmt.Fprintf(w, "Fetching live bakery catalog (%s)... ", arch)
+	if err := writef(w, "Fetching live bakery catalog (%s)... ", arch); err != nil {
+		return err
+	}
 	entries, err := fetcher.FetchCatalogArch(ctx, arch)
 	if err != nil {
 		return fmt.Errorf("fetching catalog: %w", err)
 	}
-	fmt.Fprintf(w, "%d extensions found\n\n", len(entries))
+	if err := writef(w, "%d extensions found\n\n", len(entries)); err != nil {
+		return err
+	}
 
 	// Sort by name for stable output.
 	sort.Slice(entries, func(i, j int) bool {
@@ -78,53 +104,97 @@ func run(ctx context.Context, w io.Writer, errW io.Writer, fetcher CatalogFetche
 
 	for _, e := range entries {
 		if meta, ok := bakery.Lookup(e.Name); ok {
-			fmt.Fprintf(w, "  ok       %-22s  v%-12s  %s · %s\n",
-				e.Name, e.Version, meta.SupportTier, meta.Category)
+			if err := writef(w, "  ok       %-22s  v%-12s  %s · %s\n",
+				e.Name, e.Version, meta.SupportTier, meta.Category); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(w, "  MISSING  %-22s  v%s\n", e.Name, e.Version)
+			if err := writef(w, "  MISSING  %-22s  v%s\n", e.Name, e.Version); err != nil {
+				return err
+			}
 		}
 	}
 
-	fmt.Fprintln(w)
-	fmt.Fprintf(w, "Result: %d covered, %d missing\n", covered, len(missing))
+	if err := writeln(w); err != nil {
+		return err
+	}
+	if err := writef(w, "Result: %d covered, %d missing\n", covered, len(missing)); err != nil {
+		return err
+	}
 
 	if len(missing) == 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "✓ All live bakery extensions have curated descriptions.")
-		fmt.Fprintln(w, "  No action needed.")
+		if err := writeln(w); err != nil {
+			return err
+		}
+		if err := writeln(w, "✓ All live bakery extensions have curated descriptions."); err != nil {
+			return err
+		}
+		if err := writeln(w, "  No action needed."); err != nil {
+			return err
+		}
 		return nil
 	}
 
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "─── Missing entries ────────────────────────────────────────────────────")
-	fmt.Fprintf(w, "Add the following to extensionCatalog in internal/bakery/descriptions.go:\n\n")
+	if err := writeln(w); err != nil {
+		return err
+	}
+	if err := writeln(w, "─── Missing entries ────────────────────────────────────────────────────"); err != nil {
+		return err
+	}
+	if err := writef(w, "Add the following to extensionCatalog in internal/bakery/descriptions.go:\n\n"); err != nil {
+		return err
+	}
 
 	for _, m := range missing {
-		fmt.Fprintf(w, "// %s v%s — source: %s\n", m.Name, m.Version, m.URL)
-		fmt.Fprintf(w, `"%s": {
+		if err := writef(w, "// %s v%s — source: %s\n", m.Name, m.Version, m.URL); err != nil {
+			return err
+		}
+		if err := writef(w, `"%s": {
 	Category:    "TODO", // e.g. "Container Runtime", "Networking", "Orchestration"
 	SupportTier: bakery.TierMaintained, // or TierIntegrated, TierExperimental
 	Short:       "TODO: one-line description (~80 chars)",
 	Long:        "TODO: 3–5 sentence description shown in the detail panel.",
 	Caveats:     nil,
 },
-`, m.Name)
-		fmt.Fprintln(w)
+`, m.Name); err != nil {
+			return err
+		}
+		if err := writeln(w); err != nil {
+			return err
+		}
 	}
 
-	fmt.Fprintln(w, "─── Checklist ──────────────────────────────────────────────────────────")
-	fmt.Fprintln(w, "1. Add the entry/entries above to internal/bakery/descriptions.go")
-	fmt.Fprintf(w, "2. Add %-22q to allKnownExtensions in internal/bakery/descriptions_test.go\n", missing[0].Name)
-	fmt.Fprintln(w, "3. Add a row to docs/SYSEXTS.md under the appropriate category")
-	fmt.Fprintln(w, "4. Run: just ci")
-	fmt.Fprintln(w)
+	if err := writeln(w, "─── Checklist ──────────────────────────────────────────────────────────"); err != nil {
+		return err
+	}
+	if err := writeln(w, "1. Add the entry/entries above to internal/bakery/descriptions.go"); err != nil {
+		return err
+	}
+	if err := writef(w, "2. Add %-22q to allKnownExtensions in internal/bakery/descriptions_test.go\n", missing[0].Name); err != nil {
+		return err
+	}
+	if err := writeln(w, "3. Add a row to docs/SYSEXTS.md under the appropriate category"); err != nil {
+		return err
+	}
+	if err := writeln(w, "4. Run: just ci"); err != nil {
+		return err
+	}
+	if err := writeln(w); err != nil {
+		return err
+	}
 
 	if strict {
-		fmt.Fprintf(errW, "FAIL: %d extension(s) missing curated descriptions (--strict)\n", len(missing))
+		if err := writef(errW, "FAIL: %d extension(s) missing curated descriptions (--strict)\n", len(missing)); err != nil {
+			return err
+		}
 		return errStrictViolation
 	}
 
-	fmt.Fprintf(w, "⚠ %d extension(s) are missing curated descriptions.\n", len(missing))
-	fmt.Fprintln(w, "  Run 'just catalog-check-strict' to enforce as a hard gate.")
+	if err := writef(w, "⚠ %d extension(s) are missing curated descriptions.\n", len(missing)); err != nil {
+		return err
+	}
+	if err := writeln(w, "  Run 'just catalog-check-strict' to enforce as a hard gate."); err != nil {
+		return err
+	}
 	return nil
 }
