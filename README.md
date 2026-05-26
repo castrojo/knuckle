@@ -94,6 +94,13 @@ just build-arm64
 | `--demo` | false | Mock hardware and catalog data — no network, no real disks; for UI demos and screen recording |
 | `--version` | — | Print version and exit |
 
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `KNUCKLE_ARCH` | `amd64` | Target architecture for build, ISO, and VM recipes. Set to `arm64` to cross-compile and test on ARM64 systems (e.g. `KNUCKLE_ARCH=arm64 just build`). Also used by ISO builder (`just iso`) and QEMU test recipes (`just vm`, `just vm-e2e`). |
+| `KNUCKLE_TEST_MAIN` | — | Internal testing flag. Set to `1` to delegate test process to `main()` for integration testing flag-validation paths. Only used by `TestMain` in `cmd/knuckle/main_test.go`; contributors do not need to set this manually. |
+
 ## Headless Mode
 
 `--headless --config <file.json>` drives the same install path as the TUI without any user interaction. Useful for CI/CD, automated bare-metal provisioning, and scripted lab setups.
