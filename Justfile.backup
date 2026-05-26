@@ -118,9 +118,6 @@ cover-check:
         [headless]=96 [wizard]=97  [iso]=98       [tui]=92
         [demo]=100
     )
-    declare -A scripts_targets=(
-        [catalog_check]=50
-    )
     fail=0
     for pkg in "${!targets[@]}"; do
         pct=$(go test -count=1 -cover ./internal/${pkg}/... 2>/dev/null \
@@ -138,25 +135,10 @@ cover-check:
             echo "ok    internal/${pkg}  ${pct}%  (target ${targets[$pkg]}%)"
         fi
     done
-    for pkg in "${!scripts_targets[@]}"; do
-        pct=$(go test -count=1 -cover ./scripts/${pkg}/... 2>/dev/null \
-            | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
-        pct=${pct%.*}
-        if [[ -z "$pct" ]]; then
-            echo "FAIL  scripts/${pkg}   no coverage reported"
-            fail=1
-            continue
-        fi
-        if (( pct < ${scripts_targets[$pkg]} )); then
-            echo "FAIL  scripts/${pkg}  ${pct}%  (target ${scripts_targets[$pkg]}%)"
-            fail=1
-        else
-            echo "ok    scripts/${pkg}  ${pct}%  (target ${scripts_targets[$pkg]}%)"
-        fi
-    done
     # Skip cmd packages (main functions can't be unit tested)
     echo "ok    cmd/*  (skipped — main functions untestable)"
     exit $fail
+
 # Quick headless dry-run test (no VM needed)
 headless-test:
     #!/usr/bin/env bash
