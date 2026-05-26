@@ -63,6 +63,7 @@ func TestInstallWithGeneratedConfig(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	// Check basic structure: -d /dev/sda -C stable -i <some-temp-path>
 	if len(installCall.Args) < 6 {
@@ -115,6 +116,7 @@ func TestInstallWithExternalURL(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	wantArgs := []string{"-d", "/dev/vda", "-C", "beta", "-I", "https://example.com/config.ign"}
 	if len(installCall.Args) != len(wantArgs) {
@@ -548,6 +550,7 @@ func TestInstallWithSysexts(t *testing.T) {
 	}
 	if installCall == nil {
 		t.Fatal("flatcar-install was not called")
+		return
 	}
 	// The ignition file passed to -i must have been generated (sysext URLs included)
 	if len(installCall.Args) < 5 || installCall.Args[4] != "-i" {

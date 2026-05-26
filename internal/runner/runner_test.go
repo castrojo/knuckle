@@ -134,6 +134,7 @@ func TestSpyRunnerAllErrorAppliesToRunWithInput(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("RunWithInput() result = nil, want non-nil result")
+		return
 	}
 	if result.ExitCode != 1 {
 		t.Errorf("RunWithInput() exit code = %d, want 1", result.ExitCode)
