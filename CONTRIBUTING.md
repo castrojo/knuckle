@@ -90,6 +90,45 @@ git commit --amend -s
 - Network-dependent tests go behind `//go:build integration`
 - No `os.Exec` or network calls in unit tests — use `SpyRunner` or `httptest.NewServer`
 
+### Testing a TUI step
+
+Most TUI tests stay fast by testing the model directly instead of spinning up a full Bubble Tea program.
+
+- Use `newTestWizard()` + `New(w)` to build a model with predictable state for the step you are working on.
+- For command execution, prefer the `SpyRunner` pattern used across `internal/install` and related packages: stub command results with `runner.NewSpyRunner()`, call the code under test, then assert against `spy.Calls` instead of shelling out.
+- For Ignition golden files, regenerate snapshots intentionally with `go test ./internal/ignition -update`, review the `*.golden.json` diff, and commit the updated files only when the new output is expected.
+- Real network or process-behavior tests belong behind the integration build tag:
+  ```go
+  //go:build integration
+  // +build integration
+  ```
+  Run them locally with `go test -tags=integration ./...` when you need the real path; they do not run in normal unit-test passes.
+- `internal/tui/forms_builder_test.go` is the lightweight pattern for form construction tests: seed wizard state, call `build*Form()`, and assert the form is created and preserves important input values. These tests do not need a TTY.
+
+Minimal step test structure:
+
+```go
+func TestKeyboard_CtrlB_ReviewTogglesPreview(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepReview
+
+	m := New(w)
+	m.activeForm = nil // bypass huh form when you want handleKey()/Update() directly
+
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	got := newModel.(*Model)
+
+	if !got.showButane {
+		t.Fatal("expected Ctrl+B to enable Butane preview")
+	}
+}
+```
+
+Use this split when adding coverage:
+- state transitions and keyboard handling → step-focused tests such as `keyboard_test.go` or `*_step_test.go`
+- form construction and seeded defaults → `forms_builder_test.go`
+- real external behavior → integration tests with the `integration` build tag
+
 See [docs/CI-AND-TESTING.md](docs/CI-AND-TESTING.md) for coverage gates and the full test pyramid.
 
 ## Architecture Overview

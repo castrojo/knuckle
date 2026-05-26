@@ -53,6 +53,12 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 | Sysexts | Official Flatcar Bakery (via GitHub Releases API, arch-aware) |
 | Config mode | Guided OR external Ignition URL (`Ctrl+A`) — mutually exclusive |
 
+## Keyboard Shortcuts
+
+- `Ctrl+A` on the Welcome step — toggle external Ignition URL mode
+- `Ctrl+B` on the Review step — toggle the Butane YAML preview
+- `Ctrl+C` × 2 — quit with confirmation
+
 ## Quick Start
 
 ```bash
