@@ -233,6 +233,35 @@ jobs:
       - release-amd64
       - release-arm64
     steps:
+      - name: Verify release assets before publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=$(gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name')
+
+          for asset in \
+            knuckle-linux-amd64 \
+            knuckle-linux-amd64.sha256 \
+            knuckle-linux-amd64.bundle \
+            knuckle-linux-amd64.spdx.json \
+            knuckle-linux-amd64.spdx.json.bundle \
+            knuckle-installer-stable-amd64.iso \
+            knuckle-installer-stable-amd64.iso.sha256 \
+            knuckle-installer-stable-amd64.iso.bundle \
+            knuckle-linux-arm64 \
+            knuckle-linux-arm64.sha256 \
+            knuckle-linux-arm64.bundle \
+            knuckle-linux-arm64.spdx.json \
+            knuckle-linux-arm64.spdx.json.bundle \
+            knuckle-installer-stable-arm64.iso \
+            knuckle-installer-stable-arm64.iso.sha256 \
+            knuckle-installer-stable-arm64.iso.bundle; do
+            echo "$assets" | grep -Fx "$asset" >/dev/null || {
+              echo "Missing release asset: $asset" >&2
+              exit 1
+            }
+          done
+
       - name: Publish draft release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
