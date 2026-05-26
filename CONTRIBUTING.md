@@ -17,9 +17,10 @@ For larger changes, open an issue first to align on scope before writing code.
 
 Cross-compile for arm64 with `just build-arm64` — no arm64 hardware needed for compilation or unit tests.
 
-For VM testing on arm64:
+`KNUCKLE_ARCH` defaults to `amd64` in the `Justfile`. Override it when you want `just` recipes to target arm64 instead:
 - **Native arm64 hardware** with KVM: `KNUCKLE_ARCH=arm64 just vm`
 - **QEMU TCG** (slow, x86_64 host): `sudo apt install qemu-system-arm` then `KNUCKLE_ARCH=arm64 just vm`
+- **Other arm64 recipes**: `KNUCKLE_ARCH=arm64 just vm-e2e`, `KNUCKLE_ARCH=arm64 just iso`, `KNUCKLE_ARCH=arm64 just boot-iso`
 
 CI uses native `ubuntu-24.04-arm` runners. TCG emulation is functional but significantly slower.
 
@@ -84,6 +85,10 @@ git commit --amend -s
 - New packages go under `internal/` — nothing exported from `internal/` is public API
 
 ## Tests
+
+### Test-only environment variables
+
+- `KNUCKLE_TEST_MAIN=1` — internal test helper used by `cmd/knuckle/main_test.go` to make the compiled test binary delegate into `main()`. This is only needed when working on CLI bootstrap and flag-handling tests.
 
 - Unit tests live next to the code: `foo.go` → `foo_test.go`
 - Golden files use `-update`: `go test ./internal/ignition -update` — commit the result deliberately

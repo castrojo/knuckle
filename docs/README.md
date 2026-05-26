@@ -1,32 +1,29 @@
 # docs/ — Index
 
-This directory contains supplementary documentation for knuckle. Files are organized by audience.
+This directory contains supplementary documentation for knuckle. Start with the user-facing reference docs, then dip into the maintainer material if you are working on CI, release engineering, hardware labs, or design history.
 
-## User-facing
-
-| File | Description |
-|------|-------------|
-| [HEADLESS-CONFIG.md](HEADLESS-CONFIG.md) | **Authoritative reference** for the `--headless --config` JSON schema. Every field, type, default, and validation rule. Start here for automated/CI installs. |
-| [SECURITY.md](SECURITY.md) | Threat model, supply-chain verification claims, known gaps, secret handling, and disclosure policy. |
-| [SYSEXTS.md](SYSEXTS.md) | System extensions from the Flatcar Bakery: catalog structure, how sysexts are fetched and selected, architecture handling. |
-| [GHOST-LAB.md](GHOST-LAB.md) | Hardware lab setup for real bare-metal testing. Primarily useful for maintainers with physical hardware. |
-
-## Contributor-facing
+## User-facing reference docs
 
 | File | Description |
 |------|-------------|
-| [CI-AND-TESTING.md](CI-AND-TESTING.md) | Test pyramid, coverage gates, CI workflow overview, and how to run each layer locally. Read before adding tests. |
-| [TEST-PLAN.md](TEST-PLAN.md) | Structured test plan covering TUI steps, headless paths, hardware edge cases, and sysext scenarios. |
-| [PR-TEST-MATRIX.md](PR-TEST-MATRIX.md) | Detailed per-PR test matrix mapping change types to required test coverage. |
-| [HIVE-DEPLOYMENT.md](HIVE-DEPLOYMENT.md) | Hive agent deployment context. Relevant if you are working on or with the AI agent pipeline. |
-| [BUTANE-DEPENDENCY.md](BUTANE-DEPENDENCY.md) | Notes on the in-process Butane dependency, versioning, and why it is vendored rather than called as a CLI. |
+| [HEADLESS-CONFIG.md](HEADLESS-CONFIG.md) | Canonical reference for the `--headless --config` JSON schema, including fields, defaults, and validation rules. |
+| [SECURITY.md](SECURITY.md) | Security posture, threat model, known gaps, and the disclosure path for vulnerabilities. |
+| [CI-AND-TESTING.md](CI-AND-TESTING.md) | CI pipeline overview, test pyramid, and coverage gates used for contributor changes. |
+| [SYSEXTS.md](SYSEXTS.md) | Reference guide to the Flatcar Bakery sysext catalog, support tiers, and extension behavior. |
+| [BUTANE-DEPENDENCY.md](BUTANE-DEPENDENCY.md) | Explains why knuckle embeds Butane as a Go library instead of relying on the `butane` CLI. |
+| [HIVE-DEPLOYMENT.md](HIVE-DEPLOYMENT.md) | Host-side deployment notes for running knuckle's Hive container on Flatcar. |
+| [TEST-PLAN.md](TEST-PLAN.md) | High-level test plan covering expected behavior, edge cases, and coverage goals. |
 
-## Internal / research
+## Internal / maintainer docs
+
+These files are mainly useful for maintainers, reviewers, and agent-assisted development workflows.
 
 | File | Description |
 |------|-------------|
-| [TUI-WIZARD-PATTERNS.md](TUI-WIZARD-PATTERNS.md) | Internal research on TUI wizard UX patterns from analogous projects. Background for the current wizard design. |
-| [SUBIQUITY-TUI-ANALYSIS.md](SUBIQUITY-TUI-ANALYSIS.md) | Internal analysis of the Ubuntu Subiquity installer TUI. Historical design reference. |
-| [internal/REVIEW-2026-05-19.md](internal/REVIEW-2026-05-19.md) | Principal-engineer review notes — 2026-05-19. |
-| [internal/REVIEW-2026-05-19b.md](internal/REVIEW-2026-05-19b.md) | Principal-engineer review notes — 2026-05-19 (follow-up). |
-| [internal/REVIEW-2026-05-20.md](internal/REVIEW-2026-05-20.md) | Principal-engineer review notes — 2026-05-20. |
+| [GHOST-LAB.md](GHOST-LAB.md) | Hardware lab notes for real-device and ghost test environment setup. |
+| [PR-TEST-MATRIX.md](PR-TEST-MATRIX.md) | Maintainer-oriented matrix for mapping change types to the expected PR test coverage. |
+| [SUBIQUITY-TUI-ANALYSIS.md](SUBIQUITY-TUI-ANALYSIS.md) | Design research comparing knuckle's installer UX to Ubuntu Subiquity. |
+| [TUI-WIZARD-PATTERNS.md](TUI-WIZARD-PATTERNS.md) | Background research on wizard and TUI interaction patterns used to shape the current flow. |
+| [internal/REVIEW-2026-05-19.md](internal/REVIEW-2026-05-19.md) | Agent-authored principal-engineer review notes from 2026-05-19. |
+| [internal/REVIEW-2026-05-19b.md](internal/REVIEW-2026-05-19b.md) | Agent-authored follow-up review notes from 2026-05-19. |
+| [internal/REVIEW-2026-05-20.md](internal/REVIEW-2026-05-20.md) | Agent-authored principal-engineer review notes from 2026-05-20. |

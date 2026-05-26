@@ -94,6 +94,13 @@ just build-arm64
 | `--demo` | false | Mock hardware and catalog data — no network, no real disks; for UI demos and screen recording |
 | `--version` | — | Print version and exit |
 
+## Environment Variables
+
+| Variable | Example | Effect |
+|---|---|---|
+| `KNUCKLE_ARCH` | `KNUCKLE_ARCH=arm64 just vm` | Overrides the default `amd64` target used by `just` recipes so builds, ISO tasks, and VM workflows target arm64 instead. Useful for ARM64 cross-builds and VM testing. |
+| `KNUCKLE_TEST_MAIN` | `KNUCKLE_TEST_MAIN=1 go test ./cmd/knuckle` | Internal test helper used by `cmd/knuckle/main_test.go` to re-enter `main()` inside the compiled test binary, so flag-validation and early-exit paths can be exercised without launching the TUI. |
+
 ## Headless Mode
 
 `--headless --config <file.json>` drives the same install path as the TUI without any user interaction. Useful for CI/CD, automated bare-metal provisioning, and scripted lab setups.
@@ -180,7 +187,7 @@ just ssh          # SSH into running VM
 
 `just hardware-repro` boots the installer ISO with `q35`, UEFI, a SATA target disk, and an `e1000e` NIC so the VM looks more like a generic physical machine than a paravirtualized guest. It then runs the same `internal/install` path via `--headless` and saves the useful artifacts under `.vm/` (`hardware-install-output.log`, `hardware-knuckle.log`, `hardware-journal.log`, `hardware-disk-inventory.log`, `hardware-installer-serial.log`).
 
-ARM64 VM testing: `KNUCKLE_ARCH=arm64 just vm` (requires native arm64 hardware or QEMU TCG).
+ARM64 VM testing: `KNUCKLE_ARCH=arm64 just vm` (requires native arm64 hardware or QEMU TCG). Set the same env var for other arm64-targeted `just` recipes such as `build`, `vm-e2e`, `iso`, and `boot-iso`.
 
 Requires: Go 1.26+, [just](https://just.systems), QEMU with KVM
 
@@ -205,7 +212,7 @@ internal/wizard/     → step state machine, navigation, validation gates
 ### Key Design Decisions
 
 - **Runner abstraction** — every external command goes through `internal/runner.Runner`. Three implementations: `RealRunner` (prod), `DryRunner` (no-op + logging), `SpyRunner` (test recorder). Reboot is injected via `rebootFn`.
-- **Flatcar Butane variant** — `variant: flatcar`, compiled in-process via `github.com/coreos/butane` v0.27+. No `butane` CLI needed on the target system.
+- **Flatcar Butane variant** — `variant: flatcar`, compiled in-process via `github.com/coreos/butane` v0.28+. No `butane` CLI needed on the target system.
 - **Architecture-aware** — `InstallConfig.Arch` is set from `runtime.GOARCH` (compile-time constant). Sysext catalog, channel fetches, and ISO builds all parameterize on arch. LTS channel is guarded for arm64 (not published by Flatcar).
 - **Sysext catalog** — from [flatcar/sysext-bakery](https://github.com/flatcar/sysext-bakery) GitHub Releases API; selects `x86-64.raw` or `arm64.raw` assets based on target arch.
 - **Channel versions** — assembled from SBOM JSON (preferred), `version.txt`, package lists, and `rootfs-included-sysexts`.
@@ -217,11 +224,11 @@ internal/wizard/     → step state machine, navigation, validation gates
 ## Tech Stack
 
 - [Go](https://go.dev) 1.26+ (CGO_ENABLED=0, static binary)
-- [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) — TUI framework
-- [Lip Gloss v2](https://github.com/charmbracelet/lipgloss) — styling
-- [Huh v2](https://github.com/charmbracelet/huh) — form inputs (Dracula theme)
-- [Bubbles v2](https://github.com/charmbracelet/bubbles) — reusable components
-- [Butane v0.27](https://github.com/coreos/butane) — Ignition config compilation (in-process)
+- [Bubble Tea v2.0.6](https://github.com/charmbracelet/bubbletea) — TUI framework
+- [Lip Gloss v2.0.3](https://github.com/charmbracelet/lipgloss) — styling
+- [Huh v2.0.3](https://github.com/charmbracelet/huh) — form inputs (Dracula theme)
+- [Bubbles v2.1.0](https://github.com/charmbracelet/bubbles) — reusable components
+- [Butane v0.28](https://github.com/coreos/butane) — Ignition config compilation (in-process)
 - [ProtonMail/go-crypto](https://github.com/ProtonMail/go-crypto) — GPG signature verification
 - [flatcar-install](https://www.flatcar.org/docs/latest/installing/bare-metal/installing-to-disk/) — disk provisioning
 
