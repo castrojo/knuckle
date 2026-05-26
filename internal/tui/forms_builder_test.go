@@ -263,7 +263,10 @@ func TestBuildTailscaleForm_StateCoverageAndValidators(t *testing.T) {
 		wantGroupCount int
 	}{
 		{
+			// huh.Select initializes the bound value to the first option when empty.
+			// First option is TailscaleModeConnect — expect that as the post-build value.
 			name:           "empty tailscale config",
+			mode:           model.TailscaleModeConnect,
 			wantGroupCount: 1,
 		},
 		{
