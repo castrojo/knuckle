@@ -1,8 +1,10 @@
 #!/usr/bin/env bats
-# Tests for scripts/iso-smoke.sh argument validation and error paths.
-# Requires: bats-core (https://github.com/bats-core/bats-core)
+# Tests for scripts/iso-smoke.sh argument parsing and error paths.
+# Requires: bats-core >= 1.5.0 (https://github.com/bats-core/bats-core)
 #
 # Run: bats scripts/tests/iso-smoke.bats
+
+bats_require_minimum_version 1.5.0
 
 SCRIPT="$BATS_TEST_DIRNAME/../iso-smoke.sh"
 

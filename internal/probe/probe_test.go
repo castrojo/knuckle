@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/NVIDIA/go-nvlib/pkg/nvpci"
 
+	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/runner"
 )
 
@@ -206,6 +208,38 @@ func TestResolveByIDPathLogsWarning(t *testing.T) {
 	}
 	if !foundWarning {
 		t.Error("resolveByIDPath() did not emit slog.Warn on fallback")
+	}
+}
+
+func TestHumanSize_SpecifiedBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		bytes uint64
+		want  string
+	}{
+		{name: "zero bytes", bytes: 0, want: "0 B"},
+		{name: "below kilobyte", bytes: 1023, want: "1023 B"},
+		{name: "kilobyte boundary", bytes: 1024, want: "1.0 KB"},
+		{name: "megabyte boundary", bytes: 1024 * 1024, want: "1.0 MB"},
+		{name: "terabyte boundary", bytes: 1024 * 1024 * 1024 * 1024, want: "1.0 TB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := humanSize(tt.bytes); got != tt.want {
+				t.Errorf("humanSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultNvidiaDriverSeries_Invariant(t *testing.T) {
+	got := model.DefaultNvidiaDriverSeries
+	if got == "" {
+		t.Fatal("DefaultNvidiaDriverSeries must not be empty")
+	}
+	if !regexp.MustCompile(`^\d{3}(?:-open)?$`).MatchString(got) {
+		t.Fatalf("DefaultNvidiaDriverSeries = %q, want NNN or NNN-open format", got)
 	}
 }
 
