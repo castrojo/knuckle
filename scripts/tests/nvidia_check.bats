@@ -25,7 +25,8 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$MOCK_DIR"
+  export PATH="$ORIGINAL_PATH"
+  /bin/rm -rf "$MOCK_DIR"
 }
 
 run_script() {
