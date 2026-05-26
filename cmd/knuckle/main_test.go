@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/knuckle/internal/headless"
+	"github.com/projectbluefin/knuckle/internal/runner"
 )
 
 // TestMain re-uses the compiled test binary as the knuckle subprocess.
@@ -386,5 +390,106 @@ func TestMain_TUIFlatcarVersionFlag(t *testing.T) {
 	// Verify log file was created
 	if _, statErr := os.Stat(logFile); statErr != nil {
 		t.Errorf("expected log file %q to be created, but stat failed: %v", logFile, statErr)
+	}
+}
+
+// rebootConfig returns a headless JSON config with reboot: true, dry_run: false.
+const rebootConfig = `{
+  "channel": "stable",
+  "hostname": "reboot-test",
+  "disk": "/dev/sda",
+  "network": {"mode": "dhcp"},
+  "users": [{"username": "core", "ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@knuckle"]}],
+  "update_strategy": "reboot",
+  "reboot": true,
+  "dry_run": false
+}`
+
+// TestRunHeadlessWithRunner_RebootInvoked verifies that when cfg.Reboot=true
+// and cfg.DryRun=false, the runner receives a "systemctl reboot" command.
+func TestRunHeadlessWithRunner_RebootInvoked(t *testing.T) {
+	cleanup := headless.OverrideValidateBlockDevice(func(string) error { return nil })
+	defer cleanup()
+	cleanupDelay := headless.OverrideRebootDelay(nil)
+	defer cleanupDelay()
+
+	spy := runner.NewSpyRunner()
+	// SpyRunner returns success for unknown commands by default
+
+	cfg := writeTempConfig(t, rebootConfig)
+	logFile := t.TempDir() + "/reboot-test.log"
+
+	err := runHeadlessWithRunner(cfg, false, logFile, spy)
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+
+	// Verify reboot command was called
+	found := false
+	for _, c := range spy.Calls {
+		if c.Name == "systemctl" && len(c.Args) > 0 && c.Args[0] == "reboot" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'systemctl reboot' call, got: %v", spy.Calls)
+	}
+}
+
+// TestRunHeadlessWithRunner_RebootError verifies that a reboot error is propagated.
+func TestRunHeadlessWithRunner_RebootError(t *testing.T) {
+	cleanup := headless.OverrideValidateBlockDevice(func(string) error { return nil })
+	defer cleanup()
+	cleanupDelay := headless.OverrideRebootDelay(nil)
+	defer cleanupDelay()
+
+	spy := runner.NewSpyRunner()
+	spy.StubError("systemctl reboot", fmt.Errorf("connection refused"))
+
+	cfg := writeTempConfig(t, rebootConfig)
+	logFile := t.TempDir() + "/reboot-err.log"
+
+	err := runHeadlessWithRunner(cfg, false, logFile, spy)
+	if err == nil {
+		t.Fatal("expected error for failed reboot, got nil")
+	}
+	if !strings.Contains(err.Error(), "reboot failed") {
+		t.Errorf("expected 'reboot failed' in error, got: %v", err)
+	}
+}
+
+// TestRunHeadlessWithRunner_NoRebootWhenDisabled verifies that no reboot is
+// issued when cfg.Reboot=false.
+func TestRunHeadlessWithRunner_NoRebootWhenDisabled(t *testing.T) {
+	cleanup := headless.OverrideValidateBlockDevice(func(string) error { return nil })
+	defer cleanup()
+
+	noRebootConfig := `{
+  "channel": "stable",
+  "hostname": "no-reboot-test",
+  "disk": "/dev/sda",
+  "network": {"mode": "dhcp"},
+  "users": [{"username": "core", "ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@knuckle"]}],
+  "update_strategy": "reboot",
+  "reboot": false,
+  "dry_run": false
+}`
+
+	spy := runner.NewSpyRunner()
+
+	cfg := writeTempConfig(t, noRebootConfig)
+	logFile := t.TempDir() + "/no-reboot.log"
+
+	err := runHeadlessWithRunner(cfg, false, logFile, spy)
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
+	}
+
+	// Verify NO reboot command was called
+	for _, c := range spy.Calls {
+		if c.Name == "systemctl" && len(c.Args) > 0 && c.Args[0] == "reboot" {
+			t.Errorf("unexpected reboot call when reboot=false: %v", spy.Calls)
+		}
 	}
 }
