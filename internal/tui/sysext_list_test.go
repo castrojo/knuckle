@@ -137,3 +137,92 @@ func TestSysextDelegateRender_ListScenarios(t *testing.T) {
 		t.Fatalf("invalid item should render nothing, got %q", invalid.String())
 	}
 }
+
+func TestSysextItemFilterValue(t *testing.T) {
+	tests := []struct {
+		name string
+		item sysextItem
+		want string
+	}{
+		{
+			name: "includes all filter fields",
+			item: sysextItem{entry: model.SysextEntry{Name: "docker", Category: "Container", SupportTier: bakery.TierIntegrated}},
+			want: "docker Container " + bakery.TierIntegrated,
+		},
+		{
+			name: "preserves separators for empty fields",
+			item: sysextItem{entry: model.SysextEntry{Name: "mystery"}},
+			want: "mystery  ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.item.FilterValue(); got != tt.want {
+				t.Fatalf("FilterValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderTierHeader(t *testing.T) {
+	tests := []struct {
+		name string
+		tier string
+		want string
+	}{
+		{name: "named tier", tier: bakery.TierIntegrated, want: bakery.TierIntegrated},
+		{name: "empty tier falls back to Other", tier: "", want: "Other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := renderTierHeader(tt.tier)
+			if !strings.Contains(got, tt.want) {
+				t.Fatalf("renderTierHeader(%q) = %q, want substring %q", tt.tier, got, tt.want)
+			}
+			if !strings.HasPrefix(got, "  ") {
+				t.Fatalf("renderTierHeader(%q) = %q, want two-space indent", tt.tier, got)
+			}
+			if !strings.HasSuffix(got, "\n") {
+				t.Fatalf("renderTierHeader(%q) = %q, want trailing newline", tt.tier, got)
+			}
+		})
+	}
+}
+
+func TestSysextTitle(t *testing.T) {
+	tests := []struct {
+		name    string
+		sysexts []model.SysextEntry
+		want    string
+	}{
+		{
+			name: "no selections",
+			sysexts: []model.SysextEntry{
+				{Name: "docker"},
+				{Name: "tailscale"},
+			},
+			want: "System Extensions — 0 selected",
+		},
+		{
+			name: "counts selected entries",
+			sysexts: []model.SysextEntry{
+				{Name: "docker", Selected: true},
+				{Name: "tailscale"},
+				{Name: "podman", Selected: true},
+			},
+			want: "System Extensions — 2 selected",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newTestWizard()
+			w.State.Sysexts = tt.sysexts
+			if got := New(w).sysextTitle(); got != tt.want {
+				t.Fatalf("sysextTitle() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
