@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/coreos/butane/config/common"
+	"github.com/coreos/vcontext/report"
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
@@ -100,6 +102,29 @@ passwd:
 	}
 	if !strings.Contains(got, "ssh-ed25519") {
 		t.Error("Ignition JSON missing SSH key")
+	}
+}
+
+func TestCompileToIgnition_FatalReportReturnsError(t *testing.T) {
+	previous := translateButane
+	translateButane = func([]byte, common.TranslateBytesOptions) ([]byte, report.Report, error) {
+		return []byte(`{"ignition":{"version":"3.4.0"}}`), report.Report{
+			Entries: []report.Entry{{Kind: report.Error, Message: "injected fatal report"}},
+		}, nil
+	}
+	t.Cleanup(func() {
+		translateButane = previous
+	})
+
+	_, err := CompileToIgnition("variant: flatcar\nversion: 1.1.0\n")
+	if err == nil {
+		t.Fatal("expected fatal report to return an error")
+	}
+	if !strings.Contains(err.Error(), "fatal errors") {
+		t.Fatalf("expected fatal errors message, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "injected fatal report") {
+		t.Fatalf("expected injected report details, got %v", err)
 	}
 }
 

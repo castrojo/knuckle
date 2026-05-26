@@ -18,6 +18,8 @@ setup() {
   MOCK_DIR="$(mktemp -d)"
   export PATH="$MOCK_DIR:$PATH"
   export HOME="$MOCK_DIR"
+  export MOCK_GIT_LOG="$MOCK_DIR/git.log"
+  : > "$MOCK_GIT_LOG"
   mkdir -p "$MOCK_DIR/.ssh"
   touch "$MOCK_DIR/.ssh/id_ed25519"
 
@@ -38,13 +40,31 @@ esac
 GHEOF
   chmod +x "$MOCK_DIR/gh"
 
-  # Mock git: fake fetch/rev-parse/worktree
+  # Mock git: fake fetch/rev-parse/worktree and capture cleanup calls
   cat > "$MOCK_DIR/git" << 'GITEOF'
 #!/usr/bin/env bash
+[[ -n "${MOCK_GIT_LOG:-}" ]] && printf '%s\n' "$*" >> "$MOCK_GIT_LOG"
 case "$1" in
   fetch) exit 0 ;;
   rev-parse) echo "abcdef123456" ;;
-  worktree) exit 0 ;;
+  show-ref)
+    [[ "${MOCK_GIT_SHOW_REF:-0}" == "1" ]] && exit 0
+    exit 1
+    ;;
+  update-ref) exit 0 ;;
+  worktree)
+    case "$2" in
+      list) printf '%s' "${MOCK_GIT_WORKTREE_PORCELAIN:-}" ;;
+      remove|add|prune) exit 0 ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  branch)
+    if [[ "$2" == "-D" && "${MOCK_GIT_BRANCH_DELETE_FAIL:-0}" == "1" ]]; then
+      exit 1
+    fi
+    exit 0
+    ;;
   *) exit 0 ;;
 esac
 GITEOF
@@ -110,6 +130,29 @@ teardown() {
 }
 
 # ── Complexity gate ──────────────────────────────────────────────────────────
+
+@test "stale PR ref and worktree are cleaned before fetch" {
+  export MOCK_GH_PR_JSON='{"title":"heal","headRefName":"feat/heal","labels":[{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="heal"
+  export MOCK_PR_BRANCH="feat/heal"
+  export MOCK_PR_LABELS="size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  export MOCK_GIT_SHOW_REF=1
+  export MOCK_GIT_WORKTREE_PORCELAIN=$'worktree /tmp/knuckle-qa-wt-999\nHEAD deadbeef\nbranch refs/heads/pr999-qa\n\n'
+
+  run bash "$SCRIPT" 999 2>&1
+
+  [ -f "$MOCK_GIT_LOG" ]
+  run grep -F "worktree prune" "$MOCK_GIT_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "worktree remove /tmp/knuckle-qa-wt-999 --force" "$MOCK_GIT_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "update-ref -d refs/heads/pr999-qa" "$MOCK_GIT_LOG"
+  [ "$status" -eq 0 ]
+  run grep -F "fetch upstream +pull/999/head:refs/heads/pr999-qa -q" "$MOCK_GIT_LOG"
+  [ "$status" -eq 0 ]
+}
 
 @test "size:XL triggers complexity gate (exit 2)" {
   export MOCK_GH_PR_JSON='{"title":"big PR","headRefName":"feat/big","labels":[{"name":"size:XL"}],"body":"","author":{"login":"dev"}}'

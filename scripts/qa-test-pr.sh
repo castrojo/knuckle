@@ -106,9 +106,58 @@ WORKTREE=""
 _cleanup_kv() {
   local exit_code=$?
   [[ -n "${VM_NAME:-}" ]] && kv_delete "${VM_NAME}" 2>/dev/null || true
-  # Clean up worktree (created later in build phase)
   [[ -n "${WORKTREE:-}" ]] && git worktree remove "$WORKTREE" --force 2>/dev/null || true
   exit "$exit_code"
+}
+
+remove_worktree_path() {
+  local path="$1"
+  [[ -z "$path" ]] && return 0
+
+  if git worktree list --porcelain 2>/dev/null | grep -Fqx "worktree $path"; then
+    git worktree remove "$path" --force 2>/dev/null || true
+  fi
+
+  [[ -e "$path" ]] && rm -rf "$path"
+}
+
+cleanup_pr_checkout() {
+  local pr="$1"
+  local worktree_path="$2"
+  local ref="pr${pr}-qa"
+  local legacy_worktree="/tmp/knuckle-qa-wt-${pr}"
+  local listed_path=""
+
+  git worktree prune >/dev/null 2>&1 || true
+
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *)
+        listed_path="${line#worktree }"
+        ;;
+      "branch refs/heads/${ref}")
+        if [[ -n "$listed_path" && "$listed_path" != "$(pwd)" ]]; then
+          log "Removing stale worktree registration: ${listed_path}"
+          git worktree remove "$listed_path" --force 2>/dev/null || rm -rf "$listed_path"
+        fi
+        ;;
+      "")
+        listed_path=""
+        ;;
+    esac
+  done < <(git worktree list --porcelain 2>/dev/null || true)
+
+  if [[ "$legacy_worktree" != "$worktree_path" ]]; then
+    remove_worktree_path "$legacy_worktree"
+  fi
+  remove_worktree_path "$worktree_path"
+
+  git worktree prune >/dev/null 2>&1 || true
+
+  if git show-ref --verify --quiet "refs/heads/${ref}"; then
+    log "Deleting stale local ref: ${ref}"
+    git update-ref -d "refs/heads/${ref}" 2>/dev/null || git branch -D "$ref" 2>/dev/null || true
+  fi
 }
 
 main() {
@@ -118,7 +167,9 @@ main() {
   GOPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes -i ${HOME}/.ssh/id_ed25519"
   WORK_REMOTE="/var/tmp/knuckle-qa-pr-${PR}"
   RUN_ID="pr-${PR}-$(date +%Y%m%d-%H%M%S)"
-  RUNDIR="$(pwd)/.qa/runs/${RUN_ID}"
+  QA_ROOT="$(pwd)/.qa"
+  RUNDIR="${QA_ROOT}/runs/${RUN_ID}"
+  WORKTREE="${QA_ROOT}/worktrees/pr-${PR}"
   REPORT="${RUNDIR}/report.md"
   START=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -129,7 +180,7 @@ main() {
 
   trap '_cleanup_kv' EXIT INT TERM
 
-  mkdir -p "$RUNDIR"
+  mkdir -p "$RUNDIR" "$(dirname "$WORKTREE")"
 
   # ── 1. PR metadata ──────────────────────────
   log "Fetching PR #${PR}..."
@@ -178,15 +229,11 @@ EOF
   log "tier=${TIER} needs_boot=${NEEDS_BOOT} security=${DO_SECURITY}"
 
 # ── 4. Build ──────────────────────────────────────────────────────────────────
-git branch -D "pr${PR}-qa" 2>/dev/null || true
-git fetch upstream "pull/${PR}/head:pr${PR}-qa" -q 2>/dev/null
+cleanup_pr_checkout "$PR" "$WORKTREE"
+git fetch upstream "+pull/${PR}/head:refs/heads/pr${PR}-qa" -q 2>/dev/null
 SHA=$(git rev-parse "pr${PR}-qa" | head -c 12)
 
 # Use git worktree to isolate PR checkout (avoid mutating dev working tree)
-WORKTREE="/tmp/knuckle-qa-wt-${PR}"
-if [[ -e "$WORKTREE" ]]; then
-  git worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
-fi
 git worktree add "$WORKTREE" "pr${PR}-qa"
 
 log "Building ${SHA}..."
