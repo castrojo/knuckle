@@ -106,7 +106,7 @@ WORKTREE=""
 _cleanup_kv() {
   local exit_code=$?
   [[ -n "${VM_NAME:-}" ]] && kv_delete "${VM_NAME}" 2>/dev/null || true
-  [[ -n "${WORKTREE:-}" ]] && git worktree remove "$WORKTREE" --force 2>/dev/null || true
+  [[ -n "${WORKTREE:-}" ]] && git worktree remove --force "$WORKTREE" 2>/dev/null || true
   exit "$exit_code"
 }
 
@@ -114,11 +114,10 @@ remove_worktree_path() {
   local path="$1"
   [[ -z "$path" ]] && return 0
 
-  if git worktree list --porcelain 2>/dev/null | grep -Fqx "worktree $path"; then
-    git worktree remove "$path" --force 2>/dev/null || true
+  if [[ -e "$path" ]]; then
+    git worktree remove --force "$path" 2>/dev/null || true
+    if [[ -e "$path" ]]; then rm -rf "$path"; fi
   fi
-
-  if [[ -e "$path" ]]; then rm -rf "$path"; fi
 }
 
 cleanup_pr_checkout() {
@@ -138,7 +137,7 @@ cleanup_pr_checkout() {
       "branch refs/heads/${ref}")
         if [[ -n "$listed_path" && "$listed_path" != "$(pwd)" ]]; then
           log "Removing stale worktree registration: ${listed_path}"
-          git worktree remove "$listed_path" --force 2>/dev/null || rm -rf "$listed_path"
+          git worktree remove --force "$listed_path" 2>/dev/null || rm -rf "$listed_path"
         fi
         ;;
       "")
@@ -156,7 +155,7 @@ cleanup_pr_checkout() {
 
   if git show-ref --verify --quiet "refs/heads/${ref}"; then
     log "Deleting stale local ref: ${ref}"
-    git update-ref -d "refs/heads/${ref}" 2>/dev/null || git branch -D "$ref" 2>/dev/null || true
+    git branch -D "$ref" 2>/dev/null || true
   fi
 }
 
