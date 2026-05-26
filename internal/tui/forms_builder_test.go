@@ -1,557 +1,418 @@
 package tui
 
 import (
-	"strings"
-	"testing"
+"reflect"
+"testing"
+"unsafe"
 
-	"github.com/projectbluefin/knuckle/internal/model"
+"charm.land/huh/v2"
+
+"github.com/projectbluefin/knuckle/internal/model"
 )
 
-// TestBuildNetworkForm tests the buildNetworkForm function with various configurations
-func TestBuildNetworkForm(t *testing.T) {
-	tests := []struct {
-		name       string
-		interfaces []model.NetworkInterface
-		wantFields int
-	}{
-		{
-			name:       "no interfaces detected",
-			interfaces: []model.NetworkInterface{},
-			wantFields: 2, // mode + static fields group
-		},
-		{
-			name: "single interface",
-			interfaces: []model.NetworkInterface{
-				{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-			},
-			wantFields: 2,
-		},
-		{
-			name: "multiple interfaces",
-			interfaces: []model.NetworkInterface{
-				{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-				{Name: "wlan0", MAC: "AA:BB:CC:DD:EE:FF", State: "down"},
-			},
-			wantFields: 2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := newTestWizard()
-			w.State.Interfaces = tt.interfaces
-			m := New(w)
-
-			form := m.buildNetworkForm()
-			if form == nil {
-				t.Fatal("buildNetworkForm returned nil")
-			}
-
-		})
-	}
+func TestBuildNetworkForm_StateCoverageAndValidators(t *testing.T) {
+tests := []struct {
+name            string
+interfaces       []model.NetworkInterface
+networkMode     string
+address         string
+gateway         string
+dns             string
+selectedIface   string
+wantGroupCount  int
+wantInterfaceOps int
+}{
+{
+name:             "nil interfaces",
+interfaces:       nil,
+wantGroupCount:   2,
+wantInterfaceOps: 1,
+},
+{
+name:             "empty interfaces slice",
+interfaces:       []model.NetworkInterface{},
+networkMode:      model.NetworkDHCP,
+wantGroupCount:   2,
+wantInterfaceOps: 1,
+},
+{
+name: "populated static network",
+interfaces: []model.NetworkInterface{
+{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
+{Name: "wlan0", MAC: "AA:BB:CC:DD:EE:FF", State: "down"},
+},
+networkMode:      model.NetworkStatic,
+address:          "192.168.1.100/24",
+gateway:          "192.168.1.1",
+dns:              "1.1.1.1,8.8.8.8",
+selectedIface:    "eth0",
+wantGroupCount:   2,
+wantInterfaceOps: 3,
+},
 }
 
-// TestBuildNetworkFormStaticValidation tests the inline validators for static network config
-func TestBuildNetworkFormStaticValidation(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-	}
-	m := New(w)
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+w := newTestWizard()
+w.State.Interfaces = tt.interfaces
+m := New(w)
+m.networkModeInput = tt.networkMode
+m.Wizard.State.Config.Network.Address = tt.address
+m.Wizard.State.Config.Network.Gateway = tt.gateway
+m.Wizard.State.Config.Network.Interface = tt.selectedIface
+m.dnsInput = tt.dns
 
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	// Test that form contains fields for static config
-	// The form should have IP address, gateway, and DNS fields
-	// These are in the second group (static fields)
+form := m.buildNetworkForm()
+if form == nil {
+t.Fatal("buildNetworkForm returned nil")
+}
+if got := len(formGroups(t, form)); got != tt.wantGroupCount {
+t.Fatalf("group count = %d, want %d", got, tt.wantGroupCount)
+}
+if got := len(selectOptions(t, mustFindSelect(t, form, "Interface"))); got != tt.wantInterfaceOps {
+t.Fatalf("interface options = %d, want %d", got, tt.wantInterfaceOps)
+}
+if got := m.Wizard.State.Config.Network.Interface; got != tt.selectedIface {
+t.Fatalf("interface = %q, want %q", got, tt.selectedIface)
+}
+if got := m.Wizard.State.Config.Network.Address; got != tt.address {
+t.Fatalf("address = %q, want %q", got, tt.address)
+}
+if got := m.Wizard.State.Config.Network.Gateway; got != tt.gateway {
+t.Fatalf("gateway = %q, want %q", got, tt.gateway)
+}
+if got := m.dnsInput; got != tt.dns {
+t.Fatalf("dnsInput = %q, want %q", got, tt.dns)
+}
+})
 }
 
-// TestBuildNetworkFormDHCPMode tests DHCP mode selection
-func TestBuildNetworkFormDHCPMode(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-	}
-	m := New(w)
-	m.networkModeInput = "dhcp"
-
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	if m.networkModeInput != "dhcp" {
-		t.Errorf("expected networkModeInput to be dhcp, got %s", m.networkModeInput)
-	}
+form := New(newTestWizard()).buildNetworkForm()
+cidrValidator := inputValidator(t, mustFindInput(t, form, "IP Address"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty CIDR allowed", input: "", wantErr: false},
+{name: "valid CIDR", input: "10.0.0.5/24", wantErr: false},
+{name: "invalid CIDR", input: "10.0.0.5", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := cidrValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("CIDR validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
 }
 
-// TestBuildNetworkFormStaticMode tests static mode selection
-func TestBuildNetworkFormStaticMode(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-	}
-	m := New(w)
-	m.networkModeInput = "static"
-	m.Wizard.State.Config.Network.Address = "192.168.1.100/24"
-	m.Wizard.State.Config.Network.Gateway = "192.168.1.1"
-
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	if m.Wizard.State.Config.Network.Address != "192.168.1.100/24" {
-		t.Errorf("expected address 192.168.1.100/24, got %s", m.Wizard.State.Config.Network.Address)
-	}
+gatewayValidator := inputValidator(t, mustFindInput(t, form, "Gateway"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty gateway allowed", input: "", wantErr: false},
+{name: "valid IPv4", input: "192.168.1.1", wantErr: false},
+{name: "invalid IPv4", input: "not-an-ip", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := gatewayValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("gateway validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
+}
 }
 
-// TestBuildUserForm tests the buildUserForm function with various configurations
-func TestBuildUserForm(t *testing.T) {
-	tests := []struct {
-		name       string
-		hostname   string
-		username   string
-		password   string
-		githubUser string
-		sshKey     string
-		timezone   string
-		wantGroups int
-	}{
-		{
-			name:       "empty form",
-			hostname:   "",
-			username:   "",
-			password:   "",
-			githubUser: "",
-			sshKey:     "",
-			timezone:   "",
-			wantGroups: 2, // identity + auth groups
-		},
-		{
-			name:       "with hostname and username",
-			hostname:   "flatcar-node01",
-			username:   "admin",
-			password:   "",
-			githubUser: "",
-			sshKey:     "",
-			timezone:   "UTC",
-			wantGroups: 2,
-		},
-		{
-			name:       "with password",
-			hostname:   "flatcar-node01",
-			username:   "admin",
-			password:   "secret123",
-			githubUser: "",
-			sshKey:     "",
-			timezone:   "America/New_York",
-			wantGroups: 2,
-		},
-		{
-			name:       "with GitHub username",
-			hostname:   "flatcar-node01",
-			username:   "admin",
-			password:   "",
-			githubUser: "octocat",
-			sshKey:     "",
-			timezone:   "UTC",
-			wantGroups: 2,
-		},
-		{
-			name:       "with SSH key",
-			hostname:   "flatcar-node01",
-			username:   "admin",
-			password:   "",
-			githubUser: "",
-			sshKey:     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
-			timezone:   "Europe/Berlin",
-			wantGroups: 2,
-		},
-		{
-			name:       "with all fields",
-			hostname:   "flatcar-node01",
-			username:   "admin",
-			password:   "secret123",
-			githubUser: "@octocat",
-			sshKey:     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
-			timezone:   "Asia/Tokyo",
-			wantGroups: 2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := newTestWizard()
-			m := New(w)
-			m.Wizard.State.Config.Hostname = tt.hostname
-			m.usernameInput = tt.username
-			m.passwordInput = tt.password
-			m.githubUserInput = tt.githubUser
-			m.sshKeyInput = tt.sshKey
-			m.Wizard.State.Config.Timezone = tt.timezone
-
-			form := m.buildUserForm()
-			if form == nil {
-				t.Fatal("buildUserForm returned nil")
-			}
-
-			// Verify inputs are preserved
-			if m.Wizard.State.Config.Hostname != tt.hostname {
-				t.Errorf("hostname mismatch: got %s, want %s", m.Wizard.State.Config.Hostname, tt.hostname)
-			}
-			if m.usernameInput != tt.username {
-				t.Errorf("username mismatch: got %s, want %s", m.usernameInput, tt.username)
-			}
-			if m.passwordInput != tt.password {
-				t.Errorf("password mismatch: got %s, want %s", m.passwordInput, tt.password)
-			}
-		})
-	}
+func TestBuildUserForm_StateCoverageAndValidators(t *testing.T) {
+tests := []struct {
+name           string
+hostname       string
+timezone       string
+username       string
+password       string
+githubUser     string
+sshKey         string
+wantGroupCount int
+}{
+{
+name:           "empty user inputs",
+wantGroupCount: 2,
+},
+{
+name:           "populated user inputs",
+hostname:       "flatcar-node01",
+timezone:       "America/New_York",
+username:       "admin",
+password:       "secret123",
+githubUser:     "@octocat",
+sshKey:         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeKeyComment user@example",
+wantGroupCount: 2,
+},
+{
+name:           "missing ssh auth inputs",
+hostname:       "edge-node",
+timezone:       "UTC",
+username:       "core",
+wantGroupCount: 2,
+},
 }
 
-// TestBuildUserFormValidationHostname tests hostname validation
-func TestBuildUserFormValidationHostname(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+w := newTestWizard()
+m := New(w)
+m.Wizard.State.Config.Hostname = tt.hostname
+m.Wizard.State.Config.Timezone = tt.timezone
+m.usernameInput = tt.username
+m.passwordInput = tt.password
+m.githubUserInput = tt.githubUser
+m.sshKeyInput = tt.sshKey
 
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	// The form should be created successfully
-	// Actual validation happens when the form is submitted
+form := m.buildUserForm()
+if form == nil {
+t.Fatal("buildUserForm returned nil")
+}
+if got := len(formGroups(t, form)); got != tt.wantGroupCount {
+t.Fatalf("group count = %d, want %d", got, tt.wantGroupCount)
+}
+for _, title := range []string{"Hostname", "Timezone", "Username", "Password", "GitHub Username", "SSH Public Key"} {
+if mustFindInput(t, form, title) == nil {
+t.Fatalf("missing input %q", title)
+}
+}
+if got := m.Wizard.State.Config.Hostname; got != tt.hostname {
+t.Fatalf("hostname = %q, want %q", got, tt.hostname)
+}
+if got := m.Wizard.State.Config.Timezone; got != tt.timezone {
+t.Fatalf("timezone = %q, want %q", got, tt.timezone)
+}
+if got := m.usernameInput; got != tt.username {
+t.Fatalf("username = %q, want %q", got, tt.username)
+}
+if got := m.passwordInput; got != tt.password {
+t.Fatalf("password = %q, want %q", got, tt.password)
+}
+if got := m.githubUserInput; got != tt.githubUser {
+t.Fatalf("github user = %q, want %q", got, tt.githubUser)
+}
+if got := m.sshKeyInput; got != tt.sshKey {
+t.Fatalf("ssh key = %q, want %q", got, tt.sshKey)
+}
+})
 }
 
-// TestBuildUserFormValidationUsername tests username validation
-func TestBuildUserFormValidationUsername(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.usernameInput = "testuser"
-
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	if m.usernameInput != "testuser" {
-		t.Errorf("expected usernameInput testuser, got %s", m.usernameInput)
-	}
+form := New(newTestWizard()).buildUserForm()
+hostnameValidator := inputValidator(t, mustFindInput(t, form, "Hostname"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty hostname allowed", input: "", wantErr: false},
+{name: "valid hostname", input: "flatcar-node01", wantErr: false},
+{name: "invalid hostname", input: "bad_host", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := hostnameValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("hostname validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
 }
 
-// TestBuildUserFormValidationTimezone tests timezone validation
-func TestBuildUserFormValidationTimezone(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.Wizard.State.Config.Timezone = "America/New_York"
-
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	if m.Wizard.State.Config.Timezone != "America/New_York" {
-		t.Errorf("expected timezone America/New_York, got %s", m.Wizard.State.Config.Timezone)
-	}
+usernameValidator := inputValidator(t, mustFindInput(t, form, "Username"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty username allowed", input: "", wantErr: false},
+{name: "valid username", input: "admin", wantErr: false},
+{name: "invalid username", input: "0admin", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := usernameValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("username validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
 }
 
-// TestBuildTailscaleForm tests the buildTailscaleForm function with various configurations
-func TestBuildTailscaleForm(t *testing.T) {
-	tests := []struct {
-		name       string
-		authKey    string
-		mode       string
-		routes     string
-		wantGroups int
-	}{
-		{
-			name:       "empty form",
-			authKey:    "",
-			mode:       model.TailscaleModeConnect, // huh.Select initializes to first option
-			routes:     "",
-			wantGroups: 1,
-		},
-		{
-			name:       "with auth key - connect mode",
-			authKey:    "tskey-auth-kNUCKLE-aBcDeFgHiJkLmNoPqRsTuVwXyZ",
-			mode:       model.TailscaleModeConnect,
-			routes:     "",
-			wantGroups: 1,
-		},
-		{
-			name:       "with auth key - exit node mode",
-			authKey:    "tskey-auth-kNUCKLE-aBcDeFgHiJkLmNoPqRsTuVwXyZ",
-			mode:       model.TailscaleModeExitNode,
-			routes:     "",
-			wantGroups: 1,
-		},
-		{
-			name:       "with auth key - subnet router mode",
-			authKey:    "tskey-auth-kNUCKLE-aBcDeFgHiJkLmNoPqRsTuVwXyZ",
-			mode:       model.TailscaleModeSubnetRouter,
-			routes:     "10.0.0.0/24,192.168.1.0/24",
-			wantGroups: 1,
-		},
-		{
-			name:       "without auth key - connect mode",
-			authKey:    "",
-			mode:       model.TailscaleModeConnect,
-			routes:     "",
-			wantGroups: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := newTestWizard()
-			m := New(w)
-			m.tailscaleAuthKeyIn = tt.authKey
-			m.tailscaleModeIn = tt.mode
-			m.tailscaleRoutesIn = tt.routes
-
-			form := m.buildTailscaleForm()
-			if form == nil {
-				t.Fatal("buildTailscaleForm returned nil")
-			}
-
-			// Verify inputs are preserved
-			if m.tailscaleAuthKeyIn != tt.authKey {
-				t.Errorf("authKey mismatch: got %s, want %s", m.tailscaleAuthKeyIn, tt.authKey)
-			}
-			if m.tailscaleModeIn != tt.mode {
-				t.Errorf("mode mismatch: got %s, want %s", m.tailscaleModeIn, tt.mode)
-			}
-			if m.tailscaleRoutesIn != tt.routes {
-				t.Errorf("routes mismatch: got %s, want %s", m.tailscaleRoutesIn, tt.routes)
-			}
-		})
-	}
+timezoneValidator := inputValidator(t, mustFindInput(t, form, "Timezone"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty timezone allowed", input: "", wantErr: false},
+{name: "valid timezone", input: "Europe/Berlin", wantErr: false},
+{name: "invalid timezone", input: "bad timezone", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := timezoneValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("timezone validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
+}
 }
 
-// TestBuildTailscaleFormModes tests all three Tailscale modes
-func TestBuildTailscaleFormModes(t *testing.T) {
-	modes := []string{
-		model.TailscaleModeConnect,
-		model.TailscaleModeExitNode,
-		model.TailscaleModeSubnetRouter,
-	}
-
-	for _, mode := range modes {
-		t.Run(mode, func(t *testing.T) {
-			w := newTestWizard()
-			m := New(w)
-			m.tailscaleModeIn = mode
-
-			form := m.buildTailscaleForm()
-			if form == nil {
-				t.Fatal("buildTailscaleForm returned nil")
-			}
-
-			if m.tailscaleModeIn != mode {
-				t.Errorf("expected mode %s, got %s", mode, m.tailscaleModeIn)
-			}
-		})
-	}
+func TestBuildTailscaleForm_StateCoverageAndValidators(t *testing.T) {
+tests := []struct {
+name           string
+authKey        string
+mode           string
+routes         string
+wantGroupCount int
+}{
+{
+name:           "empty tailscale config",
+wantGroupCount: 1,
+},
+{
+name:           "exit node config",
+authKey:        "tskey-auth-ABCDEFGHIJ-12345678901234567890",
+mode:           model.TailscaleModeExitNode,
+wantGroupCount: 1,
+},
+{
+name:           "subnet router config",
+authKey:        "tskey-auth-KNUCKLE1234-abcdefghijklmnopqrstuvwxyz12",
+mode:           model.TailscaleModeSubnetRouter,
+routes:         "10.0.0.0/24,192.168.1.0/24",
+wantGroupCount: 1,
+},
 }
 
-// TestBuildTailscaleFormAuthKeyValidation tests auth key validation
-func TestBuildTailscaleFormAuthKeyValidation(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.tailscaleAuthKeyIn = "tskey-auth-test-validkey"
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+m := New(newTestWizard())
+m.tailscaleAuthKeyIn = tt.authKey
+m.tailscaleModeIn = tt.mode
+m.tailscaleRoutesIn = tt.routes
 
-	form := m.buildTailscaleForm()
-	if form == nil {
-		t.Fatal("buildTailscaleForm returned nil")
-	}
-
-	// Verify auth key is set
-	if m.tailscaleAuthKeyIn != "tskey-auth-test-validkey" {
-		t.Errorf("expected auth key tskey-auth-test-validkey, got %s", m.tailscaleAuthKeyIn)
-	}
+form := m.buildTailscaleForm()
+if form == nil {
+t.Fatal("buildTailscaleForm returned nil")
+}
+if got := len(formGroups(t, form)); got != tt.wantGroupCount {
+t.Fatalf("group count = %d, want %d", got, tt.wantGroupCount)
+}
+if got := m.tailscaleAuthKeyIn; got != tt.authKey {
+t.Fatalf("auth key = %q, want %q", got, tt.authKey)
+}
+if got := m.tailscaleModeIn; got != tt.mode {
+t.Fatalf("mode = %q, want %q", got, tt.mode)
+}
+if got := m.tailscaleRoutesIn; got != tt.routes {
+t.Fatalf("routes = %q, want %q", got, tt.routes)
+}
+})
 }
 
-// TestBuildTailscaleFormSubnetRoutes tests subnet router with routes
-func TestBuildTailscaleFormSubnetRoutes(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.tailscaleModeIn = model.TailscaleModeSubnetRouter
-	m.tailscaleRoutesIn = "10.0.0.0/24,192.168.1.0/24"
-
-	form := m.buildTailscaleForm()
-	if form == nil {
-		t.Fatal("buildTailscaleForm returned nil")
-	}
-
-	if m.tailscaleModeIn != model.TailscaleModeSubnetRouter {
-		t.Errorf("expected subnet-router mode, got %s", m.tailscaleModeIn)
-	}
-
-	if m.tailscaleRoutesIn != "10.0.0.0/24,192.168.1.0/24" {
-		t.Errorf("expected routes 10.0.0.0/24,192.168.1.0/24, got %s", m.tailscaleRoutesIn)
-	}
+form := New(newTestWizard()).buildTailscaleForm()
+authKeyValidator := inputValidator(t, mustFindInput(t, form, "Auth Key"))
+for _, tc := range []struct {
+name    string
+input   string
+wantErr bool
+}{
+{name: "empty auth key allowed", input: "", wantErr: false},
+{name: "valid auth key", input: "tskey-auth-ABCDEFGHIJ-12345678901234567890", wantErr: false},
+{name: "invalid auth key", input: "not-a-tskey", wantErr: true},
+} {
+t.Run(tc.name, func(t *testing.T) {
+if err := authKeyValidator(tc.input); (err != nil) != tc.wantErr {
+t.Fatalf("auth key validator(%q) error = %v, wantErr %v", tc.input, err, tc.wantErr)
+}
+})
+}
 }
 
-// TestLocalKeysSummary tests the localKeysSummary helper function
-func TestLocalKeysSummary(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-
-	summary := m.localKeysSummary()
-	if summary == "" {
-		t.Error("localKeysSummary should return non-empty string")
-	}
-
-	// Should contain either "No local SSH keys" or "key(s) from ~/.ssh/"
-	if !strings.Contains(summary, "No local SSH keys") && !strings.Contains(summary, "key(s)") {
-		t.Errorf("unexpected summary format: %s", summary)
-	}
+func mustFindInput(t *testing.T, form *huh.Form, title string) *huh.Input {
+t.Helper()
+for _, group := range formGroups(t, form) {
+for _, field := range groupFields(t, group) {
+input, ok := field.(*huh.Input)
+if ok && fieldTitle(input) == title {
+return input
+}
+}
+}
+t.Fatalf("input %q not found", title)
+return nil
 }
 
-// TestBuildNetworkFormInterfaceOptions tests interface option generation
-func TestBuildNetworkFormInterfaceOptions(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-		{Name: "eth1", MAC: "66:77:88:99:AA:BB", State: "down"},
-		{Name: "wlan0", MAC: "CC:DD:EE:FF:00:11", State: "up"},
-	}
-	m := New(w)
-
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	// Verify all interfaces are available
-	if len(w.State.Interfaces) != 3 {
-		t.Errorf("expected 3 interfaces, got %d", len(w.State.Interfaces))
-	}
+func mustFindSelect(t *testing.T, form *huh.Form, title string) *huh.Select[string] {
+t.Helper()
+for _, group := range formGroups(t, form) {
+for _, field := range groupFields(t, group) {
+selectField, ok := field.(*huh.Select[string])
+if ok && fieldTitle(selectField) == title {
+return selectField
+}
+}
+}
+t.Fatalf("select %q not found", title)
+return nil
 }
 
-// TestBuildUserFormPasswordEchoMode tests password field is masked
-func TestBuildUserFormPasswordEchoMode(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.passwordInput = "secret"
-
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	// Password should be set
-	if m.passwordInput != "secret" {
-		t.Errorf("expected password to be set, got %s", m.passwordInput)
-	}
+func inputValidator(t *testing.T, input *huh.Input) func(string) error {
+t.Helper()
+value := accessibleValue(reflect.ValueOf(input).Elem().FieldByName("validate"))
+validator, ok := value.Interface().(func(string) error)
+if !ok {
+t.Fatal("input validator has unexpected type")
+}
+return validator
 }
 
-// TestBuildTailscaleFormEmptyAuthKey tests form with empty auth key
-func TestBuildTailscaleFormEmptyAuthKey(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.tailscaleAuthKeyIn = ""
-	m.tailscaleModeIn = model.TailscaleModeConnect
-
-	form := m.buildTailscaleForm()
-	if form == nil {
-		t.Fatal("buildTailscaleForm returned nil")
-	}
-
-	if m.tailscaleAuthKeyIn != "" {
-		t.Errorf("expected empty auth key, got %s", m.tailscaleAuthKeyIn)
-	}
+func fieldTitle(field any) string {
+value := reflect.ValueOf(field).Elem()
+title := accessibleValue(value.FieldByName("title"))
+return accessibleValue(title.FieldByName("val")).String()
 }
 
-// TestBuildNetworkFormAutoInterface tests auto DHCP option
-func TestBuildNetworkFormAutoInterface(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-	}
-	m := New(w)
-	m.Wizard.State.Config.Network.Interface = "" // Auto option
-
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	if m.Wizard.State.Config.Network.Interface != "" {
-		t.Errorf("expected empty interface (auto), got %s", m.Wizard.State.Config.Network.Interface)
-	}
+func formGroups(t *testing.T, form *huh.Form) []*huh.Group {
+t.Helper()
+selector := accessibleValue(reflect.ValueOf(form).Elem().FieldByName("selector"))
+items := accessibleValue(selector.Elem().FieldByName("items"))
+groups := make([]*huh.Group, items.Len())
+for i := 0; i < items.Len(); i++ {
+group, ok := items.Index(i).Interface().(*huh.Group)
+if !ok {
+t.Fatalf("group %d has unexpected type %T", i, items.Index(i).Interface())
+}
+groups[i] = group
+}
+return groups
 }
 
-// TestBuildUserFormMultipleSSHKeys tests SSH key field with multiple keys
-func TestBuildUserFormMultipleSSHKeys(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.sshKeyInput = "ssh-rsa KEY1;ssh-ed25519 KEY2"
-
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	if !strings.Contains(m.sshKeyInput, ";") {
-		t.Error("expected semicolon-separated keys")
-	}
+func groupFields(t *testing.T, group *huh.Group) []huh.Field {
+t.Helper()
+selector := accessibleValue(reflect.ValueOf(group).Elem().FieldByName("selector"))
+items := accessibleValue(selector.Elem().FieldByName("items"))
+fields := make([]huh.Field, items.Len())
+for i := 0; i < items.Len(); i++ {
+field, ok := items.Index(i).Interface().(huh.Field)
+if !ok {
+t.Fatalf("field %d has unexpected type %T", i, items.Index(i).Interface())
+}
+fields[i] = field
+}
+return fields
 }
 
-// TestBuildUserFormGitHubUsernameWithAt tests GitHub username with @ prefix
-func TestBuildUserFormGitHubUsernameWithAt(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.githubUserInput = "@octocat"
-
-	form := m.buildUserForm()
-	if form == nil {
-		t.Fatal("buildUserForm returned nil")
-	}
-
-	if m.githubUserInput != "@octocat" {
-		t.Errorf("expected @octocat, got %s", m.githubUserInput)
-	}
+func selectOptions(t *testing.T, field *huh.Select[string]) []reflect.Value {
+t.Helper()
+options := accessibleValue(accessibleValue(reflect.ValueOf(field).Elem().FieldByName("options")).FieldByName("val"))
+result := make([]reflect.Value, options.Len())
+for i := 0; i < options.Len(); i++ {
+result[i] = options.Index(i)
+}
+return result
 }
 
-// TestBuildNetworkFormDNSInput tests DNS input field
-func TestBuildNetworkFormDNSInput(t *testing.T) {
-	w := newTestWizard()
-	w.State.Interfaces = []model.NetworkInterface{
-		{Name: "eth0", MAC: "00:11:22:33:44:55", State: "up"},
-	}
-	m := New(w)
-	m.dnsInput = "1.1.1.1,8.8.8.8"
-
-	form := m.buildNetworkForm()
-	if form == nil {
-		t.Fatal("buildNetworkForm returned nil")
-	}
-
-	if m.dnsInput != "1.1.1.1,8.8.8.8" {
-		t.Errorf("expected DNS 1.1.1.1,8.8.8.8, got %s", m.dnsInput)
-	}
+func accessibleValue(value reflect.Value) reflect.Value {
+if value.CanAddr() {
+return reflect.NewAt(value.Type(), unsafe.Pointer(value.UnsafeAddr())).Elem()
 }
-
-// TestBuildTailscaleFormWithRoutesNoAuthKey tests routes without auth key
-func TestBuildTailscaleFormWithRoutesNoAuthKey(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-	m.tailscaleAuthKeyIn = ""
-	m.tailscaleModeIn = model.TailscaleModeSubnetRouter
-	m.tailscaleRoutesIn = "10.0.0.0/8"
-
-	form := m.buildTailscaleForm()
-	if form == nil {
-		t.Fatal("buildTailscaleForm returned nil")
-	}
-
-	// Routes can be set even without auth key
-	if m.tailscaleRoutesIn != "10.0.0.0/8" {
-		t.Errorf("expected routes 10.0.0.0/8, got %s", m.tailscaleRoutesIn)
-	}
+return value
 }
