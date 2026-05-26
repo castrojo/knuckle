@@ -200,7 +200,6 @@ func (r *errorReader) Read([]byte) (int, error) {
 
 func (r *errorReader) Close() error { return nil }
 
-
 // Verify Client satisfies KeyFetcher at compile time.
 var _ KeyFetcher = (*Client)(nil)
 
