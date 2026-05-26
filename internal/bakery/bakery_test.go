@@ -566,7 +566,6 @@ func TestNewHTTPClient(t *testing.T) {
 	c := bakery.NewHTTPClient()
 	if c == nil {
 		t.Fatal("NewHTTPClient() returned nil")
-		return
 	}
 	if c.CatalogURL != bakery.DefaultCatalogURL {
 		t.Errorf("CatalogURL = %q, want %q", c.CatalogURL, bakery.DefaultCatalogURL)
