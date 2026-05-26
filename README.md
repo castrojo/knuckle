@@ -78,6 +78,9 @@ just build-arm64
 # Run the installer (on a Flatcar live environment)
 ./bin/knuckle
 
+# Explore the full TUI with mocked hardware and catalog data
+./bin/knuckle --demo
+
 # Dry-run mode (no disk writes)
 ./bin/knuckle --dry-run
 
@@ -163,6 +166,8 @@ just cover        # coverage profile + summary
 just cover-check  # per-package coverage threshold gate
 just headless-test  # build + canned JSON config (CI gate, runs on host)
 ```
+
+Tip: use `./bin/knuckle --demo` to run the full wizard with mocked hardware and catalog data. No QEMU, network, or real disks required.
 
 ### VM Testing
 
