@@ -186,4 +186,3 @@ func (f *archCaptureFetcher) FetchCatalogArch(_ context.Context, arch string) ([
 	*f.archPtr = arch
 	return nil, nil
 }
-
