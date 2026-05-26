@@ -391,7 +391,7 @@ func TestViewStorage_RemovableDisk(t *testing.T) {
 	}
 	m := New(w)
 	out := m.viewStorage()
-	if !strings.Contains(out, "removable") {
+	if !strings.Contains(out, "(removable)") {
 		t.Errorf("viewStorage should show '(removable)' for removable disks, got: %q", out)
 	}
 }
