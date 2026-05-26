@@ -59,6 +59,7 @@ func TestCommandInjectionViaDiskPath(t *testing.T) {
 			}
 			if installCall == nil {
 				t.Fatal("flatcar-install was not called")
+				return
 			}
 
 			// The disk path must appear as a SINGLE argument after -d
