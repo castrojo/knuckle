@@ -1,14 +1,20 @@
+# Codecov configuration — coverage regression alerting
+# https://docs.codecov.io/docs/codecov-yaml
+codecov:
+  require_ci_to_pass: false
+
 coverage:
   status:
     project:
       default:
-        target: auto # don't drop below current coverage
-        threshold: 1% # allow 1% tolerance for refactors
+        target: auto      # compare against base commit
+        threshold: 1%     # allow 1% drop before failing status
+        if_ci_failed: error
     patch:
       default:
-        target: 80% # new code in PRs should be ≥80% covered
+        target: 80%       # new lines in PRs should be 80%+ covered
 
 comment:
-  layout: reach,diff,flags
+  layout: "reach,diff,flags,files"
   behavior: default
-  require_changes: true
+  require_changes: true   # only comment when coverage changes
