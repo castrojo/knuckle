@@ -89,7 +89,7 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 // ToInstallConfig converts a headless Config to a model.InstallConfig.
-func (c *Config) ToInstallConfig() (*model.InstallConfig, error) {
+func (c *Config) ToInstallConfig() *model.InstallConfig {
 	cfg := &model.InstallConfig{
 		Arch:     c.Arch,
 		Channel:  c.Channel,
@@ -180,7 +180,7 @@ func (c *Config) ToInstallConfig() (*model.InstallConfig, error) {
 		cfg.UpdateStrategy.RebootStrategy = "reboot"
 	}
 
-	return cfg, nil
+	return cfg
 }
 
 // resolveSysexts fetches the bakery catalog for the given arch and matches each
@@ -444,10 +444,7 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 	}
 
 	// Step 3: Convert to InstallConfig
-	installCfg, err := cfg.ToInstallConfig()
-	if err != nil {
-		return fmt.Errorf("converting config: %w", err)
-	}
+	installCfg := cfg.ToInstallConfig()
 	installCfg.Sysexts = resolvedSysexts
 
 	// Step 4: Full consistency check
