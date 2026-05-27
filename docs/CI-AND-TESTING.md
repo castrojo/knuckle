@@ -128,6 +128,62 @@ If `just ci` passes locally but fails in CI, the gap is one of:
   `SpyRunner` stub. Integration tests that hit real APIs go behind
   `//go:build integration`.
 
+### Test Scaffold Patterns
+
+**Bubble Tea TUI — `noopMsg{}` to reach form-state delegation**
+
+`tui.Update()` has a `case tea.WindowSizeMsg:` that returns early when
+`m.activeForm != nil`, bypassing form-state lines 244-256. A sentinel message
+type that falls through all switch arms forces delegation to the active form:
+
+```go
+type noopMsg struct{}
+
+m := newTestModel(t)
+m.activeForm = buildTestForm() // set form with pre-configured State
+m, _ = m.Update(noopMsg{})    // reaches form delegation path
+```
+
+**Bubble Tea TUI — testing `huh` form state transitions**
+
+`huh.Form.State` is an exported field; `huh.StateCompleted` and
+`huh.StateAborted` are exported constants. No mocking required:
+
+```go
+f := huh.NewForm(huh.NewGroup(huh.NewNote().Title("test")))
+f.State = huh.StateCompleted
+m.activeForm = f
+m, _ = m.Update(noopMsg{})
+// assert m.activeForm == nil (form cleared after completion)
+```
+
+**`internal/github` — `io.ReadAll` error path via custom transport**
+
+Inject a failing `http.RoundTripper` to exercise the `io.ReadAll` error branch
+(github.go line 66-68) without touching any real network:
+
+```go
+type errReader struct{}
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("injected read error") }
+
+type brokenBodyTransport struct{}
+func (brokenBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+    return &http.Response{
+        StatusCode: http.StatusOK,
+        Header:     make(http.Header),
+        Body:       io.NopCloser(errReader{}),
+    }, nil
+}
+
+client := &http.Client{Transport: brokenBodyTransport{}}
+```
+
+**Dead code note — `panelWidth < 20` in `renderDetailPanel` (tui.go:984-986)**
+
+This guard is unreachable. `effectiveWidth < 60` returns early first; when
+`effectiveWidth >= 60`, `panelWidth = min(52, effectiveWidth-32) >= 28 > 20`
+always. The `panelWidth < 20` block is dead code and can be removed if desired.
+
 ## Adding a CI Job
 
 - Pin the action by version, not `@main`.
@@ -237,33 +293,4 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
 - Verify `ens3` vs `eth0` interface name in static-network vm-e2e pass.
 - Add fixture gaps: `lsblk-empty.json`, `lsblk-all-removable.json`,
   `ip_addr-ipv6-only.json`, `bakery-malformed-digests` (from QA review).
-- ~~Raise `tui` coverage (currently 52%)~~ **Done** — `internal/tui` reached 94.1% (gate: 94%). Consider pushing toward 97%+ by covering remaining edge cases in `views.go`.
-
-## Known Untestable / Dead-Code Paths (TUI)
-
-These lines appear as uncovered in coverage profiles but represent intentional
-defensive guards or network-dependent closures that cannot be exercised by unit
-tests:
-
-**Defensive nil-form guards** (`form_logic.go:66-67, 77-78, 136-137, 164;
-`tui.go:463-464, 486, 552-554`):
-- These guards protect `m.activeForm.Init()` against a nil pointer in case a
-  future step is added without a huh form, but are always false with the current
-  step/form mapping.
-- `StepWelcome` always produces nil activeForm (card selector, not huh form).
-- `StepStorage`, `StepSysext`, `StepNvidia`, `StepUpdate`, `StepInstall`,
-  `StepDone` all fall into `default: m.activeForm = nil` in `initForm()`.
-- Acceptable as-is: they provide forward-compatibility safety.
-
-**Async closure body in onFormComplete** (`form_logic.go:107-108`):
-- The closure body `keys, err := github.FetchKeys(username)` inside the returned
-  `tea.Cmd` executes only when BubbleTea's runtime calls it, not when the test
-  calls `onFormComplete()`.
-- Unit tests can verify `cmd != nil` and `m.fetching == true`, but cannot run the
-  closure body without a real BubbleTea program loop or network access.
-- To test this path, use an integration test (build tag `integration`) or extract
-  the fetcher call into a testable function with injected client.
-
-**Init() auto-quit path** (`tui.go:116-119`):
-- Set `KNUCKLE_TEST_TUI_AUTO_QUIT=1` via `t.Setenv()` before calling `m.Init()`.
-- Assert `m.quitting == true` and that `cmd()` returns `tea.QuitMsg{}`.
+- ~~Raise `tui` coverage (currently 52%)~~ **Done** — `internal/tui` reached 95.6% (gate: 94%). PR #521 adds form-state and render branch tests.
