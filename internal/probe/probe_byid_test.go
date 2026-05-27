@@ -142,3 +142,27 @@ func TestResolveByIDPathIn_RegularFile_Skipped(t *testing.T) {
 		t.Errorf("resolveByIDPathIn() = %q, want %q", got, want)
 	}
 }
+
+// TestResolveByIDPathIn_ReadlinkError_Continue covers probe.go:233-234 —
+// the `if err != nil { continue }` branch inside the directory scan loop.
+// The regular file "aaa-regular" sorts before "zzz-link" so os.Readlink is
+// called on the regular file first, triggering the error/continue path before
+// the loop reaches the matching symlink.
+func TestResolveByIDPathIn_ReadlinkError_Continue(t *testing.T) {
+	byIDDir := t.TempDir()
+
+	// Regular file sorts before the symlink (alphabetically "aaa" < "zzz").
+	if err := os.WriteFile(filepath.Join(byIDDir, "aaa-regular"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("creating regular file: %v", err)
+	}
+	// Matching symlink comes second.
+	if err := os.Symlink("/dev/sda", filepath.Join(byIDDir, "zzz-link")); err != nil {
+		t.Fatalf("creating symlink: %v", err)
+	}
+
+	got := resolveByIDPathIn("/dev/sda", byIDDir)
+	want := filepath.Join(byIDDir, "zzz-link")
+	if got != want {
+		t.Errorf("resolveByIDPathIn() = %q, want %q (should skip non-symlink and find zzz-link)", got, want)
+	}
+}
