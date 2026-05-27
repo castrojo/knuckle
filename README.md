@@ -13,6 +13,13 @@ This is also basically [Azure Container Linux (Home Edition)](https://opensource
 
 ![img](https://github.com/user-attachments/assets/802bb450-f48c-4186-a1d0-542535124bc5)
 
+> [!WARNING]
+> **Pre-alpha software — use with caution**
+> - **Wipes the target disk** — the installer is destructive with no undo after confirmation
+> - **UEFI-only** — BIOS/legacy boot is not supported
+> - **Single disk only** — multi-disk setups are not supported
+> - **English only** — no i18n support yet
+
 ## Why
 
 Another Linux for the home? Flatcar is in the [CNCF](https://cncf.io), which means there's a core operating system in a vendor-neutral Foundation. The kind of tech that will stick around in the long term. And designed to run anything you want. Plop anything from [linuxserver.io](https://www.linuxserver.io/) right on it for an awesome setup. 
@@ -189,7 +196,14 @@ just ssh          # SSH into running VM
 
 ARM64 VM testing: `KNUCKLE_ARCH=arm64 just vm` (requires native arm64 hardware or QEMU TCG). Set the same env var for other arm64-targeted `just` recipes such as `build`, `vm-e2e`, `iso`, and `boot-iso`.
 
-Requires: Go 1.26+, [just](https://just.systems), QEMU with KVM
+**Prerequisites:**
+- **Go 1.26+** and **[just](https://just.systems)**
+- **QEMU with KVM:**
+  - Ubuntu/Debian: `apt install qemu-system-x86-64 qemu-efi-aarch64 ovmf`
+  - Fedora/RHEL: `dnf install qemu-system-x86 qemu-system-aarch64 edk2-ovmf`
+  - Arch: `pacman -S qemu qemu-efi-aarch64 edk2-ovmf`
+- **OVMF firmware** — required for `just hardware-repro` (auto-installed above) and UEFI VM testing
+- **Flatcar QEMU base image** — download via [docs/GHOST-LAB.md](docs/GHOST-LAB.md) before first run. `just vm` will fail if the image is missing
 
 ## Architecture
 
