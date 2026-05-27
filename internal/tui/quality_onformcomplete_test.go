@@ -12,7 +12,6 @@ package tui
 //   - form_logic.go:136-138 onFormComplete StepReview unconfirmed go-back → nil form
 
 import (
-	"os"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -45,8 +44,6 @@ func TestInit_AutoQuit_EnvVar(t *testing.T) {
 		t.Errorf("expected tea.QuitMsg from Init() cmd, got %T", msg)
 	}
 
-	// Cleanup — os.Setenv is scoped by t.Setenv but explicitly unset for clarity.
-	os.Unsetenv("KNUCKLE_TEST_TUI_AUTO_QUIT")
 }
 
 // ── tui.go:209-212  fetchKeysMsg Next() error ────────────────────────────────
