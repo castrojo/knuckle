@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -45,47 +46,37 @@ func TestInstall_WriteIgnitionFileError(t *testing.T) {
 	}
 }
 
-// TestInstall_CompileToIgnitionError covers install.go:64-66 — when
-// CompileToIgnition fails with invalid Butane YAML produced by the Generator.
-// Since Generator is a concrete type, we verify this path by injecting Butane
-// that is syntactically valid YAML but semantically invalid for the butane compiler.
+// TestInstall_CompileToIgnitionError covers install.go:77-79 — the error-return
+// branch after CompileToIgnition. The compileToIgnitionFunc test seam is overridden
+// to inject a compilation failure without needing invalid Butane YAML.
 func TestInstall_CompileToIgnitionError(t *testing.T) {
+	orig := compileToIgnitionFunc
+	compileToIgnitionFunc = func(_ string) (string, error) {
+		return "", fmt.Errorf("butane compilation failed")
+	}
+	t.Cleanup(func() { compileToIgnitionFunc = orig })
+
 	spy := runner.NewSpyRunner()
 	installer := NewFlatcarInstaller(spy, testLogger())
 
-	// Use a config that will produce valid Butane template output but with
-	// a sysext that has an invalid URL scheme (non-HTTPS) - this actually
-	// triggers GenerateButane error. For CompileToIgnition error specifically,
-	// we need the Generator to succeed but produce output that butane rejects.
-	// The existing butane compiler is strict — any schema violation fails.
-	//
-	// However, triggering CompileToIgnition error via normal config is difficult
-	// since Generator output follows the template. Instead, we verify the error
-	// wrapping behavior is tested from the GenerateButane path which is adjacent.
-	//
-	// This test verifies install.go:56-58 from a fresh angle: using a sysext
-	// with an empty URL (not http, not https — just empty), which may
-	// pass or fail depending on Generator implementation.
 	cfg := &model.InstallConfig{
 		Hostname: "node01",
 		Channel:  "stable",
 		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
 		Disk:     model.DiskInfo{DevPath: "/dev/vda"},
 		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@qa"}}},
-		Sysexts: []model.SysextEntry{
-			{Name: "docker", URL: "ftp://invalid-scheme.example.com/docker.raw", Selected: true},
-		},
 	}
 
 	err := installer.Install(context.Background(), cfg, func(string) {})
 	if err == nil {
-		// If this didn't error, the URL scheme validation might not catch ftp://
-		t.Log("NOTE: ftp:// URL did not trigger GenerateButane error — adjust test if needed")
-		return
+		t.Fatal("expected error from CompileToIgnition, got nil")
 	}
-	// Should be a "generating butane config" error
-	if !strings.Contains(err.Error(), "generating butane") && !strings.Contains(err.Error(), "compiling butane") {
-		t.Errorf("error should mention butane generation or compilation, got: %v", err)
+	if !strings.Contains(err.Error(), "compiling butane") {
+		t.Errorf("error = %q, want 'compiling butane' prefix", err.Error())
+	}
+	// Verify installer did not proceed to flatcar-install
+	if len(spy.Calls) > 0 {
+		t.Errorf("expected no commands executed when CompileToIgnition fails, got: %v", spy.Calls)
 	}
 }
 
