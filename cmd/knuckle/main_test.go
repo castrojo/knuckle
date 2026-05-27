@@ -459,6 +459,36 @@ func TestRunHeadlessWithRunner_RebootError(t *testing.T) {
 	}
 }
 
+// TestRunHeadlessWithRunner_NilRunnerRealRunnerPath verifies that when no runner
+// is injected and cfg.DryRun=false, runHeadlessWithRunner creates a RealRunner
+// (covers main.go:201-202) and propagates a headless.Run error (covers main.go:211-212).
+// The config uses an invalid network mode so cfg.Validate() fails before any
+// shell commands are executed — safe to run in any environment.
+func TestRunHeadlessWithRunner_NilRunnerRealRunnerPath(t *testing.T) {
+	// invalid network mode causes cfg.Validate() to fail immediately in headless.Run,
+	// before any block-device checks or shell commands are issued.
+	const invalidNetworkConfig = `{
+  "channel": "stable",
+  "hostname": "testhost",
+  "disk": "",
+  "network": {"mode": "not-a-valid-mode"},
+  "users": [{"username": "core", "ssh_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test@knuckle"]}],
+  "update_strategy": "reboot",
+  "dry_run": false
+}`
+	cfg := writeTempConfig(t, invalidNetworkConfig)
+	logFile := t.TempDir() + "/real-runner.log"
+
+	// Pass nil runner + dryRun=false so line 201-202 (NewRealRunner) is reached.
+	err := runHeadlessWithRunner(cfg, false, logFile, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid network mode config, got nil")
+	}
+	if !strings.Contains(err.Error(), "network mode") {
+		t.Errorf("expected 'network mode' validation error, got: %v", err)
+	}
+}
+
 // TestRunHeadlessWithRunner_NoRebootWhenDisabled verifies that no reboot is
 // issued when cfg.Reboot=false.
 func TestRunHeadlessWithRunner_NoRebootWhenDisabled(t *testing.T) {
