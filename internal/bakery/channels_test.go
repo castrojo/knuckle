@@ -756,3 +756,33 @@ func TestFetchAllChannels_ContextCancelled(t *testing.T) {
 		t.Fatal("expected error with cancelled context")
 	}
 }
+
+func TestFetchChannelInfo_PkgListFetchError(t *testing.T) {
+	// version.txt succeeds; SBOM 404 keeps sbomUsed=false; pkg-list 404 hits
+	// the previously uncovered error-return on line 88-90 of channels.go.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stable/current/version.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+	})
+	// All other paths (sbom, pkg-list) return 404 by default.
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldClient := channelHTTPClient
+	channelHTTPClient = srv.Client()
+	defer func() { channelHTTPClient = oldClient }()
+
+	_, err := fetchChannelInfoFromURLs(
+		context.Background(),
+		"stable",
+		srv.URL+"/stable/current/version.txt",
+		srv.URL+"/stable/current/flatcar_production_image_packages.txt",
+	)
+	if err == nil {
+		t.Fatal("expected error when pkg-list fetch fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetching package list") {
+		t.Errorf("error %q does not mention 'fetching package list'", err.Error())
+	}
+}

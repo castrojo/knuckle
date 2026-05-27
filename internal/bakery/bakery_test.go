@@ -620,3 +620,20 @@ func TestFetchSHA256ForAsset_DotSlashPrefix(t *testing.T) {
 		t.Errorf("expected hash %q, got %q", wantHash, entries[0].Sha256)
 	}
 }
+
+func TestMockClientFetchCatalogArch_AllOtherArch(t *testing.T) {
+	// All entries are arm64-only; requesting amd64 finds no match.
+	// The fallback in MockClient returns all entries rather than nil.
+	entries := []model.SysextEntry{
+		{Name: "myext", URL: "https://example.com/myext-1.0.0-arm64.raw"},
+		{Name: "other", URL: "https://example.com/other-2.0.0-arm64.raw"},
+	}
+	m := &bakery.MockClient{Entries: entries}
+	got, err := m.FetchCatalogArch(context.Background(), "amd64")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != len(entries) {
+		t.Errorf("fallback: got %d entries, want %d (all entries returned)", len(got), len(entries))
+	}
+}
