@@ -108,6 +108,44 @@ func TestFetchCatalogSuccess(t *testing.T) {
 	}
 }
 
+func TestFetchCatalogIncludesAuthorizationWhenTokenPresent(t *testing.T) {
+	const token = "ghp_testtoken123"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+token {
+			t.Fatalf("expected Authorization header %q, got %q", "Bearer "+token, got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(mockGitHubReleasesJSON))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	client.AuthToken = token
+
+	if _, err := client.FetchCatalog(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFetchCatalogOmitsAuthorizationWhenTokenEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Fatalf("expected empty Authorization header, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(mockGitHubReleasesJSON))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	client.AuthToken = ""
+
+	if _, err := client.FetchCatalog(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestFetchCatalogSkipsReleasesWithoutX86Asset(t *testing.T) {
 	payload := `[{
 		"tag_name": "myext-v1.0.0",
