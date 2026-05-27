@@ -90,6 +90,9 @@ func TestRun_WriteErrorPropagation_AllOutputWrites(t *testing.T) {
 				if err == nil {
 					t.Fatalf("failAt=%d: expected write error, got nil", failAt)
 				}
+				if errors.Is(err, errStrictViolation) {
+					t.Fatalf("failAt=%d: expected write error precedence over strict violation", failAt)
+				}
 				if !errors.Is(err, errInjectedWrite) {
 					t.Fatalf("failAt=%d: expected injected write error, got %v", failAt, err)
 				}
@@ -115,6 +118,9 @@ func TestRun_WriteErrorPropagation_StrictErrWriter(t *testing.T) {
 	err := run(context.Background(), stdout, stderr, fetcher, "amd64", true)
 	if err == nil {
 		t.Fatal("expected error when strict-mode stderr write fails")
+	}
+	if errors.Is(err, errStrictViolation) {
+		t.Fatal("expected write error precedence over strict violation")
 	}
 	if !errors.Is(err, errInjectedWrite) {
 		t.Fatalf("expected injected write error, got %v", err)
