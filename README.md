@@ -20,6 +20,72 @@ This is also basically [Azure Container Linux (Home Edition)](https://opensource
 > - **Single disk only** — multi-disk setups are not supported
 > - **English only** — no i18n support yet
 
+## Installation
+
+> Knuckle is pre-alpha. Test on hardware you can reinstall.
+
+### 1. Download the installer ISO
+
+From [Releases](https://github.com/projectbluefin/knuckle/releases), download:
+
+| Architecture | Release asset |
+|---|---|
+| AMD64 / x86_64 | `knuckle-installer-stable-amd64.iso` |
+| ARM64 | `knuckle-installer-stable-arm64.iso` |
+
+Verify the checksum (recommended):
+
+```bash
+# use the matching .sha256 file for your architecture
+sha256sum -c knuckle-installer-stable-amd64.iso.sha256
+```
+
+### 2. Write the ISO to USB
+
+Linux:
+
+```bash
+# Replace /dev/sdX with your USB device (check with lsblk first)
+sudo dd if=knuckle-installer-stable-amd64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+macOS: use `diskutil list` to find your USB device and write with `dd` using the matching `/dev/diskN` path.
+
+Windows: use [Rufus](https://rufus.ie), select the ISO, choose **DD Image** mode, then start.
+
+### 3. Boot from USB
+
+1. Insert the USB drive into the target machine.
+2. Enter BIOS/UEFI setup (commonly `F2`, `F12`, or `Del` at power-on).
+3. Set USB as first boot device, or pick it from the one-time boot menu.
+4. Save and reboot; Knuckle starts automatically.
+
+### 4. Follow the wizard
+
+The base flow is 9 steps:
+
+1. **Welcome** (`Ctrl+A` toggles external Ignition URL mode)
+2. **Network** (DHCP or static IPv4)
+3. **Storage** (select target disk; all data is erased)
+4. **User** (hostname, timezone, password, SSH keys)
+5. **Sysext** (optional Flatcar Bakery extensions)
+6. **Update strategy**
+7. **Review** (`Ctrl+B` toggles full Butane preview)
+8. **Install** (`flatcar-install` runs with live progress)
+9. **Done** (remove USB and reboot)
+
+If you enable Tailscale or NVIDIA options, additional wizard steps appear.
+
+### 5. First boot
+
+SSH to the installed system with the credentials you configured:
+
+```bash
+ssh core@<your-server-ip>
+```
+
+For unattended installs, see [docs/HEADLESS-CONFIG.md](docs/HEADLESS-CONFIG.md).
+
 ## Why
 
 Another Linux for the home? Flatcar is in the [CNCF](https://cncf.io), which means there's a core operating system in a vendor-neutral Foundation. The kind of tech that will stick around in the long term. And designed to run anything you want. Plop anything from [linuxserver.io](https://www.linuxserver.io/) right on it for an awesome setup. 
