@@ -9,11 +9,9 @@ import (
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
-// TestToInstallConfig_NeverReturnsError documents that ToInstallConfig() currently
-// never returns an error (the error return exists for forward compatibility).
-// This means the error-handling path in Run() at line 448 is dead code.
-func TestToInstallConfig_NeverReturnsError(t *testing.T) {
-	// Exercise ToInstallConfig with various inputs to confirm no error is returned.
+// TestToInstallConfig_AlwaysBuildsInstallConfig verifies ToInstallConfig always
+// produces an InstallConfig for validated input shapes.
+func TestToInstallConfig_AlwaysBuildsInstallConfig(t *testing.T) {
 	cases := []struct {
 		name string
 		cfg  *Config
@@ -38,16 +36,16 @@ func TestToInstallConfig_NeverReturnsError(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.cfg.ToInstallConfig()
-			if err != nil {
-				t.Errorf("ToInstallConfig returned unexpected error: %v", err)
+			ic := tc.cfg.ToInstallConfig()
+			if ic == nil {
+				t.Fatal("ToInstallConfig returned nil config")
 			}
 		})
 	}
 }
 
 // TestRun_ToInstallConfigPathExercised verifies the full Run path passes through
-// ToInstallConfig without error, covering the L447-450 code path (the non-error branch).
+// config conversion and into install execution.
 func TestRun_ToInstallConfigPathExercised(t *testing.T) {
 	origFetch := fetchGitHubKeysFunc
 	defer func() { fetchGitHubKeysFunc = origFetch }()

@@ -110,13 +110,9 @@ func TestRun_GitHubKeyInvalidFromRemote(t *testing.T) {
 	}
 }
 
-// TestRun_ToInstallConfigError tests the path (line 448) where ToInstallConfig
-// returns an error during Run. This requires a config that passes Validate()
-// but fails ToInstallConfig().
-func TestRun_ToInstallConfigError(t *testing.T) {
-	// ToInstallConfig can fail if update_strategy is unrecognized (Validate
-	// allows empty, but ToInstallConfig might reject it depending on logic).
-	// We test by passing a config with an arch that ToInstallConfig doesn't handle.
+// TestRun_InvalidUpdateStrategy_BlocksBeforeInstall verifies invalid
+// update_strategy is rejected at validation time and does not reach install.
+func TestRun_InvalidUpdateStrategy_BlocksBeforeInstall(t *testing.T) {
 	cfg := &Config{
 		Channel:        "stable",
 		Hostname:       "node01",
@@ -131,10 +127,14 @@ func TestRun_ToInstallConfigError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	err := Run(context.Background(), cfg, installer, logger)
-	// This test documents what happens with an invalid update_strategy.
-	// If Validate() catches it first, that's fine — we're testing the boundary.
 	if err == nil {
-		t.Log("NOTE: config passed both Validate and ToInstallConfig — adjust test input if coverage needed")
+		t.Fatal("expected validation error for invalid update_strategy")
+	}
+	if !strings.Contains(err.Error(), "validation failed: update_strategy") {
+		t.Errorf("expected validation failure for update_strategy, got: %v", err)
+	}
+	if installer.called {
+		t.Error("installer should not be called for invalid update_strategy")
 	}
 }
 

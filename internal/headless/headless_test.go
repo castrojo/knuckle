@@ -315,10 +315,7 @@ func TestToInstallConfig(t *testing.T) {
 		UpdateStrategy: "off",
 	}
 
-	installCfg, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	installCfg := cfg.ToInstallConfig()
 
 	if installCfg.Channel != "beta" {
 		t.Errorf("channel: got %q, want beta", installCfg.Channel)
@@ -349,10 +346,7 @@ func TestToInstallConfig_Defaults(t *testing.T) {
 		Disk:  "/dev/vdb",
 	}
 
-	installCfg, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	installCfg := cfg.ToInstallConfig()
 
 	if installCfg.Channel != "stable" {
 		t.Errorf("default channel: got %q, want stable", installCfg.Channel)
@@ -438,10 +432,7 @@ func TestToInstallConfig_StaticNetwork(t *testing.T) {
 		UpdateStrategy: "off",
 	}
 
-	installCfg, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	installCfg := cfg.ToInstallConfig()
 
 	if installCfg.Network.Mode != model.NetworkStatic {
 		t.Errorf("mode: got %v, want Static", installCfg.Network.Mode)
@@ -665,10 +656,7 @@ func TestToInstallConfig_DefaultArch(t *testing.T) {
 		Disk:           "/dev/vda",
 		UpdateStrategy: "reboot",
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.Arch != "amd64" {
 		t.Errorf("default arch: got %q, want \"amd64\"", ic.Arch)
 	}
@@ -734,10 +722,7 @@ func TestToInstallConfig_Arm64(t *testing.T) {
 		Disk:           "/dev/vda",
 		UpdateStrategy: "reboot",
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.Arch != "arm64" {
 		t.Errorf("got arch %q, want \"arm64\"", ic.Arch)
 	}
@@ -901,10 +886,7 @@ func TestToInstallConfig_NvidiaDriverVersionPropagation(t *testing.T) {
 		NvidiaDriverVersion: "570-open",
 	}
 
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.NvidiaDriverVersion != "570-open" {
 		t.Errorf("NvidiaDriverVersion not propagated: got %q, want \"570-open\"", ic.NvidiaDriverVersion)
 	}
@@ -920,10 +902,7 @@ func TestToInstallConfig_NvidiaDriverVersionEmpty(t *testing.T) {
 		Disk:     "/dev/vdb",
 	}
 
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.NvidiaDriverVersion != "" {
 		t.Errorf("NvidiaDriverVersion should be empty, got %q", ic.NvidiaDriverVersion)
 	}
@@ -1483,10 +1462,7 @@ func TestToInstallConfig_IgnitionURL_PropagatesCorrectly(t *testing.T) {
 		IgnitionURL: "https://myserver.example.com/nodes/prod-01.ign",
 	}
 
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.IgnitionURL != "https://myserver.example.com/nodes/prod-01.ign" {
 		t.Errorf("IgnitionURL = %q, want https://myserver.example.com/nodes/prod-01.ign", ic.IgnitionURL)
 	}
@@ -1510,10 +1486,7 @@ func TestToInstallConfig_PasswordOnlyUser_SetsPasswordHash(t *testing.T) {
 		Disk:     "/dev/sda",
 	}
 
-	installCfg, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig() error: %v", err)
-	}
+	installCfg := cfg.ToInstallConfig()
 
 	if len(installCfg.Users) == 0 {
 		t.Fatal("expected at least one user in install config")
@@ -1784,10 +1757,7 @@ func TestToInstallConfig_OmittedTailscaleSkipsIgnitionArtifacts(t *testing.T) {
 		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
 	}
 
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 
 	gen := ignition.NewGenerator()
 	out, err := gen.GenerateButane(ic)
@@ -1813,10 +1783,7 @@ func TestToInstallConfig_TailscaleDefaultsMode(t *testing.T) {
 			Mode:    "", // should default to "connect"
 		},
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.Tailscale.Mode != "connect" {
 		t.Errorf("Tailscale.Mode = %q, want %q", ic.Tailscale.Mode, "connect")
 	}
@@ -1833,10 +1800,7 @@ func TestToInstallConfig_UserCustomGroups(t *testing.T) {
 			Groups:   []string{"wheel", "adm"},
 		}},
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if len(ic.Users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(ic.Users))
 	}
@@ -1853,10 +1817,7 @@ func TestToInstallConfig_DefaultTimezone(t *testing.T) {
 		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
 		Timezone: "", // should default to UTC
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.Timezone != "UTC" {
 		t.Errorf("Timezone = %q, want UTC", ic.Timezone)
 	}
@@ -1871,10 +1832,7 @@ func TestToInstallConfig_NonNilSwap(t *testing.T) {
 		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
 		Swap:    &SwapConfig{Enabled: enabled, SizeMB: 512},
 	}
-	ic, err := cfg.ToInstallConfig()
-	if err != nil {
-		t.Fatalf("ToInstallConfig: %v", err)
-	}
+	ic := cfg.ToInstallConfig()
 	if ic.Swap.Enabled != false || ic.Swap.SizeMB != 512 {
 		t.Errorf("Swap = %+v, want {Enabled:false SizeMB:512}", ic.Swap)
 	}
