@@ -269,6 +269,9 @@ jobs:
     name: CI/bats script tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -277,3 +280,25 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y bats
       - name: Run BATS tests
         run: bats scripts/tests/*.bats
+      - name: File issue on main BATS failure
+        if: failure() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sha7 = context.sha.slice(0, 7);
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 BATS smoke failure on main (${sha7})`,
+              body: [
+                `BATS script tests failed on \`main\` after merging commit ${context.sha}.`,
+                ``,
+                `**Run:** ${runUrl}`,
+                `**Commit:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`,
+                ``,
+                `Check the failing run linked above for the specific test output.`,
+                `Fix the failure and close this issue with a reference to the fixing PR.`,
+              ].join('\n'),
+              labels: ['domain:ci', 'kind/test', 'priority:p0'],
+            });
