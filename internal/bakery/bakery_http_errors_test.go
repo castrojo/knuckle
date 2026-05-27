@@ -222,6 +222,135 @@ func TestFetchSHA256ReadBodyError(t *testing.T) {
 	}
 }
 
+// TestFetchCatalogArchDoError verifies that a transport-level failure in
+// HTTP.Do() during catalog page fetch is surfaced as an error
+// (coverage: bakery.go lines 109-111 — c.HTTP.Do error in FetchCatalogArch).
+func TestFetchCatalogArchDoError(t *testing.T) {
+	// Hijack the connection immediately without writing any response.
+	// This causes HTTP.Do() itself (not just body reading) to return an error.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hj, ok := w.(http.Hijacker); ok {
+			conn, _, _ := hj.Hijack()
+			if conn != nil {
+				_ = conn.Close()
+			}
+		}
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	_, err := client.FetchCatalogArch(context.Background(), "amd64")
+	if err == nil {
+		t.Fatal("expected error from HTTP Do() failure in FetchCatalogArch, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetching catalog") {
+		t.Errorf("expected 'fetching catalog' in error; got: %v", err)
+	}
+}
+
+// TestFetchCatalogArchMalformedLinkURL verifies that a malformed URL in a
+// Link: rel="next" header causes NewRequestWithContext to return an error
+// (coverage: bakery.go lines 101-105 — NewRequestWithContext error on page 2).
+func TestFetchCatalogArchMalformedLinkURL(t *testing.T) {
+	// First page succeeds and returns a Link header pointing to a malformed URL
+	// (leading space makes url.ParseRequestURI fail, which NewRequestWithContext
+	// propagates as an error).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Space before "http" makes the URL invalid for NewRequestWithContext.
+		w.Header().Set("Link", fmt.Sprintf(`< http://%s/page2>; rel="next"`, r.Host))
+		_, _ = w.Write([]byte(`[{"tag_name":"k3s-v1.28.0","body":"k3s","assets":[
+			{"name":"k3s-1.28.0-x86-64.raw","browser_download_url":"https://example.com/k3s.raw"}
+		]}]`))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	_, err := client.FetchCatalogArch(context.Background(), "amd64")
+	if err == nil {
+		t.Fatal("expected error from malformed Link URL, got nil")
+	}
+	if !strings.Contains(err.Error(), "creating request") {
+		t.Errorf("expected 'creating request' in error; got: %v", err)
+	}
+}
+
+// TestFetchSHA256DoError verifies that a transport-level failure in HTTP.Do()
+// during SHA256SUMS fetch is a soft failure — FetchCatalogArch still succeeds
+// but the returned entry has an empty Sha256
+// (coverage: bakery.go lines 248-250 — c.HTTP.Do error in fetchSHA256ForAsset).
+func TestFetchSHA256DoError(t *testing.T) {
+	// Catalog JSON includes a SHA256SUMS asset pointing at the test server.
+	payload := `[{"tag_name":"etcd-v3.5.0","body":"","assets":[
+		{"name":"etcd-3.5.0-x86-64.raw","browser_download_url":"https://BASEURL/etcd-3.5.0-x86-64.raw"},
+		{"name":"SHA256SUMS","browser_download_url":"https://BASEURL/SHA256SUMS"}
+	]}]`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/SHA256SUMS" {
+			// Close immediately without a response — Do() returns a transport error.
+			if hj, ok := w.(http.Hijacker); ok {
+				conn, _, _ := hj.Hijack()
+				if conn != nil {
+					_ = conn.Close()
+				}
+			}
+			return
+		}
+		catalog := strings.ReplaceAll(payload, "https://BASEURL", "http://"+r.Host)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(catalog))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	entries, err := client.FetchCatalogArch(context.Background(), "amd64")
+	// SHA256 fetch failure is soft — FetchCatalogArch must still succeed.
+	if err != nil {
+		t.Fatalf("FetchCatalogArch should succeed despite SHA256 Do() error; got: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	// Sha256 must be empty — the soft-failure suppresses the hash.
+	if entries[0].Sha256 != "" {
+		t.Errorf("expected empty Sha256 when Do() fails; got %q", entries[0].Sha256)
+	}
+}
+
+// TestFetchSHA256MalformedURL verifies that a malformed sha256sumsURL in the
+// catalog JSON causes NewRequestWithContext to fail (soft-fail — FetchCatalogArch
+// still succeeds with empty Sha256).
+// (coverage: bakery.go lines 246-250 — NewRequestWithContext error in fetchSHA256ForAsset).
+func TestFetchSHA256MalformedURL(t *testing.T) {
+	// SHA256SUMS BrowserDownloadURL is a space-prefixed URL that fails url.ParseRequestURI.
+	payload := `[{"tag_name":"etcd-v3.5.0","body":"","assets":[
+		{"name":"etcd-3.5.0-x86-64.raw","browser_download_url":"BASEURL/etcd-3.5.0-x86-64.raw"},
+		{"name":"SHA256SUMS","browser_download_url":" http://malformed-sha256sums-url/SHA256SUMS"}
+	]}]`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		catalog := strings.ReplaceAll(payload, "BASEURL", "http://"+r.Host)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(catalog))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	entries, err := client.FetchCatalogArch(context.Background(), "amd64")
+	// NewRequestWithContext error inside fetchSHA256ForAsset is soft-fail.
+	if err != nil {
+		t.Fatalf("FetchCatalogArch should succeed despite malformed SHA256SUMS URL; got: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	// Sha256 must be empty — the soft-failure suppresses the hash.
+	if entries[0].Sha256 != "" {
+		t.Errorf("expected empty Sha256 on malformed URL; got %q", entries[0].Sha256)
+	}
+}
+
 // TestFetchCatalogSkipsUnparseableTagName verifies that releases with tag
 // names that cannot be parsed by ParseTagName are silently skipped
 // (coverage: line 149 — name == "").
