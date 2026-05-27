@@ -192,3 +192,57 @@ func TestClient_FetchKeys_CapAt50(t *testing.T) {
 		t.Errorf("expected 50 keys (cap), got %d", len(keys))
 	}
 }
+
+// TestClient_FetchKeys_BadBaseURL covers the http.NewRequestWithContext error
+// path (github.go line 47-49). A BaseURL containing a null byte produces an
+// invalid URL that url.Parse rejects inside http.NewRequestWithContext.
+func TestClient_FetchKeys_BadBaseURL(t *testing.T) {
+	client := &Client{
+		BaseURL: "http://127.0.0.1\x00invalid",
+		HTTP:    &http.Client{},
+	}
+	_, err := client.FetchKeys(context.Background(), "validuser")
+	if err == nil {
+		t.Fatal("expected error for invalid BaseURL, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create request") {
+		t.Errorf("expected 'failed to create request' error, got: %v", err)
+	}
+}
+
+// errorBody is an io.ReadCloser whose Read always returns an error,
+// used to exercise the io.ReadAll error path in FetchKeys.
+type errorBody struct{}
+
+func (errorBody) Read(_ []byte) (int, error) { return 0, fmt.Errorf("simulated body read error") }
+func (errorBody) Close() error               { return nil }
+
+// errorBodyTransport is an http.RoundTripper that returns a successful 200
+// response whose body reader immediately fails on the first Read call.
+type errorBodyTransport struct{}
+
+func (errorBodyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       errorBody{},
+		Header:     make(http.Header),
+		Request:    r,
+	}, nil
+}
+
+// TestClient_FetchKeys_BodyReadError covers the io.ReadAll error path
+// (github.go line 66-68) using a custom RoundTripper that serves a 200
+// response with a body reader that immediately returns an error.
+func TestClient_FetchKeys_BodyReadError(t *testing.T) {
+	client := &Client{
+		BaseURL: "http://example.com",
+		HTTP:    &http.Client{Transport: errorBodyTransport{}},
+	}
+	_, err := client.FetchKeys(context.Background(), "validuser")
+	if err == nil {
+		t.Fatal("expected error for broken response body, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read response") {
+		t.Errorf("expected 'failed to read response' error, got: %v", err)
+	}
+}
