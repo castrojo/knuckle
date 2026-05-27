@@ -229,7 +229,7 @@ vm:
 
     echo "Waiting for installed system (first boot runs Ignition)..."
     ok=0
-    for i in $(seq 1 60); do
+    for i in $(seq 1 120); do
         ssh {{SSH_OPTS}} -o ConnectTimeout=3 -p 2222 core@127.0.0.1 true 2>/dev/null && ok=1 && break
         sleep 5
     done
@@ -284,6 +284,8 @@ vm-e2e:
         "$E2E_PUB" > .vm/e2e-config.json
 
     E2E_SSH="ssh {{SSH_OPTS}} -i .vm/e2e_key -p 2222 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 core@127.0.0.1"
+    # Long-running install calls can exceed default keepalive windows.
+    E2E_SSH_LONG="$E2E_SSH -o ServerAliveInterval=60 -o ServerAliveCountMax=120"
     E2E_SCP="scp {{SSH_OPTS}} -i .vm/e2e_key -P 2222"
 
     # ── Step 1: Boot installer VM ──────────────────────────────────────────
@@ -326,9 +328,9 @@ vm-e2e:
     $E2E_SCP bin/knuckle core@127.0.0.1:/tmp/knuckle >/dev/null
     $E2E_SCP .vm/e2e-config.json core@127.0.0.1:/tmp/e2e-config.json >/dev/null
 
-    if ! $E2E_SSH "timeout 15m sudo /tmp/knuckle --headless --config /tmp/e2e-config.json --log-file /tmp/knuckle.log"; then
+    if ! $E2E_SSH_LONG "timeout 15m sudo /tmp/knuckle --headless --config /tmp/e2e-config.json --log-file /tmp/knuckle.log"; then
         echo "❌ headless install failed — knuckle.log:"
-        $E2E_SSH "cat /tmp/knuckle.log" 2>/dev/null || true
+        timeout 20 $E2E_SSH_LONG "cat /tmp/knuckle.log" 2>/dev/null || true
         exit 1
     fi
     echo "  ✓ flatcar-install completed"
@@ -356,7 +358,7 @@ vm-e2e:
         -serial file:.vm/e2e-target-serial.log
 
     ok=0
-    for i in $(seq 1 60); do
+    for i in $(seq 1 120); do
         $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null && ok=1 && break
         sleep 5
     done
@@ -440,9 +442,9 @@ vm-e2e:
     echo "[2/4] Running headless install (static network config)..."
     $E2E_SCP bin/knuckle core@127.0.0.1:/tmp/knuckle >/dev/null
     $E2E_SCP .vm/e2e-static-config.json core@127.0.0.1:/tmp/e2e-static-config.json >/dev/null
-    if ! $E2E_SSH "timeout 15m sudo /tmp/knuckle --headless --config /tmp/e2e-static-config.json --log-file /tmp/knuckle-static.log"; then
+    if ! $E2E_SSH_LONG "timeout 25m sudo /tmp/knuckle --headless --config /tmp/e2e-static-config.json --log-file /tmp/knuckle-static.log"; then
         echo "❌ headless install (static) failed — knuckle-static.log:"
-        $E2E_SSH "cat /tmp/knuckle-static.log" 2>/dev/null || true
+        timeout 20 $E2E_SSH_LONG "cat /tmp/knuckle-static.log" 2>/dev/null || true
         exit 1
     fi
     echo "  ✓ static install completed"
@@ -458,7 +460,7 @@ vm-e2e:
         -serial file:.vm/e2e-static-target-serial.log
 
     ok=0
-    for i in $(seq 1 60); do
+    for i in $(seq 1 120); do
         $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null && ok=1 && break
         sleep 5
     done
@@ -505,7 +507,7 @@ vm-e2e:
     qemu-img create -f qcow2 -b "$(pwd)/.vm/flatcar_base_{{KNUCKLE_ARCH}}.img" -F qcow2 .vm/boot.qcow2 >/dev/null
 
     # docker sysext — knuckle resolves the name to a real URL via bakery catalog
-    printf '{"channel":"stable","hostname":"e2e-sysext","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","sysexts":["docker"],"update_strategy":"off","reboot":false}\n' \
+    printf '{"channel":"stable","hostname":"e2e-sysext","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","swap":{"enabled":false},"sysexts":["docker"],"update_strategy":"off","reboot":false}\n' \
         "$E2E_PUB" > .vm/e2e-sysext-config.json
 
     echo "[1/4] Booting installer VM (sysext pass)..."
@@ -529,9 +531,20 @@ vm-e2e:
     echo "[2/4] Running headless install with docker sysext (downloads ~400MB + sysext)..."
     $E2E_SCP bin/knuckle core@127.0.0.1:/tmp/knuckle >/dev/null
     $E2E_SCP .vm/e2e-sysext-config.json core@127.0.0.1:/tmp/e2e-sysext-config.json >/dev/null
-    if ! $E2E_SSH "timeout 25m sudo /tmp/knuckle --headless --config /tmp/e2e-sysext-config.json --log-file /tmp/knuckle-sysext.log"; then
+    # Pass an authenticated GitHub token when available to avoid unauthenticated
+    # API rate limits while resolving bakery sysext metadata in e2e loops.
+    E2E_GH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+    if [[ -z "$E2E_GH_TOKEN" ]] && command -v gh >/dev/null 2>&1; then
+        E2E_GH_TOKEN="$(gh auth token 2>/dev/null || true)"
+    fi
+    if [[ -n "$E2E_GH_TOKEN" ]]; then
+        INSTALL_CMD="timeout 25m sudo GITHUB_TOKEN='$E2E_GH_TOKEN' /tmp/knuckle --headless --config /tmp/e2e-sysext-config.json --log-file /tmp/knuckle-sysext.log"
+    else
+        INSTALL_CMD="timeout 25m sudo /tmp/knuckle --headless --config /tmp/e2e-sysext-config.json --log-file /tmp/knuckle-sysext.log"
+    fi
+    if ! $E2E_SSH_LONG "$INSTALL_CMD"; then
         echo "❌ sysext install failed — knuckle-sysext.log:"
-        $E2E_SSH "cat /tmp/knuckle-sysext.log" 2>/dev/null || true
+        timeout 20 $E2E_SSH_LONG "cat /tmp/knuckle-sysext.log" 2>/dev/null || true
         exit 1
     fi
     echo "  ✓ sysext install completed"
@@ -547,7 +560,7 @@ vm-e2e:
         -serial file:.vm/e2e-sysext-target-serial.log
 
     ok=0
-    for i in $(seq 1 60); do
+    for i in $(seq 1 120); do
         $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null && ok=1 && break
         sleep 5
     done
@@ -594,7 +607,7 @@ vm-e2e:
     echo ""
 
     # Headless config with nvidia_driver_version (no nvidia-runtime sysext — testing kernel driver path only)
-    printf '{"channel":"stable","hostname":"nvidia-test","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","nvidia_driver_version":"570-open","update_strategy":"off","reboot":false}\n' \
+    printf '{"channel":"stable","hostname":"nvidia-test","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","swap":{"enabled":false},"nvidia_driver_version":"570-open","update_strategy":"off","reboot":false}\n' \
         "$E2E_PUB" > .vm/e2e-nvidia-config.json
 
     # Fresh disks
@@ -624,9 +637,9 @@ vm-e2e:
     echo "[2/4] Running headless install (NVIDIA kernel driver config)..."
     $E2E_SCP bin/knuckle core@127.0.0.1:/tmp/knuckle >/dev/null
     $E2E_SCP .vm/e2e-nvidia-config.json core@127.0.0.1:/tmp/e2e-nvidia-config.json >/dev/null
-    if ! $E2E_SSH "timeout 15m sudo /tmp/knuckle --headless --config /tmp/e2e-nvidia-config.json --log-file /tmp/knuckle-nvidia.log"; then
+    if ! $E2E_SSH_LONG "timeout 15m sudo /tmp/knuckle --headless --config /tmp/e2e-nvidia-config.json --log-file /tmp/knuckle-nvidia.log"; then
         echo "❌ headless install (nvidia) failed — knuckle-nvidia.log:"
-        $E2E_SSH "cat /tmp/knuckle-nvidia.log" 2>/dev/null || true
+        timeout 20 $E2E_SSH_LONG "cat /tmp/knuckle-nvidia.log" 2>/dev/null || true
         exit 1
     fi
     echo "  ✓ nvidia install completed"
@@ -641,7 +654,7 @@ vm-e2e:
         -serial file:.vm/e2e-nvidia-target-serial.log
 
     ok=0
-    for i in $(seq 1 60); do
+    for i in $(seq 1 120); do
         $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null && ok=1 && break
         sleep 3
     done

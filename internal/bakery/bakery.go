@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type Client interface {
 type HTTPClient struct {
 	CatalogURL string
 	HTTP       *http.Client
+	AuthToken  string
 }
 
 // NewHTTPClient creates a new bakery HTTP client
@@ -47,6 +49,7 @@ func NewHTTPClient() *HTTPClient {
 		HTTP: &http.Client{
 			Timeout: defaultTimeout,
 		},
+		AuthToken: githubTokenFromEnv(),
 	}
 }
 
@@ -57,7 +60,15 @@ func NewHTTPClientWithURL(url string) *HTTPClient {
 		HTTP: &http.Client{
 			Timeout: defaultTimeout,
 		},
+		AuthToken: githubTokenFromEnv(),
 	}
+}
+
+func githubTokenFromEnv() string {
+	if tok := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); tok != "" {
+		return tok
+	}
+	return strings.TrimSpace(os.Getenv("GH_TOKEN"))
 }
 
 // githubRelease represents a single release from the GitHub Releases API.
@@ -105,6 +116,9 @@ func (c *HTTPClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 		}
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "knuckle/1.0")
+		if c.AuthToken != "" {
+			req.Header.Set("Authorization", "Bearer "+c.AuthToken)
+		}
 
 		resp, err := c.HTTP.Do(req)
 		if err != nil {
