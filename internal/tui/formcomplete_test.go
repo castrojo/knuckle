@@ -157,6 +157,49 @@ func TestOnFormComplete_User_GitHubFetch(t *testing.T) {
 	}
 }
 
+func TestOnFormComplete_User_GitHubFetch_ClosureBody(t *testing.T) {
+	// Verifies the returned tea.Cmd closure body (the actual fetch call)
+	// by replacing fetchGitHubKeysFn with a stub.
+	want := []string{"ssh-ed25519 AAAA stub@key"}
+	old := fetchGitHubKeysFn
+	fetchGitHubKeysFn = func(username string) ([]string, error) {
+		if username != "someuser" {
+			t.Errorf("fetchGitHubKeysFn: got username %q, want %q", username, "someuser")
+		}
+		return want, nil
+	}
+	defer func() { fetchGitHubKeysFn = old }()
+
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUser
+	w.State.Config.Channel = "stable"
+	w.State.Config.Hostname = "node1"
+	w.State.Config.Disk = model.DiskInfo{DevPath: "/dev/vda"}
+	w.State.Config.Users = []model.UserConfig{{Username: "core"}}
+	m := New(w)
+	m.usernameInput = "core"
+	m.githubUserInput = "@someuser"
+	m.sshKeyInput = "ssh-ed25519 AAAA local@key"
+
+	cmd := m.onFormComplete()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for async fetch")
+	}
+
+	// Execute the closure — this covers the closure body in form_logic.go.
+	msg := cmd()
+	got, ok := msg.(fetchKeysMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want fetchKeysMsg", msg)
+	}
+	if got.err != nil {
+		t.Fatalf("unexpected error in fetchKeysMsg: %v", got.err)
+	}
+	if len(got.keys) != 1 || got.keys[0] != want[0] {
+		t.Errorf("fetchKeysMsg.keys = %v, want %v", got.keys, want)
+	}
+}
+
 func TestOnFormComplete_User_DefaultTimezone(t *testing.T) {
 	w := newTestWizard()
 	w.State.CurrentStep = model.StepUser

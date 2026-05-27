@@ -12,6 +12,10 @@ import (
 	"github.com/projectbluefin/knuckle/internal/wizard"
 )
 
+// fetchGitHubKeysFn is the function used to retrieve SSH keys from GitHub.
+// Tests can replace it to avoid real network calls.
+var fetchGitHubKeysFn = github.FetchKeys
+
 // initForm sets up the huh form for form-based steps.
 // Non-form steps (Storage, Sysext, Update, Install, Done) set activeForm = nil.
 func (m *Model) initForm() {
@@ -104,7 +108,7 @@ func (m *Model) onFormComplete() tea.Cmd {
 			m.fetching = true
 			username := strings.TrimPrefix(m.githubUserInput, "@")
 			return func() tea.Msg {
-				keys, err := github.FetchKeys(username)
+				keys, err := fetchGitHubKeysFn(username)
 				return fetchKeysMsg{keys: keys, err: err}
 			}
 		}
