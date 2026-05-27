@@ -51,4 +51,3 @@ func TestRun_NilRebootFn(t *testing.T) {
 		t.Fatalf("Run(nil rebootFn) returned unexpected error: %v", err)
 	}
 }
-
