@@ -7,9 +7,9 @@ coverage:
   status:
     project:
       default:
-        target: auto
+        target: 91%
         threshold: 1%
-        informational: true
+        informational: false
     patch:
       default:
         target: 80%
