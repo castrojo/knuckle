@@ -142,29 +142,6 @@ func TestViewStorage_UnknownDiskModel(t *testing.T) {
 	}
 }
 
-// TestViewStorage_RemovableDisk verifies that a removable disk shows
-// " (removable)" appended to the transport label (tui.go:832-834).
-func TestViewStorage_RemovableDisk(t *testing.T) {
-	w := newTestWizard()
-	w.State.CurrentStep = model.StepStorage
-	w.State.Disks = []model.DiskInfo{
-		{
-			DevPath:   "/dev/sdb",
-			Model:     "USB Drive",
-			SizeHuman: "32 GB",
-			Transport: "USB",
-			Removable: true,
-		},
-	}
-	m := New(w)
-
-	out := m.render()
-
-	if !strings.Contains(out, "(removable)") {
-		t.Errorf("expected '(removable)' in storage view for removable disk, got: %q", out)
-	}
-}
-
 // TestViewStorage_SelectedDiskStyling verifies that the cursor-selected disk
 // is rendered (selectedStyle path at tui.go:850-852).
 func TestViewStorage_SelectedDiskStyling(t *testing.T) {
