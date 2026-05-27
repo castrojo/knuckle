@@ -15,6 +15,26 @@ file is the curated, human-readable history.
 - `.github/release.yml` to group auto-generated release notes by label
   (Features, Bug fixes, Security, etc.) (#116).
 
+## [0.7.0] - 2026-05-24
+
+### Fixed
+- GPG verification now uses `gpg --decrypt` for Flatcar's clearsigned
+  `.DIGESTS.asc` format; the previous `gpg --verify` call (detached-signature
+  form) always failed silently, leaving ISO integrity unverified.
+- Tailscale Ignition file and systemd unit are only injected when Tailscale is
+  actually configured; prevents spurious empty entries for users who skip it
+  (#343).
+
+### Security
+- Third-party CI actions (`security.yml`, `ci.yml`) pinned to full commit SHAs
+  to prevent supply-chain substitution attacks (#345).
+
+### Internal
+- OSSF Scorecard workflow restricted to scheduled runs only (removes noisy
+  per-push duplication) (#364).
+- `kv_inject_ssh_key` VM helper eliminates the stop/mount/start cycle via
+  `fw_cfg` passthrough, cutting VM-test wall time (#350).
+
 ## [0.6.2] - 2026-05-19
 
 ### Fixed
@@ -73,7 +93,8 @@ file is the curated, human-readable history.
 ### Added
 - First working ISO build with GRUB and `boot-iso` justfile recipes.
 
-[Unreleased]: https://github.com/projectbluefin/knuckle/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/projectbluefin/knuckle/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/projectbluefin/knuckle/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/projectbluefin/knuckle/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/projectbluefin/knuckle/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/projectbluefin/knuckle/compare/v0.5.1...v0.6.0
