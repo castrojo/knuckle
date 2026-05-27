@@ -1,6 +1,7 @@
 package ignition
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -134,5 +135,28 @@ func TestCompile_BuilderStorageLinkIntegration(t *testing.T) {
 	yaml := b.Build()
 	if !strings.Contains(yaml, "localtime") {
 		t.Errorf("Build() output missing storage link: %q", yaml)
+	}
+}
+
+// TestCompileToIgnition_TranslateError covers the err != nil branch (lines 26-28)
+// in CompileToIgnition when translateButane itself returns a non-nil error.
+// This is distinct from the report.IsFatal() path covered by
+// TestCompileToIgnition_FatalReportReturnsError.
+func TestCompileToIgnition_TranslateError(t *testing.T) {
+	prev := translateButane
+	t.Cleanup(func() { translateButane = prev })
+	translateButane = func(_ []byte, _ common.TranslateBytesOptions) ([]byte, report.Report, error) {
+		return nil, report.Report{}, errors.New("injected translation error")
+	}
+
+	_, err := CompileToIgnition("variant: flatcar\nversion: 1.1.0\n")
+	if err == nil {
+		t.Fatal("expected error when translateButane returns non-nil error, got nil")
+	}
+	if !strings.Contains(err.Error(), "butane compilation failed") {
+		t.Errorf("expected 'butane compilation failed' in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "injected translation error") {
+		t.Errorf("expected injected error in message, got: %v", err)
 	}
 }
