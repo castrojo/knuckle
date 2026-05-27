@@ -51,7 +51,7 @@
 | `internal/probe`     |  81%  | 80%  | ≥ 85%                     |
 | `internal/wizard`    | 99.5% | 99%  | ≥ 85%                     |
 | `internal/install`   | 98.8% | 98%  | ≥ 80%                     |
-| `internal/tui`       | 94.1% | 94%  | ≥ 85%                     |
+| `internal/tui`       | 95.6% | 94%  | ≥ 85%                     |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
@@ -234,3 +234,33 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
   `ip_addr-ipv6-only.json`, `bakery-malformed-digests` (from QA review).
 - Raise `tui` coverage (currently 52%) by extracting more pure logic into
   `wizard` / `validate`.
+
+## Known Untestable / Dead-Code Paths (TUI)
+
+These lines appear as uncovered in coverage profiles but represent intentional
+defensive guards or network-dependent closures that cannot be exercised by unit
+tests:
+
+**Defensive nil-form guards** (`form_logic.go:66-67, 77-78, 136-137, 164;
+`tui.go:463-464, 486, 552-554`):
+- These guards protect `m.activeForm.Init()` against a nil pointer in case a
+  future step is added without a huh form, but are always false with the current
+  step/form mapping.
+- `StepWelcome` always produces nil activeForm (card selector, not huh form).
+- `StepStorage`, `StepSysext`, `StepNvidia`, `StepUpdate`, `StepInstall`,
+  `StepDone` all fall into `default: m.activeForm = nil` in `initForm()`.
+- Acceptable as-is: they provide forward-compatibility safety.
+
+**Async closure body in onFormComplete** (`form_logic.go:107-108`):
+- The closure body `keys, err := github.FetchKeys(username)` inside the returned
+  `tea.Cmd` executes only when BubbleTea's runtime calls it, not when the test
+  calls `onFormComplete()`.
+- Unit tests can verify `cmd != nil` and `m.fetching == true`, but cannot run the
+  closure body without a real BubbleTea program loop or network access.
+- To test this path, use an integration test (build tag `integration`) or extract
+  the fetcher call into a testable function with injected client.
+
+**Init() auto-quit path** (`tui.go:116-119`):
+- Set `KNUCKLE_TEST_TUI_AUTO_QUIT=1` via `t.Setenv()` before calling `m.Init()`.
+- Assert `m.quitting == true` and that `cmd()` returns `tea.QuitMsg{}`.
+
