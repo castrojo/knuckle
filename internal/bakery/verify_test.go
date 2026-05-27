@@ -1,9 +1,13 @@
 package bakery
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 func TestVerifyFlatcarSignature_ValidSignature(t *testing.T) {
@@ -37,5 +41,20 @@ func TestVerifyFlatcarSignature_NotPGP(t *testing.T) {
 func TestVerifyFlatcarSignature_Empty(t *testing.T) {
 	if verifyFlatcarSignature("") {
 		t.Error("empty input should not verify")
+	}
+}
+
+// TestVerifyFlatcarSignature_KeyringReadError covers the return-false branch
+// when readArmoredKeyRingFn returns an error (structurally unreachable in
+// production because flatcarSigningKeyASC is a compile-time //go:embed constant).
+func TestVerifyFlatcarSignature_KeyringReadError(t *testing.T) {
+	old := readArmoredKeyRingFn
+	readArmoredKeyRingFn = func(_ io.Reader) (openpgp.EntityList, error) {
+		return nil, fmt.Errorf("injected keyring error")
+	}
+	t.Cleanup(func() { readArmoredKeyRingFn = old })
+
+	if verifyFlatcarSignature("anything") {
+		t.Error("keyring read error should return false")
 	}
 }
