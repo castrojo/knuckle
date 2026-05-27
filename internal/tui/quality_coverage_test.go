@@ -224,6 +224,8 @@ func TestHandleEnter_StepUser_GithubUserFetch(t *testing.T) {
 	w.State.Config.Hostname = "test"
 	m := New(w)
 	m.fetching = false
+	// Nil out activeForm so Enter routes to handleKey → handleEnter, not the huh form.
+	m.activeForm = nil
 	// Manually inject a github_user field value so handleEnter sees it.
 	m.fields = []field{
 		{key: "hostname", value: "test"},
