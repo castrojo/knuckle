@@ -113,9 +113,9 @@ cover-check:
     #!/usr/bin/env bash
     set -euo pipefail
     declare -A targets=(
-        [model]=95  [validate]=97  [ignition]=97  [github]=92
-        [bakery]=95 [probe]=96     [runner]=98    [install]=96
-        [headless]=96 [wizard]=97  [iso]=98       [tui]=92
+        [model]=99  [validate]=98  [ignition]=97  [github]=93
+        [bakery]=96 [probe]=97     [runner]=99    [install]=97
+        [headless]=97 [wizard]=98  [iso]=99       [tui]=94
         [demo]=100
     )
     fail=0
@@ -136,7 +136,7 @@ cover-check:
         fi
     done
     script_pkg=scripts/catalog_check
-    script_target=50
+    script_target=95
     script_pct=$(go test -count=1 -cover ./${script_pkg} 2>/dev/null \
         | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
     script_pct=${script_pct%.*}
