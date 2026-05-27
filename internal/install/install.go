@@ -39,7 +39,9 @@ var newIgnitionTempFile = func() (ignitionTempFile, error) {
 
 var removeIgnitionFile = os.Remove
 
-// compileToIgnitionFunc is a test seam for ignition.CompileToIgnition.
+// compileToIgnitionFunc is the injectable seam for ignition.CompileToIgnition.
+// Tests can replace this to simulate compilation failures without requiring
+// valid Butane input.
 var compileToIgnitionFunc = ignition.CompileToIgnition
 
 // NewFlatcarInstaller creates a FlatcarInstaller with the given runner and logger.
