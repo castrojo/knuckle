@@ -242,6 +242,7 @@ internal/wizard/     → step state machine, navigation, validation gates
 
 - [Flatcar on Discord](https://flatcar.org/discord) — chat with the Flatcar community
 - [Flatcar docs](https://www.flatcar.org/docs/) — official documentation
+- [Troubleshooting guide](docs/TROUBLESHOOTING.md) — common install/first-boot fixes and diagnostic commands
 - [knuckle issues](https://github.com/projectbluefin/knuckle/issues) — file bugs and ideas
 
 ## License
