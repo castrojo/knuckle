@@ -166,4 +166,3 @@ func TestResolveByIDPathIn_ReadlinkError_Continue(t *testing.T) {
 		t.Errorf("resolveByIDPathIn() = %q, want %q (should skip non-symlink and find zzz-link)", got, want)
 	}
 }
-
