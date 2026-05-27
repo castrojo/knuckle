@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/huh/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
