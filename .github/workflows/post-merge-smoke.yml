@@ -1,0 +1,129 @@
+name: Post-merge BATS smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: post-merge-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bats-smoke:
+    name: post-merge BATS smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: run BATS smoke tests
+        id: smoke
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          failures=()
+
+          if ! bats scripts/tests/qa-test-pr.bats 2>&1 | tee qa-test-pr.log; then
+            failures+=("scripts/tests/qa-test-pr.bats")
+          fi
+
+          if ! bats scripts/tests/iso-smoke.bats 2>&1 | tee iso-smoke.log; then
+            failures+=("scripts/tests/iso-smoke.bats")
+          fi
+
+          {
+            echo "failed_tests<<EOF"
+            if ((${#failures[@]})); then
+              printf '%s\n' "${failures[@]}"
+            else
+              echo "none"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if ((${#failures[@]})); then
+            exit 1
+          fi
+
+      - name: upload smoke logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: post-merge-bats-smoke-logs-${{ github.run_number }}
+          path: |
+            qa-test-pr.log
+            iso-smoke.log
+          retention-days: 14
+
+      - name: open failure issue
+        if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          FAILED_TESTS: ${{ steps.smoke.outputs.failed_tests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const labels = [
+              { name: 'domain:ci', color: '1d76db', description: 'CI/CD workflows' },
+              { name: 'kind/test', color: 'c7def8', description: 'Test coverage or quality' },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                });
+              }
+            }
+
+            const failedTests = (process.env.FAILED_TESTS || 'unknown')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter((line) => line && line !== 'none')
+              .map((line) => `- \`${line}\``)
+              .join('\n') || '- unknown';
+
+            const title = `🔴 post-merge BATS smoke failed on main [run: ${context.runNumber}]`;
+            const body = [
+              'Post-merge BATS smoke check failed on `main`.',
+              '',
+              `- Run: ${process.env.RUN_URL}`,
+              `- Commit: \`${context.sha}\``,
+              `- Workflow: \`${context.workflow}\``,
+              '',
+              'Failed tests:',
+              failedTests,
+            ].join('\n');
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: labels.map((label) => label.name),
+            });
+
+            core.notice(`Created issue #${issue.data.number}: ${issue.data.html_url}`);
