@@ -32,12 +32,14 @@ Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flat
 
 ## Features
 
-- **9-step guided wizard** — Welcome → Network → Storage → User → Sysext → Update Strategy → Review → Install → Done
+- **Up to 11-step guided wizard** — Welcome → Network → Storage → User → Sysext → [Nvidia] → [Tailscale] → Update Strategy → Review → Install → Done (Nvidia and Tailscale steps are conditional on sysext selection)
 - **Channel selector with version details** — shows kernel, systemd, docker, containerd, ignition, and etcd versions per channel (sourced from SBOM JSON, `version.txt`, package lists, and `rootfs-included-sysexts`)
 - **Hardware probing** — automatic disk and network interface discovery with `/dev/disk/by-id` path resolution
 - **Network configuration** — DHCP or static IPv4
 - **User setup** — hostname, timezone, password (bcrypt hashed), GitHub SSH key fetching with multi-key support, local `~/.ssh/*.pub` auto-detection
 - **System extensions** — architecture-aware sysext catalog fetched via TLS from [flatcar/sysext-bakery](https://github.com/flatcar/sysext-bakery) GitHub Releases API (not yet cryptographically verified — see [docs/SECURITY.md](docs/SECURITY.md))
+- **NVIDIA driver series** — conditional step shown when `nvidia-runtime` sysext is selected; selects the kernel driver series (e.g. `550`, `560`) matching the chosen NVIDIA runtime sysext; supported in both TUI and headless (`nvidiaDriverSeries`) modes
+- **Tailscale provisioning** — conditional step shown when `tailscale` sysext is selected; sets a pre-auth key (`tskey-auth-…`) written to `/etc/tailscale/tailscale.env`; supported in both TUI and headless (`tailscaleAuthKey`) modes
 - **Update strategy** — reboot, off, or etcd-lock options
 - **Review screen** — full Butane YAML preview before install
 - **Install step** — progress bar, wipes stale disk signatures, runs `flatcar-install`, then relocates the backup GPT header for larger target disks
