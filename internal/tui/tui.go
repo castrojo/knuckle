@@ -1264,12 +1264,19 @@ func (m *Model) viewDone() string {
 	return b.String()
 }
 
+// programRunner allows tests to inject a no-op runner in place of p.Run().
+// Production code always uses the default (nil → real run).
+var programRunner func(p *tea.Program) error
+
 // Run starts the Bubble Tea program. rebootFn is called when the user
 // confirms reboot on the Done screen; pass nil to suppress (e.g. dry-run).
 func Run(w *wizard.Wizard, rebootFn func(context.Context) error) error {
 	m := New(w)
 	m.rebootFn = rebootFn
 	p := tea.NewProgram(m)
+	if programRunner != nil {
+		return programRunner(p)
+	}
 	_, err := p.Run()
 	return err
 }
