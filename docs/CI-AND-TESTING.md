@@ -171,10 +171,12 @@ capture deterministic. On every run it writes:
 - `.vm/hardware-disk-inventory.log` — `lsblk` plus `/dev/disk/by-id` inventory
 - `.vm/hardware-installer-serial.log` — VM serial console output
 
-## Ghost Testlab (192.168.1.102)
+## Ghost Testlab (Tier 1–3 test host)
 
 Ghost is the dedicated headless QEMU host for per-PR automated testing.
 See `docs/TEST-PLAN.md` for the full E2E scenario table.
+
+**Running tests locally:** Any Linux machine with KVM can serve as the test host. See [GHOST-LAB.md](GHOST-LAB.md) for setup instructions and `just qa-pr <PR_NUMBER>` as the canonical way to run the full test suite locally.
 
 **Infrastructure:**
 - Flatcar 4593.2.1 base image: `/var/tmp/knuckle-test/flatcar_base.img`
