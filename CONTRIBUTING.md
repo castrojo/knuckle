@@ -136,6 +136,22 @@ Use this split when adding coverage:
 
 See [docs/CI-AND-TESTING.md](docs/CI-AND-TESTING.md) for coverage gates and the full test pyramid.
 
+## Demo Recording
+
+The `demo/` directory holds the source for the animated demo GIF shown in the README:
+
+- `demo/knuckle-demo.tape` — [VHS](https://github.com/charmbracelet/vhs) script that drives the terminal recording
+- `demo/knuckle-install.cast` — [asciinema](https://asciinema.org/) cast produced by VHS
+- `demo/knuckle-install.gif` — rendered GIF embedded in the README
+
+To regenerate after TUI changes (requires [VHS](https://github.com/charmbracelet/vhs)):
+
+```bash
+vhs demo/knuckle-demo.tape
+```
+
+The GIF and cast are committed so contributors can preview them without re-running VHS.
+
 ## Architecture Overview
 
 ```
