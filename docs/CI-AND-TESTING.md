@@ -232,5 +232,4 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
 - Verify `ens3` vs `eth0` interface name in static-network vm-e2e pass.
 - Add fixture gaps: `lsblk-empty.json`, `lsblk-all-removable.json`,
   `ip_addr-ipv6-only.json`, `bakery-malformed-digests` (from QA review).
-- Raise `tui` coverage (currently 52%) by extracting more pure logic into
-  `wizard` / `validate`.
+- ~~Raise `tui` coverage (currently 52%)~~ **Done** — `internal/tui` reached 94.1% (gate: 94%). Consider pushing toward 97%+ by covering remaining edge cases in `views.go`.
