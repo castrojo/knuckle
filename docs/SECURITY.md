@@ -53,6 +53,11 @@ This document covers each.
   using GitHub Actions OIDC (keyless). Signatures are recorded in the Sigstore
   Rekor transparency log. Bundles (`.bundle` files) are published alongside
   release artifacts.
+- **Flatcar release GPG signatures.** `channels.go` downloads `.DIGESTS.asc`
+  and `verify.go` validates the signature against the embedded Flatcar signing
+  key (`internal/bakery/keys/flatcar-signing.asc`). If verification fails,
+  `SignedDigest` is set to `false` and a warning is logged. This is separate
+  from knuckle's own release artifact signing (cosign keyless via Sigstore).
 
 - **Flatcar release GPG signatures.** `channels.go` downloads `.DIGESTS.asc`
   and `verify.go` validates the signature against the embedded Flatcar signing
