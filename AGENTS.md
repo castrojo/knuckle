@@ -188,6 +188,9 @@ CI runs unit + race + lint + vuln + coverage gate. `just vm-e2e` and `scripts/qa
 
 > ⛔ Never queue a PR without a passing ghost test report. Code review approval alone is not sufficient.
 
+> ⛔ Never merge or queue a PR with failed CI. If required checks or merge-queue (`merge_group`)
+> CI fail, rerun/fix first, then requeue only after checks are green.
+
 ---
 
 ## Working in this repo as an agent
@@ -341,7 +344,16 @@ STATE=$(gh pr view $PR --repo projectbluefin/knuckle --json mergeStateStatus --j
     exit 1
   }
 }
+
+# Never queue while required checks are failing
+gh pr checks $PR --repo projectbluefin/knuckle
+
 gh pr merge $PR --repo projectbluefin/knuckle
+
+# If merge_group failed, inspect and rerun then requeue
+gh run view <RUN_ID> --repo projectbluefin/knuckle --log-failed
+gh run rerun <RUN_ID> --repo projectbluefin/knuckle --failed
+gh pr merge --auto $PR --repo projectbluefin/knuckle
 ```
 
 ---
