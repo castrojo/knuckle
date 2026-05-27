@@ -4,22 +4,25 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
+var errInjectedWrite = errors.New("injected write error")
+
 // errWriter returns an error after N successful writes.
-// This exercises every writef/writeln error-return branch in run().
+// This exercises writef/writeln error-return branches in run().
 type errWriter struct {
 	remaining int
+	err       error
 	buf       bytes.Buffer
 }
 
 func (w *errWriter) Write(p []byte) (int, error) {
 	if w.remaining <= 0 {
-		return 0, errors.New("simulated write error")
+		return 0, w.err
 	}
 	w.remaining--
 	return w.buf.Write(p)
@@ -46,116 +49,109 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 	return w.buf.Write(p)
 }
 
-// TestRun_WriteErrorPropagation_AllCovered verifies that every writef/writeln
-// call in the "all covered" path returns an error when the writer fails.
-func TestRun_WriteErrorPropagation_AllCovered(t *testing.T) {
-	entries := []model.SysextEntry{
+func TestRun_WriteErrorPropagation_AllOutputWrites(t *testing.T) {
+	t.Parallel()
+
+	knownEntries := []model.SysextEntry{
 		{Name: "docker", Version: "28.0.0", URL: "https://example.com/docker.raw"},
 		{Name: "tailscale", Version: "1.56.1", URL: "https://example.com/tailscale.raw"},
 	}
-
-	total := countWriteCalls(t, entries, false)
-	if total == 0 {
-		t.Fatal("expected at least one write call")
+	mixedEntries := []model.SysextEntry{
+		{Name: "docker", Version: "28.0.0", URL: "https://example.com/docker.raw"},
+		{Name: "unknown-ext", Version: "1.0.0", URL: "https://example.com/unknown.raw"},
 	}
 
-	for failAt := 0; failAt < total; failAt++ {
-		w := &errWriter{remaining: failAt}
-		errOut := &bytes.Buffer{}
-		fetcher := &mockFetcher{entries: entries}
+	tests := []struct {
+		name    string
+		entries []model.SysextEntry
+		strict  bool
+	}{
+		{name: "all covered path", entries: knownEntries, strict: false},
+		{name: "missing entries non-strict path", entries: mixedEntries, strict: false},
+		{name: "missing entries strict path stdout", entries: mixedEntries, strict: true},
+	}
 
-		err := run(context.Background(), w, errOut, fetcher, "amd64", false)
-		if err == nil {
-			t.Errorf("failAt=%d: expected error, got nil", failAt)
-		}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			total := countWriteCalls(t, tc.entries, tc.strict)
+			if total == 0 {
+				t.Fatal("expected at least one write call")
+			}
+
+			for failAt := 0; failAt < total; failAt++ {
+				w := &errWriter{remaining: failAt, err: errInjectedWrite}
+				errOut := &bytes.Buffer{}
+				fetcher := &mockFetcher{entries: tc.entries}
+
+				err := run(context.Background(), w, errOut, fetcher, "amd64", tc.strict)
+				if err == nil {
+					t.Fatalf("failAt=%d: expected write error, got nil", failAt)
+				}
+				if !errors.Is(err, errInjectedWrite) {
+					t.Fatalf("failAt=%d: expected injected write error, got %v", failAt, err)
+				}
+				if !strings.Contains(err.Error(), "writing report") {
+					t.Fatalf("failAt=%d: expected wrapped report error, got %v", failAt, err)
+				}
+			}
+		})
 	}
 }
 
-// TestRun_WriteErrorPropagation_MissingEntries verifies write-error branches
-// in the "missing entries" report path (non-strict).
-func TestRun_WriteErrorPropagation_MissingEntries(t *testing.T) {
+func TestRun_WriteErrorPropagation_StrictErrWriter(t *testing.T) {
+	t.Parallel()
+
 	entries := []model.SysextEntry{
 		{Name: "docker", Version: "28.0.0", URL: "https://example.com/docker.raw"},
 		{Name: "unknown-ext", Version: "1.0.0", URL: "https://example.com/unknown.raw"},
 	}
 
-	total := countWriteCalls(t, entries, false)
-	if total == 0 {
-		t.Fatal("expected at least one write call")
-	}
-
-	for failAt := 0; failAt < total; failAt++ {
-		w := &errWriter{remaining: failAt}
-		errOut := &bytes.Buffer{}
-		fetcher := &mockFetcher{entries: entries}
-
-		err := run(context.Background(), w, errOut, fetcher, "amd64", false)
-		if err == nil {
-			t.Errorf("failAt=%d: expected error, got nil", failAt)
-		}
-	}
-}
-
-// TestRun_WriteErrorPropagation_Strict verifies write-error branches in
-// the strict-mode error output path.
-func TestRun_WriteErrorPropagation_Strict(t *testing.T) {
-	entries := []model.SysextEntry{
-		{Name: "docker", Version: "28.0.0", URL: "https://example.com/docker.raw"},
-		{Name: "unknown-ext", Version: "1.0.0", URL: "https://example.com/unknown.raw"},
-	}
-
-	// In strict mode, errW gets a write too. Test that errW failure propagates.
-	total := countWriteCalls(t, entries, true)
-	if total == 0 {
-		t.Fatal("expected at least one write call")
-	}
-
-	// Test stdout write failures
-	for failAt := 0; failAt < total; failAt++ {
-		w := &errWriter{remaining: failAt}
-		errOut := &bytes.Buffer{}
-		fetcher := &mockFetcher{entries: entries}
-
-		err := run(context.Background(), w, errOut, fetcher, "amd64", true)
-		if err == nil {
-			t.Errorf("failAt=%d: expected error, got nil", failAt)
-		}
-	}
-
-	// Test errW (stderr) write failure in strict mode
-	w := &bytes.Buffer{}
-	errW := &errWriter{remaining: 0}
+	stdout := &bytes.Buffer{}
+	stderr := &errWriter{remaining: 0, err: errInjectedWrite}
 	fetcher := &mockFetcher{entries: entries}
-	err := run(context.Background(), w, errW, fetcher, "amd64", true)
+	err := run(context.Background(), stdout, stderr, fetcher, "amd64", true)
 	if err == nil {
-		t.Error("expected error when errW fails in strict mode")
+		t.Fatal("expected error when strict-mode stderr write fails")
+	}
+	if !errors.Is(err, errInjectedWrite) {
+		t.Fatalf("expected injected write error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "writing report") {
+		t.Fatalf("expected wrapped report error, got %v", err)
 	}
 }
 
-// TestWritef_Error verifies writef returns a wrapped error.
 func TestWritef_Error(t *testing.T) {
-	w := &errWriter{remaining: 0}
+	t.Parallel()
+
+	w := &errWriter{remaining: 0, err: errInjectedWrite}
 	err := writef(w, "hello %s", "world")
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, io.ErrClosedPipe) {
-		// The error wraps "simulated write error", not io.ErrClosedPipe.
-		// Just verify it's non-nil and contains our message.
-		if err.Error() == "" {
-			t.Error("expected non-empty error message")
-		}
+	if !errors.Is(err, errInjectedWrite) {
+		t.Fatalf("expected injected write error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "writing report") {
+		t.Fatalf("expected wrapped report error, got %v", err)
 	}
 }
 
-// TestWriteln_Error verifies writeln returns a wrapped error.
 func TestWriteln_Error(t *testing.T) {
-	w := &errWriter{remaining: 0}
+	t.Parallel()
+
+	w := &errWriter{remaining: 0, err: errInjectedWrite}
 	err := writeln(w, "hello")
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if err.Error() == "" {
-		t.Error("expected non-empty error message")
+	if !errors.Is(err, errInjectedWrite) {
+		t.Fatalf("expected injected write error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "writing report") {
+		t.Fatalf("expected wrapped report error, got %v", err)
 	}
 }
