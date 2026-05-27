@@ -7,6 +7,7 @@ This directory contains supplementary documentation for knuckle. Start with the 
 | File | Description |
 |------|-------------|
 | [HEADLESS-CONFIG.md](HEADLESS-CONFIG.md) | Canonical reference for the `--headless --config` JSON schema, including fields, defaults, and validation rules. |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Practical runbook for common install failures, first-boot issues, and quick diagnostics. |
 | [SECURITY.md](SECURITY.md) | Security posture, threat model, known gaps, and the disclosure path for vulnerabilities. |
 | [CI-AND-TESTING.md](CI-AND-TESTING.md) | CI pipeline overview, test pyramid, and coverage gates used for contributor changes. |
 | [SYSEXTS.md](SYSEXTS.md) | Reference guide to the Flatcar Bakery sysext catalog, support tiers, and extension behavior. |
