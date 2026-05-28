@@ -423,4 +423,3 @@ func TestNSEC1_SHA256SUMSURLTooLong(t *testing.T) {
 		t.Errorf("expected empty Sha256 when SHA256SUMS URL too long, got %q", entries[0].Sha256)
 	}
 }
-
