@@ -320,6 +320,16 @@ func TestViewSysext_ListCursorSync(t *testing.T) {
 
 // ── tui.go: detectLocalSSHKeys ────────────────────────────────────────────────
 
+// TestDetectLocalSSHKeys_HomeDirError covers the os.UserHomeDir() failure path.
+// On Linux, setting HOME="" causes UserHomeDir to return an error.
+func TestDetectLocalSSHKeys_HomeDirError(t *testing.T) {
+	t.Setenv("HOME", "")
+	keys := detectLocalSSHKeys()
+	if keys != nil {
+		t.Errorf("expected nil on UserHomeDir error, got %v", keys)
+	}
+}
+
 func TestDetectLocalSSHKeys_MultipleKeysPerFile(t *testing.T) {
 	dir := t.TempDir()
 	sshDir := filepath.Join(dir, ".ssh")
