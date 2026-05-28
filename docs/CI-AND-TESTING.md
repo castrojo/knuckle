@@ -268,6 +268,21 @@ Test tiers by domain label (see `knuckle-qa` skill for full matrix):
 | `domain:install`, `domain:headless`, `domain:ignition` | 2 | Tier 1 + real headless install on ghost |
 | `domain:iso` | 3 | Tier 2 + `hardware-repro` on ghost |
 
+## ISO Build Internals
+
+The installer ISO injects knuckle into Flatcar's `usr.squashfs` — the only
+reliable method for Flatcar PXE live boot.
+
+- **`squashfs-root/` = `/usr/` in the live system.** `squashfs-root/bin/knuckle` → `/usr/bin/knuckle`. Units in `squashfs-root/lib/systemd/system/`.
+- **Binary:** `scripts/build-iso.sh` uses `bin/knuckle` (`just build`, `CGO_ENABLED=0`). Never the repo-root binary — may contain AVX instructions that crash with `trap invalid opcode` in QEMU.
+- **QEMU:** always `-cpu host`. Without it AVX binaries crash silently. Use `-display gtk` to see the TUI on tty1.
+- **Ignition in QEMU:** pass via `-fw_cfg name=opt/org.flatcar-linux/config,file=config.ign`. The `ignition.config.data=` kernel cmdline is silently ignored on the QEMU platform.
+- **`systemd.gpt_auto=0` is REQUIRED on every BLS entry.** Without it, bare-metal GPT disks trigger `systemd-gpt-auto-generator` → dracut `xd2root` hook is skipped → installer fails to appear. Both `knuckle.conf` and `knuckle-serial.conf` must include this. Root cause of the v0.6.2 regression (fixed v0.7.0).
+- **Pure systemd-boot, no GRUB.** ESP contains only `EFI/BOOT/BOOTX64.EFI` (from `systemd-boot-efi`), `loader/loader.conf`, and two BLS entries.
+- **Flatcar `.DIGESTS.asc`** = PGP clearsigned. Verify with `gpg --decrypt asc > content`, not `gpg --verify` (detached form — always fails on clearsigned input).
+- **Build cache:** squashfs is content-addressed on `sha256sum bin/knuckle` — skips repack when binary unchanged.
+- **`just vm-e2e` does NOT test ISO boot.** Use `just iso-smoke <iso> <ovmf>` for headless serial-log ISO boot validation on ghost.
+
 ## Roadmap
 
 Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
