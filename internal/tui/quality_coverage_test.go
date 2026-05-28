@@ -246,3 +246,52 @@ func TestHandleEnter_StepUser_GithubUserFetch(t *testing.T) {
 		t.Error("expected non-nil tea.Cmd for async GitHub key fetch")
 	}
 }
+
+// TestHandleEnter_StepUser_GithubUserFetch_ClosureBody covers the closure body
+// returned by handleEnter when a github_user field is present, using the
+// injectable fetchGitHubKeysFn stub (same pattern as onFormComplete tests).
+func TestHandleEnter_StepUser_GithubUserFetch_ClosureBody(t *testing.T) {
+	wantKeys := []string{"ssh-ed25519 AAAA handleenter@test"}
+	old := fetchGitHubKeysFn
+	fetchGitHubKeysFn = func(username string) ([]string, error) {
+		if username != "handleenter" {
+			t.Errorf("fetchGitHubKeysFn called with %q, want %q", username, "handleenter")
+		}
+		return wantKeys, nil
+	}
+	defer func() { fetchGitHubKeysFn = old }()
+
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepUser
+	w.State.Config.Channel = "stable"
+	w.State.Config.Hostname = "test"
+	m := New(w)
+	m.fetching = false
+	m.activeForm = nil
+	m.fields = []field{
+		{key: "hostname", value: "test"},
+		{key: "timezone", value: "UTC"},
+		{key: "username", value: "core"},
+		{key: "password", value: ""},
+		{key: "github_user", value: "@handleenter"},
+		{key: "ssh_key", value: ""},
+	}
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected non-nil tea.Cmd for async GitHub key fetch")
+	}
+
+	// Execute the closure — covers the handleEnter GitHub fetch closure body.
+	msg := cmd()
+	fetched, ok := msg.(fetchKeysMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want fetchKeysMsg", msg)
+	}
+	if fetched.err != nil {
+		t.Fatalf("unexpected error: %v", fetched.err)
+	}
+	if len(fetched.keys) != 1 || fetched.keys[0] != wantKeys[0] {
+		t.Errorf("fetchKeysMsg.keys = %v, want %v", fetched.keys, wantKeys)
+	}
+}

@@ -301,7 +301,34 @@ func TestViewSysext_CursorHighlight(t *testing.T) {
 	}
 }
 
+// TestViewSysext_ListCursorSync exercises the m.sysextList.Select(listIdx) branch.
+// When sysextListReady is true but the model cursor is ahead of the list's
+// current index, viewSysext must call Select to sync the list.
+func TestViewSysext_ListCursorSync(t *testing.T) {
+	m := newSysextModel()
+	// List starts at index 0; advance model cursor to 1 so they diverge.
+	m.cursor = 1
+	out := m.viewSysext()
+	if out == "" {
+		t.Error("viewSysext should return non-empty output with sysextListReady=true")
+	}
+	if m.sysextList.Index() != m.sysextListLookup(m.cursor) {
+		t.Errorf("viewSysext should have synced list cursor: list=%d model_lookup=%d",
+			m.sysextList.Index(), m.sysextListLookup(m.cursor))
+	}
+}
+
 // ── tui.go: detectLocalSSHKeys ────────────────────────────────────────────────
+
+// TestDetectLocalSSHKeys_HomeDirError covers the os.UserHomeDir() failure path.
+// On Linux, setting HOME="" causes UserHomeDir to return an error.
+func TestDetectLocalSSHKeys_HomeDirError(t *testing.T) {
+	t.Setenv("HOME", "")
+	keys := detectLocalSSHKeys()
+	if keys != nil {
+		t.Errorf("expected nil on UserHomeDir error, got %v", keys)
+	}
+}
 
 func TestDetectLocalSSHKeys_MultipleKeysPerFile(t *testing.T) {
 	dir := t.TempDir()
