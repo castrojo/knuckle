@@ -23,6 +23,12 @@ const (
 	// The bakery spans multiple pages; FetchCatalogArch follows Link headers automatically.
 	DefaultCatalogURL = "https://api.github.com/repos/flatcar/sysext-bakery/releases?per_page=100"
 	defaultTimeout    = 30 * time.Second
+
+	// maxSysextURLLen is the maximum permitted length for a sysext download or
+	// SHA256SUMS URL sourced from the GitHub Releases API.  A legitimate URL is
+	// well under 512 bytes; 2048 provides headroom while preventing an
+	// adversarial or malformed API response from causing unbounded HTTP requests.
+	maxSysextURLLen = 2048
 	// maxCatalogPages caps the number of API pages fetched to prevent unbounded loops.
 	maxCatalogPages = 10
 )
@@ -183,6 +189,12 @@ func (c *HTTPClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 		}
 		if downloadURL == "" {
 			continue
+		}
+		if len(downloadURL) > maxSysextURLLen {
+			continue
+		}
+		if sha256sumsURL != "" && len(sha256sumsURL) > maxSysextURLLen {
+			sha256sumsURL = ""
 		}
 		if validate.SysextName(name) != nil {
 			continue
