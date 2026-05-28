@@ -15,7 +15,6 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/projectbluefin/knuckle/internal/bakery"
-	"github.com/projectbluefin/knuckle/internal/github"
 	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/validate"
 	"github.com/projectbluefin/knuckle/internal/wizard"
@@ -504,8 +503,7 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 				m.fetching = true
 				username := strings.TrimPrefix(f.value, "@")
 				return m, func() tea.Msg {
-					client := github.NewClient()
-					keys, err := client.FetchKeys(context.Background(), username)
+					keys, err := fetchGitHubKeysFn(username)
 					return fetchKeysMsg{keys: keys, err: err}
 				}
 			}

@@ -24,6 +24,16 @@ func (i *startInstallPanicInstaller) Install(_ context.Context, _ *model.Install
 	panic("installer panic")
 }
 
+// startInstallProgressInstaller calls progress once then succeeds.
+type startInstallProgressInstaller struct {
+	step string
+}
+
+func (i *startInstallProgressInstaller) Install(_ context.Context, _ *model.InstallConfig, progress func(string)) error {
+	progress(i.step)
+	return nil
+}
+
 func TestStartInstall_ReturnsInstallDoneMsgOnError(t *testing.T) {
 	w := wizard.New(nil, nil, &startInstallErrorInstaller{err: errors.New("install failed")})
 	m := New(w)
@@ -71,5 +81,39 @@ func TestStartInstall_ReturnsInstallDoneMsgOnPanic(t *testing.T) {
 	}
 	if !strings.Contains(done.err.Error(), "PANIC: installer panic") {
 		t.Fatalf("expected panic error to include panic marker, got %v", done.err)
+	}
+}
+
+func TestStartInstall_DeliversProgressMsgBeforeDone(t *testing.T) {
+	w := wizard.New(nil, nil, &startInstallProgressInstaller{step: "partitioning disk"})
+	m := New(w)
+
+	cmd := m.startInstall()
+	if cmd == nil {
+		t.Fatal("startInstall() returned nil cmd")
+	}
+
+	// Drain all messages until installDoneMsg.
+	gotProgress := false
+	for {
+		msg := cmd()
+		switch v := msg.(type) {
+		case installProgressMsg:
+			if string(v) == "partitioning disk" {
+				gotProgress = true
+			}
+			// Get the next waitForProgress cmd from the model update cycle.
+			cmd = m.waitForProgress()
+		case installDoneMsg:
+			if v.err != nil {
+				t.Fatalf("expected successful install, got error: %v", v.err)
+			}
+			if !gotProgress {
+				t.Error("expected at least one installProgressMsg before installDoneMsg")
+			}
+			return
+		default:
+			t.Fatalf("unexpected message type %T", msg)
+		}
 	}
 }
