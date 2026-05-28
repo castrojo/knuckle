@@ -250,9 +250,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.initStepFields()
 			m.initForm()
-			if m.activeForm != nil {
-				return m, m.activeForm.Init()
-			}
 			return m, nil
 		}
 		return m, cmd
@@ -460,9 +457,6 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.initStepFields()
 			m.initForm()
-			if m.activeForm != nil {
-				return m, m.activeForm.Init()
-			}
 			return m, nil
 		}
 	case model.StepStorage:
@@ -480,10 +474,7 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.initStepFields()
 			m.initForm()
-			if m.activeForm != nil {
-				return m, m.activeForm.Init()
-			}
-			return m, nil
+			return m, m.activeForm.Init()
 		}
 	case model.StepNvidia:
 		// Confirm the cursor-selected driver series.
@@ -549,9 +540,6 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 	m.initStepFields()
 	m.initForm()
 
-	if m.Wizard.State.CurrentStep == model.StepDone {
-		return m, tea.Quit
-	}
 	if m.activeForm != nil {
 		return m, m.activeForm.Init()
 	}
@@ -980,10 +968,8 @@ func (m *Model) renderDetailPanel(ext model.SysextEntry) string {
 	}
 
 	// Content width: terminal width minus 8-space indent and 4 border chars (│ ... │).
+	// With effectiveWidth ≥ 60 (guaranteed above), panelWidth ≥ min(52,28) = 28.
 	panelWidth := min(52, effectiveWidth-32)
-	if panelWidth < 20 {
-		return ""
-	}
 
 	// Resolve long description and caveats from the curated catalog.
 	longDesc := ext.Description
