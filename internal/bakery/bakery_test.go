@@ -675,3 +675,54 @@ func TestMockClientFetchCatalogArch_AllOtherArch(t *testing.T) {
 		t.Errorf("fallback: got %d entries, want %d (all entries returned)", len(got), len(entries))
 	}
 }
+
+// TestGithubTokenFromEnv_GHTokenFallback verifies that when GITHUB_TOKEN is
+// unset but GH_TOKEN is set, NewHTTPClientWithURL picks up the GH_TOKEN value.
+// This exercises the fallback branch in githubTokenFromEnv().
+func TestGithubTokenFromEnv_GHTokenFallback(t *testing.T) {
+	const want = "ghp_fallback_test_token"
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", want)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	if client.AuthToken != want {
+		t.Errorf("GH_TOKEN fallback: got AuthToken %q, want %q", client.AuthToken, want)
+	}
+}
+
+// TestGithubTokenFromEnv_GITHUBTokenPreferred verifies that GITHUB_TOKEN takes
+// precedence over GH_TOKEN when both are set.
+func TestGithubTokenFromEnv_GITHUBTokenPreferred(t *testing.T) {
+	const wantGH = "ghp_github_token"
+	t.Setenv("GITHUB_TOKEN", wantGH)
+	t.Setenv("GH_TOKEN", "ghp_should_not_be_used")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer srv.Close()
+
+	client := bakery.NewHTTPClientWithURL(srv.URL)
+	if client.AuthToken != wantGH {
+		t.Errorf("GITHUB_TOKEN precedence: got AuthToken %q, want %q", client.AuthToken, wantGH)
+	}
+}
+
+// TestMockClientFetchCatalogArch_ReturnsErrorWhenSet verifies that
+// MockClient.FetchCatalogArch returns the configured error immediately,
+// exercising the m.Err != nil guard branch.
+func TestMockClientFetchCatalogArch_ReturnsErrorWhenSet(t *testing.T) {
+	want := errors.New("arch fetch error")
+	m := &bakery.MockClient{Err: want}
+	_, err := m.FetchCatalogArch(context.Background(), "amd64")
+	if !errors.Is(err, want) {
+		t.Errorf("expected error %v, got %v", want, err)
+	}
+}
