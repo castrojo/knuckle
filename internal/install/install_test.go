@@ -181,6 +181,37 @@ func TestInstall_GenerateButaneError(t *testing.T) {
 	}
 }
 
+func TestInstall_CompileToIgnitionFuncError(t *testing.T) {
+	// Covers install.go:77-79: compileToIgnitionFunc returns error.
+	// Uses the compileToIgnitionFunc seam to inject a failure after
+	// GenerateButane succeeds, exercising the "compiling butane" error path
+	// through Install() — distinct from TestInstallButaneCompilationFailure
+	// which calls the function directly without going through Install().
+	prev := compileToIgnitionFunc
+	t.Cleanup(func() { compileToIgnitionFunc = prev })
+	compileToIgnitionFunc = func(string) (string, error) {
+		return "", fmt.Errorf("injected compilation error")
+	}
+
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Hostname: "node01",
+		Channel:  "stable",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Disk:     model.DiskInfo{DevPath: "/dev/vda"},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from compileToIgnitionFunc, got nil")
+	}
+	if !strings.Contains(err.Error(), "compiling butane") {
+		t.Errorf("error = %q, want 'compiling butane' prefix", err.Error())
+	}
+}
+
 func TestInstallFlatcarInstallFailure(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	// Stub a generic error for any flatcar-install call
