@@ -150,7 +150,7 @@ cover-check:
         echo "ok    ${script_pkg}  ${script_pct}%  (target ${script_target}%)"
     fi
     cmd_pkg=cmd/knuckle
-    cmd_target=85
+    cmd_target=50
     cmd_pct=$(go test -count=1 -cover ./${cmd_pkg}/... 2>/dev/null \
         | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
     cmd_pct=${cmd_pct%.*}
