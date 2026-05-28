@@ -786,3 +786,78 @@ func TestFetchChannelInfo_PkgListFetchError(t *testing.T) {
 		t.Errorf("error %q does not mention 'fetching package list'", err.Error())
 	}
 }
+
+// TestHttpGet_NewRequestWithContextError covers the NewRequestWithContext error path
+// in httpGet (channels.go lines 198-200). A leading space in the pkg URL makes it
+// invalid for url.ParseRequestURI, causing NewRequestWithContext to return an error.
+func TestHttpGet_NewRequestWithContextError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stable/current/version.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+	})
+	// All other paths (sbom) return 404, keeping sbomUsed=false.
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldClient := channelHTTPClient
+	channelHTTPClient = srv.Client()
+	defer func() { channelHTTPClient = oldClient }()
+
+	// Leading space makes the URL invalid — NewRequestWithContext returns an error.
+	_, err := fetchChannelInfoFromURLs(
+		context.Background(),
+		"stable",
+		srv.URL+"/stable/current/version.txt",
+		" http://invalid-url-with-leading-space/pkg.txt",
+	)
+	if err == nil {
+		t.Fatal("expected error from malformed pkg URL, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetching package list") {
+		t.Errorf("expected 'fetching package list' in error, got: %v", err)
+	}
+}
+
+// TestHttpGet_ReadAllError covers the io.ReadAll error path in httpGet
+// (channels.go lines 215-217). The server returns 200 OK but closes the
+// connection mid-body, causing io.ReadAll to return an error.
+func TestHttpGet_ReadAllError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stable/current/version.txt", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, "FLATCAR_VERSION=3815.2.0\nFLATCAR_VERSION_ID=3815.2.0\n")
+	})
+	mux.HandleFunc("/pkg.txt", func(w http.ResponseWriter, r *http.Request) {
+		// Send 200 with a large Content-Length, write a few bytes, then hijack and
+		// close — io.ReadAll on the response body will return an unexpected-EOF error.
+		w.Header().Set("Content-Length", "99999")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		if hj, ok := w.(http.Hijacker); ok {
+			conn, _, _ := hj.Hijack()
+			if conn != nil {
+				_ = conn.Close()
+			}
+		}
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldClient := channelHTTPClient
+	channelHTTPClient = srv.Client()
+	defer func() { channelHTTPClient = oldClient }()
+
+	_, err := fetchChannelInfoFromURLs(
+		context.Background(),
+		"stable",
+		srv.URL+"/stable/current/version.txt",
+		srv.URL+"/pkg.txt",
+	)
+	if err == nil {
+		t.Fatal("expected error from body read failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "fetching package list") {
+		t.Errorf("expected 'fetching package list' in error, got: %v", err)
+	}
+}
