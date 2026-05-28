@@ -1073,19 +1073,19 @@ func TestRenderTemplate_ExecuteError(t *testing.T) {
 // cover the error branch at ignition.go:63-65 (template.Parse failure).
 // butaneTemplate was changed from const to var for exactly this test seam.
 func TestGenerateButane_TemplateParseError(t *testing.T) {
-orig := butaneTemplate
-butaneTemplate = "{{unclosed action" // missing closing "}}" → parse error
-t.Cleanup(func() { butaneTemplate = orig })
+	orig := butaneTemplate
+	butaneTemplate = "{{unclosed action" // missing closing "}}" → parse error
+	t.Cleanup(func() { butaneTemplate = orig })
 
-g := NewGenerator()
-cfg := &model.InstallConfig{Hostname: "test-host"}
-_, err := g.GenerateButane(cfg)
-if err == nil {
-t.Fatal("expected template parse error, got nil")
-}
-if !strings.Contains(err.Error(), "parsing template") {
-t.Errorf("error should mention 'parsing template', got: %v", err)
-}
+	g := NewGenerator()
+	cfg := &model.InstallConfig{Hostname: "test-host"}
+	_, err := g.GenerateButane(cfg)
+	if err == nil {
+		t.Fatal("expected template parse error, got nil")
+	}
+	if !strings.Contains(err.Error(), "parsing template") {
+		t.Errorf("error should mention 'parsing template', got: %v", err)
+	}
 }
 
 // ── GenerateButane: template execute error (lines 119-121) ───────────────────
@@ -1094,18 +1094,18 @@ t.Errorf("error should mention 'parsing template', got: %v", err)
 // that references a non-existent field on a string value, causing Execute to
 // return an error and covering ignition.go:119-121.
 func TestGenerateButane_TemplateExecuteError(t *testing.T) {
-orig := butaneTemplate
-// .Hostname is a string; .Hostname.NoSuchField triggers an execute error.
-butaneTemplate = "{{.Hostname.NoSuchField}}"
-t.Cleanup(func() { butaneTemplate = orig })
+	orig := butaneTemplate
+	// .Hostname is a string; .Hostname.NoSuchField triggers an execute error.
+	butaneTemplate = "{{.Hostname.NoSuchField}}"
+	t.Cleanup(func() { butaneTemplate = orig })
 
-g := NewGenerator()
-cfg := &model.InstallConfig{Hostname: "test-host"}
-_, err := g.GenerateButane(cfg)
-if err == nil {
-t.Fatal("expected template execute error, got nil")
-}
-if !strings.Contains(err.Error(), "executing template") {
-t.Errorf("error should mention 'executing template', got: %v", err)
-}
+	g := NewGenerator()
+	cfg := &model.InstallConfig{Hostname: "test-host"}
+	_, err := g.GenerateButane(cfg)
+	if err == nil {
+		t.Fatal("expected template execute error, got nil")
+	}
+	if !strings.Contains(err.Error(), "executing template") {
+		t.Errorf("error should mention 'executing template', got: %v", err)
+	}
 }
