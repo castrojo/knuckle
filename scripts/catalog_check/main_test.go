@@ -186,3 +186,12 @@ func (f *archCaptureFetcher) FetchCatalogArch(_ context.Context, arch string) ([
 	*f.archPtr = arch
 	return nil, nil
 }
+
+func TestNewCatalogFetcher_ReturnsNonNil(t *testing.T) {
+	// newCatalogFetcher is the default injectable factory. Verify the default
+	// closure returns a non-nil CatalogFetcher (bakery.HTTPClient).
+	f := newCatalogFetcher()
+	if f == nil {
+		t.Fatal("newCatalogFetcher() returned nil")
+	}
+}
