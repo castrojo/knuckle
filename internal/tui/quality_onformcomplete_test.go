@@ -9,7 +9,6 @@ package tui
 //   - form_logic.go:66-68   onFormComplete StepWelcome invalid channel → nil form
 //   - form_logic.go:77-79   onFormComplete StepWelcome IgnitionURL skip → nil form
 //   - form_logic.go:162-168 onFormComplete fallthrough Next() error → re-inits form
-//   - form_logic.go:191-194 viewWithForm checksStr dead-code (renderSystemChecks = "")
 //   - form_logic.go:103-109 onFormComplete StepUser githubUserInput → async cmd
 //   - form_logic.go:136-138 onFormComplete StepReview unconfirmed go-back → nil form
 
@@ -246,23 +245,5 @@ func TestOnFormComplete_NetworkStep_StaticNextError_ReinitsForm(t *testing.T) {
 	// Wizard must not have advanced past StepNetwork.
 	if m.Wizard.State.CurrentStep != model.StepNetwork {
 		t.Errorf("expected wizard to remain at StepNetwork, got %v", m.Wizard.State.CurrentStep)
-	}
-}
-
-// ── form_logic.go:191-194  renderSystemChecks dead-code invariant ────────────
-
-// TestRenderSystemChecks_AlwaysEmpty documents that renderSystemChecks()
-// unconditionally returns "" (forms.go comment: "renderSystemChecks absorbed
-// into zen chrome — returns empty"). This makes the checksStr guard in
-// viewWithForm (form_logic.go:191-194) permanently unreachable.
-//
-// The test exists to catch a regression if someone adds logic to
-// renderSystemChecks() without updating or removing the guard in viewWithForm.
-func TestRenderSystemChecks_AlwaysEmpty(t *testing.T) {
-	w := newTestWizard()
-	m := New(w)
-
-	if got := m.renderSystemChecks(); got != "" {
-		t.Errorf("renderSystemChecks() must return empty string (absorbed into zen chrome), got %q", got)
 	}
 }

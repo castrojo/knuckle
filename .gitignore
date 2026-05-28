@@ -33,3 +33,7 @@ cover.html
 .iso-build/
 output/
 cover_tui.out
+
+# Local worktrees (never committed)
+.worktrees/
+coverage.txt
