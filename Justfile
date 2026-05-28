@@ -149,8 +149,20 @@ cover-check:
     else
         echo "ok    ${script_pkg}  ${script_pct}%  (target ${script_target}%)"
     fi
-    # Skip cmd packages (main functions can't be unit tested)
-    echo "ok    cmd/*  (skipped — main functions untestable)"
+    cmd_pkg=cmd/knuckle
+    cmd_target=50
+    cmd_pct=$(go test -count=1 -cover ./${cmd_pkg}/... 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    cmd_pct=${cmd_pct%.*}
+    if [[ -z "$cmd_pct" ]]; then
+        echo "FAIL  ${cmd_pkg}   no coverage reported"
+        fail=1
+    elif (( cmd_pct < cmd_target )); then
+        echo "FAIL  ${cmd_pkg}  ${cmd_pct}%  (target ${cmd_target}%)"
+        fail=1
+    else
+        echo "ok    ${cmd_pkg}  ${cmd_pct}%  (target ${cmd_target}%)"
+    fi
     exit $fail
 
 # Quick headless dry-run test (no VM needed)
