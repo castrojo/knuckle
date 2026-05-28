@@ -80,23 +80,23 @@ just e2e                 # build ISO → boot in QEMU GTK window → interactive
 ## Package Boundaries
 
 Coverage numbers are authoritative in [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md#coverage-gate).
-Current values (as of 2026-05-25, `just cover-check`):
+Current values (as of 2026-05-28, `just cover-check`):
 
 | Package           | Responsibility                                                     | Coverage |
 | ----------------- | ------------------------------------------------------------------ | -------- |
 | `cmd/knuckle`     | CLI entrypoint, flag parsing, runner wiring                        | n/a      |
 | `internal/model`  | Pure data types — `InstallConfig`, `DiskInfo`, `NetworkInterface`  | 100%     |
-| `internal/runner` | `Runner` interface: `RealRunner`, `DryRunner`, `SpyRunner`         | 81%      |
-| `internal/probe`  | `lsblk` + `ip addr` JSON parsing, `/dev/disk/by-id` resolution     | 81%      |
-| `internal/validate` | Hostname, CIDR, gateway, SSH key, timezone, disk path validators | 97%      |
-| `internal/bakery` | sysext catalog + Flatcar release/SBOM fetchers, SHA512 check       | 97.8%    |
-| `internal/github` | SSH key fetch + GitHub Releases API client                         | 90%      |
-| `internal/ignition` | Butane assembly + in-process Butane→Ignition compilation         | 93%      |
-| `internal/install` | `flatcar-install` orchestration via runner                        | 98.8%    |
+| `internal/runner` | `Runner` interface: `RealRunner`, `DryRunner`, `SpyRunner`         | 100%     |
+| `internal/probe`  | `lsblk` + `ip addr` JSON parsing, `/dev/disk/by-id` resolution     | 100%     |
+| `internal/validate` | Hostname, CIDR, gateway, SSH key, timezone, disk path validators | 100%     |
+| `internal/bakery` | sysext catalog + Flatcar release/SBOM fetchers, SHA512 check       | 100%     |
+| `internal/github` | SSH key fetch + GitHub Releases API client                         | 97%      |
+| `internal/ignition` | Butane assembly + in-process Butane→Ignition compilation         | 100%     |
+| `internal/install` | `flatcar-install` orchestration via runner                        | 100%     |
 | `internal/iso`    | Installer ISO builder helpers                                      | 100%     |
-| `internal/headless` | `--headless --config` JSON-driven install path                   | 98.5%    |
+| `internal/headless` | `--headless --config` JSON-driven install path                   | 99%      |
 | `internal/wizard` | Step state machine, navigation, validation gates                   | 99.5%    |
-| `internal/tui`    | Bubble Tea view models (one sub-model per step), forms             | 94.1%    |
+| `internal/tui`    | Bubble Tea view models (one sub-model per step), forms             | 98.7%    |
 
 Targets enforced by `just cover-check` are deliberately set ≤ current numbers
 so the gate guards against *regression*. Long-term aspirations live in
