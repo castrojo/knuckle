@@ -67,9 +67,6 @@ func (m *Model) onFormComplete() tea.Cmd {
 		if err := validate.Channel(cfg.Channel); err != nil {
 			m.err = err
 			m.initForm()
-			if m.activeForm != nil {
-				return m.activeForm.Init()
-			}
 			return nil
 		}
 		if cfg.IgnitionURL != "" {
@@ -78,9 +75,6 @@ func (m *Model) onFormComplete() tea.Cmd {
 			m.cursor = 0
 			m.initStepFields()
 			m.initForm()
-			if m.activeForm != nil {
-				return m.activeForm.Init()
-			}
 			return nil
 		}
 
@@ -123,10 +117,7 @@ func (m *Model) onFormComplete() tea.Cmd {
 		if err := m.Wizard.ValidateCurrentStep(); err != nil {
 			m.err = err
 			m.initForm()
-			if m.activeForm != nil {
-				return m.activeForm.Init()
-			}
-			return nil
+			return m.activeForm.Init()
 		}
 
 	case model.StepReview:
@@ -137,9 +128,6 @@ func (m *Model) onFormComplete() tea.Cmd {
 			m.cursor = 0
 			m.initStepFields()
 			m.initForm()
-			if m.activeForm != nil {
-				return m.activeForm.Init()
-			}
 			return nil
 		}
 		// Advance to install
@@ -162,10 +150,7 @@ func (m *Model) onFormComplete() tea.Cmd {
 	if err := m.Wizard.Next(); err != nil {
 		m.err = err
 		m.initForm()
-		if m.activeForm != nil {
-			return m.activeForm.Init()
-		}
-		return nil
+		return m.activeForm.Init()
 	}
 	m.err = nil
 	m.cursor = 0
@@ -184,15 +169,6 @@ func (m *Model) viewWithForm() string {
 	// Breadcrumb navigation (conversational style)
 	b.WriteString(m.buildBreadcrumb())
 	b.WriteString("\n")
-
-	// System checks — only on Welcome step, only if warn/fail
-	if m.Wizard.State.CurrentStep == model.StepWelcome {
-		checksStr := m.renderSystemChecks()
-		if checksStr != "" {
-			b.WriteString(checksStr)
-			b.WriteString("\n")
-		}
-	}
 
 	// Form
 	if m.activeForm != nil {

@@ -261,11 +261,6 @@ func (m *Model) buildBreadcrumb() string {
 	return m.renderZenChrome()
 }
 
-// renderSystemChecks absorbed into zen chrome — returns empty.
-func (m *Model) renderSystemChecks() string {
-	return ""
-}
-
 // renderZenChrome creates the ANSI-art inspired header.
 // Aesthetic: clean framed letterform, cool blue palette, scene-era vibes.
 // Info shown via color hierarchy — version numbers always visible.
