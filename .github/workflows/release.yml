@@ -15,9 +15,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Create or verify draft release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        with:
+          draft: true
+          make_latest: "false"
+          generate_release_notes: true
+
   release-amd64:
     name: Release (amd64)
     runs-on: ubuntu-latest
+    needs: create-release
     steps:
       - name: Check release state (amd64)
         id: release-check
@@ -156,13 +171,13 @@ jobs:
         with:
           subject-path: knuckle-linux-amd64
 
-      - name: Create draft release and upload amd64 artifacts
+      - name: Upload amd64 artifacts to draft release
         if: steps.release-check.outputs.skip_upload != 'true'
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
         with:
           draft: true
           make_latest: "false"
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             knuckle-linux-amd64
             knuckle-linux-amd64.sha256
@@ -176,7 +191,7 @@ jobs:
   release-arm64:
     name: Release (arm64)
     runs-on: ubuntu-24.04-arm
-    needs: release-amd64
+    needs: create-release
     steps:
       - name: Check release state (arm64)
         id: release-check
