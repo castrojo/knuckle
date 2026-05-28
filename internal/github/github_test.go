@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -200,5 +201,63 @@ func TestClient_FetchKeys_CapAt50(t *testing.T) {
 	}
 	if len(keys) != 50 {
 		t.Errorf("expected 50 keys (cap), got %d", len(keys))
+	}
+}
+
+// errRoundTripper is a RoundTripper that always returns a transport-level error,
+// simulating network failures (connection refused, DNS failure, timeout, etc.).
+type errRoundTripper struct{ err error }
+
+func (e errRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, e.err
+}
+
+// errBodyReader is an io.ReadCloser whose Read always returns an error,
+// simulating a mid-stream connection drop after headers are received.
+type errBodyReader struct{}
+
+func (errBodyReader) Read([]byte) (int, error) { return 0, errors.New("simulated read error") }
+func (errBodyReader) Close() error             { return nil }
+
+// errBodyRoundTripper returns a 200 response whose body errors on Read,
+// covering the io.ReadAll failure path in FetchKeys.
+type errBodyRoundTripper struct{}
+
+func (errBodyRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       errBodyReader{},
+	}, nil
+}
+
+// TestClient_FetchKeys_HTTPDoError covers the c.HTTP.Do(req) error branch (line 47-49).
+// This exercises the "failed to fetch keys" error path triggered by network failures.
+func TestClient_FetchKeys_HTTPDoError(t *testing.T) {
+	client := &Client{
+		BaseURL: "https://github.com",
+		HTTP:    &http.Client{Transport: errRoundTripper{err: errors.New("connection refused")}},
+	}
+	_, err := client.FetchKeys(context.Background(), "someuser")
+	if err == nil {
+		t.Fatal("expected error for HTTP Do failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to fetch keys") {
+		t.Errorf("expected 'failed to fetch keys' in error, got: %v", err)
+	}
+}
+
+// TestClient_FetchKeys_ReadAllError covers the io.ReadAll failure path (line 66-68).
+// This exercises the "failed to read response" error path triggered by body read errors.
+func TestClient_FetchKeys_ReadAllError(t *testing.T) {
+	client := &Client{
+		BaseURL: "https://github.com",
+		HTTP:    &http.Client{Transport: errBodyRoundTripper{}},
+	}
+	_, err := client.FetchKeys(context.Background(), "someuser")
+	if err == nil {
+		t.Fatal("expected error for body ReadAll failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to read response") {
+		t.Errorf("expected 'failed to read response' in error, got: %v", err)
 	}
 }
