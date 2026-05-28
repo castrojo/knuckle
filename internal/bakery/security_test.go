@@ -348,3 +348,79 @@ func TestSHA256HashValidation(t *testing.T) {
 		t.Errorf("expected empty Sha256 for invalid hash, got %q", entries[0].Sha256)
 	}
 }
+
+// TestNSEC1_DownloadURLTooLong verifies that catalog entries with a download URL
+// exceeding maxSysextURLLen are silently skipped (N-SEC1).
+func TestNSEC1_DownloadURLTooLong(t *testing.T) {
+	longURL := "https://github.com/flatcar/sysext-bakery/releases/download/docker-v24.0.7/" + strings.Repeat("a", maxSysextURLLen) + ".raw"
+	goodURL := "https://BASEURL/docker-24.0.7-x86-64.raw"
+
+	payload := `[
+		{"tag_name":"docker-v24.0.7","body":"Docker","assets":[
+			{"name":"docker-24.0.7-x86-64.raw","browser_download_url":"` + longURL + `"}
+		]},
+		{"tag_name":"tailscale-v1.80.0","body":"Tailscale","assets":[
+			{"name":"tailscale-1.80.0-x86-64.raw","browser_download_url":"https://BASEURL/tailscale-1.80.0-x86-64.raw"}
+		]}
+	]`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		catalog := strings.ReplaceAll(payload, "https://BASEURL", "http://"+r.Host)
+		_ = goodURL
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(catalog))
+	}))
+	defer srv.Close()
+
+	client := NewHTTPClientWithURL(srv.URL)
+	entries, err := client.FetchCatalog(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// docker entry has an oversized URL and must be dropped; tailscale must survive
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry (tailscale), got %d (oversized URL entry must be dropped)", len(entries))
+	}
+	if entries[0].Name != "tailscale" {
+		t.Errorf("expected surviving entry to be tailscale, got %q", entries[0].Name)
+	}
+}
+
+// TestNSEC1_SHA256SUMSURLTooLong verifies that when the SHA256SUMS URL exceeds
+// maxSysextURLLen, the entry is still returned but without a SHA256 hash (N-SEC1).
+func TestNSEC1_SHA256SUMSURLTooLong(t *testing.T) {
+	longSHA256URL := "https://github.com/flatcar/sysext-bakery/releases/download/docker-v24.0.7/" + strings.Repeat("b", maxSysextURLLen) + "/SHA256SUMS"
+	const expectedHash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+
+	payload := `[{"tag_name":"docker-v24.0.7","body":"Docker","assets":[
+		{"name":"docker-24.0.7-x86-64.raw","browser_download_url":"https://BASEURL/docker-24.0.7-x86-64.raw"},
+		{"name":"SHA256SUMS","browser_download_url":"` + longSHA256URL + `"}
+	]}]`
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/SHA256SUMS":
+			_, _ = w.Write([]byte(expectedHash + "  docker-24.0.7-x86-64.raw\n"))
+		default:
+			catalog := strings.ReplaceAll(payload, "https://BASEURL", "http://"+r.Host)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(catalog))
+		}
+	}))
+	defer srv.Close()
+
+	client := NewHTTPClientWithURL(srv.URL)
+	entries, err := client.FetchCatalog(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Entry must still be present — oversized SHA256SUMS URL is cleared, not fatal
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	// SHA256 hash must be empty because sha256sumsURL was cleared
+	if entries[0].Sha256 != "" {
+		t.Errorf("expected empty Sha256 when SHA256SUMS URL too long, got %q", entries[0].Sha256)
+	}
+}
+
