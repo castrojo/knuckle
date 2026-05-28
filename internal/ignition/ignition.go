@@ -173,7 +173,8 @@ func filterSelected(sysexts []model.SysextEntry) []model.SysextEntry {
 	return selected
 }
 
-const butaneTemplate = `variant: flatcar
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var butaneTemplate = `variant: flatcar
 version: 1.1.0
 storage:
   files:

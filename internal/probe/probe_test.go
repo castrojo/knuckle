@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -360,4 +361,21 @@ func TestDetectNvidiaGPUs_Smoke(t *testing.T) {
 	// Test only verifies it does not panic.
 	result := DetectNvidiaGPUs()
 	_ = result
+}
+
+// TestResolveByIDPathIn_NonSymlinkSkipped verifies the continue path at probe.go:233-234:
+// when an entry in byIDDir is NOT a symlink, os.Readlink returns an error and the entry
+// is silently skipped, falling back to returning devPath.
+func TestResolveByIDPathIn_NonSymlinkSkipped(t *testing.T) {
+dir := t.TempDir()
+// A regular file is not a symlink; os.Readlink returns EINVAL.
+regularFile := filepath.Join(dir, "not-a-symlink")
+if err := os.WriteFile(regularFile, []byte{}, 0o644); err != nil {
+t.Fatal(err)
+}
+
+got := resolveByIDPathIn("/dev/sda", dir)
+if got != "/dev/sda" {
+t.Errorf("resolveByIDPathIn() = %q, want %q (devPath fallback)", got, "/dev/sda")
+}
 }
