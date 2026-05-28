@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -240,6 +241,29 @@ func TestBlockDevice_PermissionDenied(t *testing.T) {
 	// Must NOT say "not found" — that would mean IsNotExist hit instead.
 	if strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected generic stat error, got not-found message: %v", err)
+	}
+}
+
+func TestBlockDevice_Success(t *testing.T) {
+	// Find any block device that stat(2) can read (no read permission needed).
+	candidates := []string{"/dev/sda", "/dev/vda", "/dev/nvme0n1", "/dev/loop0", "/dev/zram0"}
+	var blkdev string
+	for _, dev := range candidates {
+		info, err := os.Stat(dev)
+		if err != nil {
+			continue
+		}
+		st, ok := info.Sys().(*syscall.Stat_t)
+		if ok && st.Mode&syscall.S_IFMT == syscall.S_IFBLK {
+			blkdev = dev
+			break
+		}
+	}
+	if blkdev == "" {
+		t.Skip("no accessible block device found for test (CI may have none)")
+	}
+	if err := BlockDevice(blkdev); err != nil {
+		t.Errorf("BlockDevice(%q) = %v, want nil", blkdev, err)
 	}
 }
 
