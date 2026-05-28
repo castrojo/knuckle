@@ -181,7 +181,7 @@ func TestInstall_GenerateButaneError(t *testing.T) {
 	}
 }
 
-func TestInstall_CompileToIgnitionError(t *testing.T) {
+func TestInstall_CompileToIgnitionFuncError(t *testing.T) {
 	// Covers install.go:77-79: compileToIgnitionFunc returns error.
 	// Uses the compileToIgnitionFunc seam to inject a failure after
 	// GenerateButane succeeds, exercising the "compiling butane" error path
