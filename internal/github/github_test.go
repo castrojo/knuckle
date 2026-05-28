@@ -207,7 +207,7 @@ func (e errRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 type errBodyReader struct{}
 
 func (errBodyReader) Read([]byte) (int, error) { return 0, errors.New("simulated read error") }
-func (errBodyReader) Close() error              { return nil }
+func (errBodyReader) Close() error             { return nil }
 
 // errBodyRoundTripper returns a 200 response whose body errors on Read,
 // covering the io.ReadAll failure path in FetchKeys.
