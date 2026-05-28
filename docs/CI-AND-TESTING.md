@@ -36,24 +36,24 @@
 ## Coverage Gate
 
 `just cover-check` enforces per-package thresholds. Current numbers as of
-2026-05-26:
+2026-05-28:
 
 | Package                      | Now    | Gate | Aspiration (TEST-PLAN.md) |
 | ---------------------------- | ------ | ---- | ------------------------- |
-| `internal/model`             |  100%  |  99% | ≥ 90%                     |
-| `internal/iso`               |  100%  |  99% | (n/a)                     |
-| `internal/runner`            |  100%  |  99% | ≥ 80%                     |
+| `internal/model`             |  100%  | 100% | ≥ 90%                     |
+| `internal/iso`               |  100%  | 100% | (n/a)                     |
+| `internal/runner`            |  100%  | 100% | ≥ 80%                     |
 | `internal/demo`              |  100%  | 100% | (n/a)                     |
-| `internal/validate`          |  99.4% |  98% | ≥ 95%                     |
-| `internal/wizard`            |  99.5% |  98% | ≥ 85%                     |
-| `internal/probe`             |  98.9% |  97% | ≥ 85%                     |
-| `internal/install`           |  98.8% |  97% | ≥ 80%                     |
-| `internal/ignition`          |  98.1% |  97% | ≥ 90%                     |
-| `internal/headless`          |  98.6% |  97% | (n/a)                     |
-| `internal/bakery`            |  97.8% |  96% | ≥ 85%                     |
-| `internal/tui`               |  95.6% |  94% | ≥ 85%                     |
-| `internal/github`            |  94.4% |  93% | (n/a)                     |
-| `scripts/catalog_check`      |  99.0% |  95% | (n/a)                     |
+| `internal/validate`          |  100%  | 100% | ≥ 95%                     |
+| `internal/probe`             |  100%  | 100% | ≥ 85%                     |
+| `internal/install`           |  100%  | 100% | ≥ 80%                     |
+| `internal/ignition`          |  100%  | 100% | ≥ 90%                     |
+| `internal/bakery`            |  100%  | 100% | ≥ 85%                     |
+| `scripts/catalog_check`      |  100%  | 100% | (n/a)                     |
+| `internal/wizard`            |  99.5% |  99% | ≥ 85%                     |
+| `internal/headless`          |  99%   |  99% | (n/a)                     |
+| `internal/tui`               |  98.7% |  98% | ≥ 85%                     |
+| `internal/github`            |  97%   |  96% | (n/a)                     |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
