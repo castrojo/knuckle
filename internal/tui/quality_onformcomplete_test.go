@@ -224,29 +224,29 @@ func TestOnFormComplete_ReviewUnconfirmed_GoBack(t *testing.T) {
 // Interface is empty. initForm() rebuilds the network form (non-nil), so line
 // 165–166 is reached: the returned tea.Cmd comes from m.activeForm.Init().
 func TestOnFormComplete_NetworkStep_StaticNextError_ReinitsForm(t *testing.T) {
-w := newTestWizard()
-w.State.CurrentStep = model.StepNetwork
-m := New(w)
-// "static" mode with no interface set → validateNetwork() returns an error.
-m.networkModeInput = "static"
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepNetwork
+	m := New(w)
+	// "static" mode with no interface set → validateNetwork() returns an error.
+	m.networkModeInput = "static"
 
-cmd := m.onFormComplete()
+	cmd := m.onFormComplete()
 
-if m.err == nil {
-t.Error("expected m.err to be set when Wizard.Next() fails (static with no interface)")
-}
-// initForm() for StepNetwork always sets a non-nil activeForm; the error
-// handler must call activeForm.Init() and return its cmd.
-if m.activeForm == nil {
-t.Error("expected activeForm to be re-initialized for StepNetwork after Next() error")
-}
-if cmd == nil {
-t.Error("expected non-nil cmd from activeForm.Init() after fallthrough Next() error")
-}
-// Wizard must not have advanced past StepNetwork.
-if m.Wizard.State.CurrentStep != model.StepNetwork {
-t.Errorf("expected wizard to remain at StepNetwork, got %v", m.Wizard.State.CurrentStep)
-}
+	if m.err == nil {
+		t.Error("expected m.err to be set when Wizard.Next() fails (static with no interface)")
+	}
+	// initForm() for StepNetwork always sets a non-nil activeForm; the error
+	// handler must call activeForm.Init() and return its cmd.
+	if m.activeForm == nil {
+		t.Error("expected activeForm to be re-initialized for StepNetwork after Next() error")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd from activeForm.Init() after fallthrough Next() error")
+	}
+	// Wizard must not have advanced past StepNetwork.
+	if m.Wizard.State.CurrentStep != model.StepNetwork {
+		t.Errorf("expected wizard to remain at StepNetwork, got %v", m.Wizard.State.CurrentStep)
+	}
 }
 
 // ── form_logic.go:191-194  renderSystemChecks dead-code invariant ────────────
@@ -259,10 +259,10 @@ t.Errorf("expected wizard to remain at StepNetwork, got %v", m.Wizard.State.Curr
 // The test exists to catch a regression if someone adds logic to
 // renderSystemChecks() without updating or removing the guard in viewWithForm.
 func TestRenderSystemChecks_AlwaysEmpty(t *testing.T) {
-w := newTestWizard()
-m := New(w)
+	w := newTestWizard()
+	m := New(w)
 
-if got := m.renderSystemChecks(); got != "" {
-t.Errorf("renderSystemChecks() must return empty string (absorbed into zen chrome), got %q", got)
-}
+	if got := m.renderSystemChecks(); got != "" {
+		t.Errorf("renderSystemChecks() must return empty string (absorbed into zen chrome), got %q", got)
+	}
 }
