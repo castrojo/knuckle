@@ -1066,3 +1066,46 @@ func TestRenderTemplate_ExecuteError(t *testing.T) {
 		t.Errorf("error should mention template name, got: %v", err)
 	}
 }
+
+// ── GenerateButane: template parse error (lines 63-65) ───────────────────────
+
+// TestGenerateButane_TemplateParseError injects an invalid butaneTemplate to
+// cover the error branch at ignition.go:63-65 (template.Parse failure).
+// butaneTemplate was changed from const to var for exactly this test seam.
+func TestGenerateButane_TemplateParseError(t *testing.T) {
+	orig := butaneTemplate
+	butaneTemplate = "{{unclosed action" // missing closing "}}" → parse error
+	t.Cleanup(func() { butaneTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{Hostname: "test-host"}
+	_, err := g.GenerateButane(cfg)
+	if err == nil {
+		t.Fatal("expected template parse error, got nil")
+	}
+	if !strings.Contains(err.Error(), "parsing template") {
+		t.Errorf("error should mention 'parsing template', got: %v", err)
+	}
+}
+
+// ── GenerateButane: template execute error (lines 119-121) ───────────────────
+
+// TestGenerateButane_TemplateExecuteError injects a syntactically valid template
+// that references a non-existent field on a string value, causing Execute to
+// return an error and covering ignition.go:119-121.
+func TestGenerateButane_TemplateExecuteError(t *testing.T) {
+	orig := butaneTemplate
+	// .Hostname is a string; .Hostname.NoSuchField triggers an execute error.
+	butaneTemplate = "{{.Hostname.NoSuchField}}"
+	t.Cleanup(func() { butaneTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{Hostname: "test-host"}
+	_, err := g.GenerateButane(cfg)
+	if err == nil {
+		t.Fatal("expected template execute error, got nil")
+	}
+	if !strings.Contains(err.Error(), "executing template") {
+		t.Errorf("error should mention 'executing template', got: %v", err)
+	}
+}
