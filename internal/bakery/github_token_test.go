@@ -1,7 +1,6 @@
 package bakery
 
 import (
-	"os"
 	"testing"
 )
 
@@ -60,10 +59,8 @@ func TestGithubTokenFromEnv_GH_TOKEN_whitespace_only_fallback(t *testing.T) {
 
 func TestNewHTTPClient_UsesGH_TOKEN(t *testing.T) {
 	// Verify the client constructed by NewHTTPClient picks up the token.
-	prev := os.Getenv("GH_TOKEN")
-	t.Cleanup(func() { os.Setenv("GH_TOKEN", prev) })
-	os.Setenv("GITHUB_TOKEN", "")
-	os.Setenv("GH_TOKEN", "integration-token")
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "integration-token")
 
 	c := NewHTTPClient()
 	if c.AuthToken != "integration-token" {
