@@ -228,15 +228,33 @@ func TestMain_HeadlessUnwriteableLogFile(t *testing.T) {
 	}
 }
 
+// hasTTY reports whether /dev/tty is accessible in the current process.
+// Used to skip interactive TUI tests in non-interactive environments such as
+// CI runners and ghost QA workers that have no controlling terminal.
+func hasTTY() bool {
+	f, err := os.Open("/dev/tty")
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
+}
+
+// skipIfNoTTY calls t.Skip when there is no accessible /dev/tty.
+func skipIfNoTTY(t *testing.T) {
+	t.Helper()
+	if !hasTTY() {
+		t.Skip("skipping TTY test: /dev/tty not accessible (non-interactive environment)")
+	}
+}
+
 // TestMain_TUINormalMode verifies that normal TUI mode starts successfully
 // and follows the full startup path: hardware probe → sysext fetch → channel
 // fetch → tui.Run(). Uses KNUCKLE_TEST_TUI_AUTO_QUIT to exit cleanly.
 // Covers: log file setup, channel validation, runner setup, prober/bakery/
 // installer wiring, wizard creation, probe/fetch calls, tui.Run() invocation.
 func TestMain_TUINormalMode(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
+	skipIfNoTTY(t)
 	logFile := t.TempDir() + "/knuckle.log"
 	cmd := helperCmdWithTimeout(t, 15*time.Second,
 		"--channel=stable", "--dry-run", "--log-file="+logFile)
@@ -256,9 +274,7 @@ func TestMain_TUINormalMode(t *testing.T) {
 // real hardware/network calls. Covers the demo mode branch, mock wiring, and
 // pre-populated wizard state.
 func TestMain_TUIDemoMode(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
+	skipIfNoTTY(t)
 	logFile := t.TempDir() + "/knuckle-demo.log"
 	cmd := helperCmdWithTimeout(t, 15*time.Second,
 		"--demo", "--log-file="+logFile)
@@ -298,9 +314,7 @@ func TestMain_TUILogFileError(t *testing.T) {
 // mode. The auto-quit mechanism prevents the TUI from blocking.
 // Covers: rebootFn setup for non-dry-run mode (lines 147-152 in main.go).
 func TestMain_TUIRebootFnWiring(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
+	skipIfNoTTY(t)
 	logFile := t.TempDir() + "/knuckle-reboot.log"
 	// Start TUI without --dry-run (rebootFn will be non-nil)
 	// but use auto-quit to prevent blocking. Since we quit before install
@@ -376,9 +390,7 @@ func TestRunHeadless_DryRunSuccess(t *testing.T) {
 // TestMain_TUIFlatcarVersionFlag verifies that the --flatcar-version flag
 // is correctly passed to the wizard state.
 func TestMain_TUIFlatcarVersionFlag(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping TTY test in CI — no /dev/tty available")
-	}
+	skipIfNoTTY(t)
 	logFile := t.TempDir() + "/knuckle-version.log"
 	cmd := helperCmdWithTimeout(t, 15*time.Second,
 		"--channel=stable", "--dry-run", "--flatcar-version=3510.2.8", "--log-file="+logFile)
