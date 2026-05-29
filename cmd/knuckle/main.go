@@ -21,6 +21,12 @@ import (
 
 var (
 	version = "dev"
+
+	// tuiRunFn and demo*Factory are package-level so tests can swap them via init()
+	// to cover error branches without a real terminal or hardware.
+	tuiRunFn          = tui.Run
+	demoProberFactory = func() probe.Prober { return &demo.Prober{} }
+	demoBakeryFactory = func() bakery.Client { return &demo.Bakery{} }
 )
 
 func main() {
@@ -101,8 +107,8 @@ func main() {
 		installer    install.Installer
 	)
 	if demoMode {
-		prober = &demo.Prober{}
-		bakeryClient = &demo.Bakery{}
+		prober = demoProberFactory()
+		bakeryClient = demoBakeryFactory()
 		installer = &demo.Installer{}
 	} else {
 		realRunner := runner.NewRealRunner(logger)
@@ -153,7 +159,7 @@ func main() {
 			return err
 		}
 	}
-	if err := tui.Run(w, rebootFn); err != nil {
+	if err := tuiRunFn(w, rebootFn); err != nil {
 		logger.Error("TUI error", "error", err)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
