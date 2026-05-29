@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,9 +10,57 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectbluefin/knuckle/internal/bakery"
 	"github.com/projectbluefin/knuckle/internal/headless"
+	"github.com/projectbluefin/knuckle/internal/model"
+	"github.com/projectbluefin/knuckle/internal/probe"
 	"github.com/projectbluefin/knuckle/internal/runner"
+	"github.com/projectbluefin/knuckle/internal/wizard"
 )
+
+// errProber is a probe.Prober stub that always returns an error.
+type errProber struct{}
+
+func (p *errProber) ListDisks(_ context.Context) ([]model.DiskInfo, error) {
+	return nil, errors.New("injected probe error")
+}
+func (p *errProber) ListNetworkInterfaces(_ context.Context) ([]model.NetworkInterface, error) {
+	return nil, errors.New("injected probe error")
+}
+
+// errBakery is a bakery.Client stub that always returns an error.
+type errBakery struct{}
+
+func (b *errBakery) FetchCatalog(_ context.Context) ([]model.SysextEntry, error) {
+	return nil, errors.New("injected bakery error")
+}
+func (b *errBakery) FetchCatalogArch(_ context.Context, _ string) ([]model.SysextEntry, error) {
+	return nil, errors.New("injected bakery error")
+}
+
+// Compile-time interface checks.
+var _ probe.Prober   = (*errProber)(nil)
+var _ bakery.Client  = (*errBakery)(nil)
+
+// init wires test-only env vars into the injectable package-level variables.
+// These run before TestMain delegates to main() in subprocess mode, letting
+// subprocess tests cover error branches that normally require real hardware or TTY.
+func init() {
+	if os.Getenv("KNUCKLE_TEST_DEMO_PROBE_FAIL") == "1" {
+		demoProberFactory = func() probe.Prober { return &errProber{} }
+	}
+	if os.Getenv("KNUCKLE_TEST_DEMO_BAKERY_FAIL") == "1" {
+		demoBakeryFactory = func() bakery.Client { return &errBakery{} }
+	}
+	if os.Getenv("KNUCKLE_TEST_TUI_NOOP") == "1" {
+		tuiRunFn = func(_ *wizard.Wizard, _ func(context.Context) error) error { return nil }
+	}
+	if os.Getenv("KNUCKLE_TEST_TUI_FAIL") == "1" {
+		tuiRunFn = func(_ *wizard.Wizard, _ func(context.Context) error) error {
+			return errors.New("injected TUI failure")
+		}
+	}
+}
 
 // TestMain re-uses the compiled test binary as the knuckle subprocess.
 // When KNUCKLE_TEST_MAIN=1, the process delegates directly to main() —
@@ -521,5 +570,70 @@ func TestRunHeadlessWithRunner_NoRebootWhenDisabled(t *testing.T) {
 		if c.Name == "systemctl" && len(c.Args) > 0 && c.Args[0] == "reboot" {
 			t.Errorf("unexpected reboot call when reboot=false: %v", spy.Calls)
 		}
+	}
+}
+
+// TestMain_DemoProbeWarn verifies that when the demo hardware prober returns an
+// error, main logs a warning and continues (does not exit 1).
+// Covers: lines ~124-126 (demo hardware probe failed warn branch).
+func TestMain_DemoProbeWarn(t *testing.T) {
+	logFile := t.TempDir() + "/knuckle-probe-warn.log"
+	cmd := helperCmd(t, "--demo", "--log-file="+logFile)
+	cmd.Env = append(cmd.Env,
+		"KNUCKLE_TEST_DEMO_PROBE_FAIL=1",
+		"KNUCKLE_TEST_TUI_NOOP=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected exit 0 (warn-and-continue), got %v\noutput: %s", err, out)
+	}
+	logData, readErr := os.ReadFile(logFile)
+	if readErr != nil {
+		t.Fatalf("reading log file: %v", readErr)
+	}
+	if !strings.Contains(string(logData), "demo hardware probe failed") {
+		t.Errorf("expected log to contain 'demo hardware probe failed'; log: %s", logData)
+	}
+}
+
+// TestMain_DemoBakeryWarn verifies that when the demo bakery returns an error,
+// main logs a warning and continues (does not exit 1).
+// Covers: lines ~127-129 (demo sysext fetch failed warn branch).
+func TestMain_DemoBakeryWarn(t *testing.T) {
+	logFile := t.TempDir() + "/knuckle-bakery-warn.log"
+	cmd := helperCmd(t, "--demo", "--log-file="+logFile)
+	cmd.Env = append(cmd.Env,
+		"KNUCKLE_TEST_DEMO_BAKERY_FAIL=1",
+		"KNUCKLE_TEST_TUI_NOOP=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected exit 0 (warn-and-continue), got %v\noutput: %s", err, out)
+	}
+	logData, readErr := os.ReadFile(logFile)
+	if readErr != nil {
+		t.Fatalf("reading log file: %v", readErr)
+	}
+	if !strings.Contains(string(logData), "demo sysext fetch failed") {
+		t.Errorf("expected log to contain 'demo sysext fetch failed'; log: %s", logData)
+	}
+}
+
+// TestMain_TUIRunError verifies that when tui.Run returns an error, main logs it,
+// prints to stderr, and exits 1.
+// Covers: lines ~156-159 (TUI error path).
+// Uses --demo to bypass hardware/network probes so the process reaches tuiRunFn fast.
+func TestMain_TUIRunError(t *testing.T) {
+	cmd := helperCmd(t, "--demo", "--log-file=/dev/null")
+	cmd.Env = append(cmd.Env, "KNUCKLE_TEST_TUI_FAIL=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected non-zero exit for TUI error, got exit 0")
+	}
+	if cmd.ProcessState.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", cmd.ProcessState.ExitCode())
+	}
+	if !strings.Contains(string(out), "Error:") {
+		t.Errorf("expected 'Error:' in output; got: %s", out)
 	}
 }
