@@ -39,8 +39,8 @@ func (b *errBakery) FetchCatalogArch(_ context.Context, _ string) ([]model.Sysex
 }
 
 // Compile-time interface checks.
-var _ probe.Prober   = (*errProber)(nil)
-var _ bakery.Client  = (*errBakery)(nil)
+var _ probe.Prober = (*errProber)(nil)
+var _ bakery.Client = (*errBakery)(nil)
 
 // init wires test-only env vars into the injectable package-level variables.
 // These run before TestMain delegates to main() in subprocess mode, letting

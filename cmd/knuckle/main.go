@@ -25,7 +25,7 @@ var (
 	// tuiRunFn and demo*Factory are package-level so tests can swap them via init()
 	// to cover error branches without a real terminal or hardware.
 	tuiRunFn          = tui.Run
-	demoProberFactory = func() probe.Prober  { return &demo.Prober{} }
+	demoProberFactory = func() probe.Prober { return &demo.Prober{} }
 	demoBakeryFactory = func() bakery.Client { return &demo.Bakery{} }
 )
 
