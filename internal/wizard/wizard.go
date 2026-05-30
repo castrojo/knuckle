@@ -71,6 +71,7 @@ func New(prober probe.Prober, bakeryClient bakery.Client, installer install.Inst
 		State: &State{
 			CurrentStep: model.StepWelcome,
 			Config: model.InstallConfig{
+				OS: model.OSFlatcar,
 				// Arch is set at compile time — the ISO is built for a specific architecture.
 				// runtime.GOARCH reflects the arch the binary was compiled for (amd64 or arm64).
 				Arch:           runtime.GOARCH,
