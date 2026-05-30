@@ -637,6 +637,29 @@ func TestValidateWelcomeAcceptsValidChannels(t *testing.T) {
 	}
 }
 
+func TestValidateWelcomeFCOS(t *testing.T) {
+	// 1. Success on valid FCOS streams
+	w, _, _, _ := newTestWizard()
+	w.State.CurrentStep = model.StepWelcome
+	w.State.Config.OS = model.OSFCOS
+
+	for _, ch := range []string{"stable", "testing", "next"} {
+		w.State.Config.Channel = ch
+		if err := w.ValidateCurrentStep(); err != nil {
+			t.Errorf("FCOS stream %q should be valid, got error: %v", ch, err)
+		}
+	}
+
+	// 2. Failure on invalid FCOS streams (like Flatcar-only channels)
+	for _, ch := range []string{"beta", "alpha", "lts", "invalid"} {
+		w.State.Config.Channel = ch
+		if err := w.ValidateCurrentStep(); err == nil {
+			t.Errorf("expected FCOS validation error for invalid stream %q", ch)
+		}
+	}
+}
+
+
 func TestNextSkipsNvidiaWhenNotSelected(t *testing.T) {
 	w, _, _, _ := newTestWizard()
 	// Set up valid config to advance to StepSysext

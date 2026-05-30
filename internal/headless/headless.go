@@ -20,7 +20,7 @@ import (
 // Config is the JSON schema for headless install configuration.
 // It maps closely to model.InstallConfig but uses simpler types for JSON.
 type Config struct {
-	OS                  string          `json:"os,omitempty"`          // "flatcar" or "fcos"; defaults to "flatcar"
+	OS                  string          `json:"os,omitempty"`   // "flatcar" or "fcos"; defaults to "flatcar"
 	Arch                string          `json:"arch,omitempty"` // "amd64" or "arm64"; defaults to "amd64"
 	Channel             string          `json:"channel"`
 	Version             string          `json:"version,omitempty"`
