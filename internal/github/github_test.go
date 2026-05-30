@@ -146,6 +146,7 @@ func TestClient_FetchKeys_InvalidBaseURL(t *testing.T) {
 	_, err := client.FetchKeys(context.Background(), "testuser")
 	if err == nil {
 		t.Fatal("expected error for invalid base URL, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "failed to create request") {
 		t.Errorf("expected 'failed to create request' error, got: %v", err)
@@ -164,6 +165,7 @@ func TestClient_FetchKeys_RateLimited(t *testing.T) {
 	_, err := client.FetchKeys(context.Background(), "testuser")
 	if err == nil {
 		t.Fatal("expected error for 429 response, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "429") {
 		t.Errorf("expected error to contain status 429, got: %v", err)
@@ -182,6 +184,7 @@ func TestClient_FetchKeys_BodyReadError(t *testing.T) {
 	_, err := client.FetchKeys(context.Background(), "testuser")
 	if err == nil {
 		t.Fatal("expected error for body read failure, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "failed to read response") {
 		t.Errorf("expected 'failed to read response' error, got: %v", err)
