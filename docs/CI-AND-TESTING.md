@@ -30,8 +30,8 @@
 | Golden         |     ✅      | Ignition output stability (regenerate with `-update`)                   |
 | Headless e2e   |     ✅      | `just headless-test` — build + canned JSON, validates config generation |
 | ISO smoke      |     ⚠️      | `just iso-smoke <iso> <ovmf>` — headless serial-log ISO boot assertions |
-| Integration    |     ❌      | Tagged `//go:build integration`. Real HTTP to GitHub + Flatcar          |
-| VM e2e         |     ❌      | Requires QEMU + KVM; dev-machine only; automated 4-pass recipe          |
+| Integration    |   ✅ nightly | Tagged `//go:build integration`. Real HTTP to GitHub + Flatcar         |
+| VM e2e         |  ✅ on-demand | `just vm-e2e` locally or `vm-e2e.yml` GHA workflow (4-pass)           |
 
 ## Coverage Gate
 
@@ -93,6 +93,32 @@ needs. `persist-credentials: false` on every `actions/checkout` — keeps the
 
 Weekly cron is Mondays at 06:37 UTC — odd minute on purpose, avoids the
 00/30 GitHub Actions stampede.
+
+### `.github/workflows/nightly.yml`
+
+Nightly and manually-triggered extended validation, including the migrated integration suite.
+
+| Job                   | What it does                                              | Timeout |
+| --------------------- | --------------------------------------------------------- | ------- |
+| `nightly-test`        | Runs `go test -race -count=1 ./...` 10x to catch flakes   | 30 min  |
+| `nightly-coverage`    | Runs `just cover-check`, uploads `cover.out`, flags Codecov nightly | 15 min |
+| `nightly-vuln`        | Runs `govulncheck ./...` against latest advisories        | 10 min  |
+| `nightly-integration` | Runs `go test -race -count=1 -v -tags=integration ./...`  | 15 min  |
+
+### `.github/workflows/vm-e2e.yml`
+
+Full VM install + boot + domain assertions. Triggered via `workflow_dispatch` (on-demand) and on `push` to `main` when `internal/**`, `cmd/**`, `scripts/**`, `go.mod`, or `go.sum` change.
+
+| Job       | What it does                                                         | Timeout |
+| --------- | -------------------------------------------------------------------- | ------- |
+| `prepare` | Downloads + caches Flatcar base image (keyed on version.txt)         | 10 min  |
+| `dhcp`    | Full install with DHCP networking; verifies hostname + update strategy | 35 min |
+| `static`  | Full install with static IP 10.0.2.15/24; verifies networkd unit content | 35 min |
+| `sysext`  | Full install with docker sysext; verifies docker.raw + systemd-sysext active | 45 min |
+| `nvidia`  | Full install with NVIDIA config; verifies sysupdate.d entries present | 35 min |
+
+All jobs run in parallel after `prepare`. Each uses KVM-enabled GHA ubuntu-latest runners.
+Flatcar base image (~480 MB) is cached by `actions/cache` keyed on `FLATCAR_VERSION` from version.txt.
 
 ### `.github/workflows/release.yml`
 
@@ -230,35 +256,14 @@ capture deterministic. On every run it writes:
 - `.vm/hardware-disk-inventory.log` — `lsblk` plus `/dev/disk/by-id` inventory
 - `.vm/hardware-installer-serial.log` — VM serial console output
 
-## Ghost Testlab (Tier 1–3 test host)
+## VM e2e (Local or GHA)
 
-Ghost is the dedicated headless QEMU host for per-PR automated testing.
+VM e2e tests can run on any Linux machine with KVM, or via the `vm-e2e.yml` GHA workflow.
 See `docs/TEST-PLAN.md` for the full E2E scenario table.
 
-**Running tests locally:** Any Linux machine with KVM can serve as the test host. See [GHOST-LAB.md](GHOST-LAB.md) for setup instructions and `just qa-pr <PR_NUMBER>` as the canonical way to run the full test suite locally.
+**Running tests locally:** Any Linux machine with KVM can serve as the test host. `just vm-e2e` runs all 4 passes locally. See [GHOST-LAB.md](GHOST-LAB.md) for setup on a dedicated host.
 
-**Infrastructure:**
-- Flatcar 4593.2.1 base image: `/var/tmp/knuckle-test/flatcar_base.img`
-- 32 KVM cores, 46 GB RAM available, 205 GB NVMe (`/var/tmp`)
-- Test port range: 2300–2315 (auto-allocated by `scripts/qa-test-pr.sh`)
-
-**Critical: `hostfwd` binds `127.0.0.1` on ghost.**
-VM SSH must be issued from ghost itself — never from the dev workstation:
-```bash
-# correct:
-ssh jorge@ghost "ssh -o StrictHostKeyChecking=no -p 2307 core@127.0.0.1 'uname -r'"
-# wrong (reaches host sshd):
-ssh -p 2307 jorge@ghost
-```
-
-**Per-PR test harness:**
-```bash
-# Run from dev machine — builds locally, tests on ghost, outputs markdown report
-./scripts/qa-test-pr.sh <PR_NUMBER>
-
-# Publish report to PR
-gh pr comment <PR_NUMBER> --repo projectbluefin/knuckle --body-file /tmp/knuckle-qa-pr-<N>-report.md
-```
+**Running in GHA:** Use `gh workflow run vm-e2e.yml` or trigger via the Actions tab. Results appear as job logs; serial logs and knuckle.log are uploaded as artifacts on failure.
 
 Test tiers by domain label (see `knuckle-qa` skill for full matrix):
 | Labels | Tier | Runs |
@@ -298,6 +303,8 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
   `installCancel` stored in Model, called on all quit paths).
 - ~~`just vm` required manual reboot step~~ — **fixed** (2026-05-20, `just vm`
   now boots installed system automatically after knuckle exits).
+- ~~Move vm-e2e and integration tests to GHA~~ — **done** (2026-05-30,
+  `vm-e2e.yml` + `nightly-integration` job).
 - ~~Blocker B1~~ GPG signature verification — **closed**. `internal/bakery/verify.go` validates Flatcar release `.DIGESTS.asc` against the embedded signing key. Separate from knuckle's own release artifact signing (cosign keyless via Sigstore in `release.yml`).
 - ~~Blocker B2~~ Reboot via runner — **closed**.
 - ~~Blocker B3~~ `validate.DiskPath()` in headless — **closed**.
