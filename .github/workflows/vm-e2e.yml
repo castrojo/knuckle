@@ -550,7 +550,7 @@ jobs:
           printf '{"ignition":{"version":"3.4.0"},"passwd":{"users":[{"name":"core","sshAuthorizedKeys":["%s"]}]},"systemd":{"units":[{"name":"sshd.service","enabled":true}]}}\n' \
             "$E2E_PUB" > .vm/e2e-installer.ign
 
-          printf '{"channel":"stable","hostname":"e2e-nvidia","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","nvidia":{"enabled":true,"driver_type":"open"},"update_strategy":"off","reboot":false}\n' \
+          printf '{"channel":"stable","hostname":"e2e-nvidia","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","swap":{"enabled":false},"nvidia_driver_version":"570-open","update_strategy":"off","reboot":false}\n' \
             "$E2E_PUB" > .vm/e2e-nvidia-config.json
 
           qemu-system-x86_64 "${QEMU_ARGS[@]}" \
