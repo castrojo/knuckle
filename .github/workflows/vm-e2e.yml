@@ -598,9 +598,9 @@ jobs:
           UPDATE_STRATEGY=$($E2E_SSH "grep REBOOT_STRATEGY /etc/flatcar/update.conf 2>/dev/null" | cut -d= -f2 | tr -d '"' | xargs) || true
           [ "$UPDATE_STRATEGY" = "off" ] && echo "✓ update_strategy: off" || echo "⚠ update_strategy: '$UPDATE_STRATEGY'"
 
-          $E2E_SSH "test -f /etc/sysupdate.d/nv-open-gpu-driver.conf 2>/dev/null || ls /etc/sysupdate.d/ 2>/dev/null" \
-            | tee .vm/nvidia-verify.txt
-          grep -q "nv-" .vm/nvidia-verify.txt && echo "✓ NVIDIA sysupdate config present" || echo "⚠ NVIDIA sysupdate config not found (check assertion)"
+          NVIDIA_LINE=$($E2E_SSH "grep -i nvidia /etc/flatcar/enabled-sysext.conf 2>/dev/null || true")
+          [ -n "$NVIDIA_LINE" ] && echo "✓ NVIDIA sysext enabled: $NVIDIA_LINE" \
+            || { echo "❌ NVIDIA entry missing from /etc/flatcar/enabled-sysext.conf"; $E2E_SSH "cat /etc/flatcar/enabled-sysext.conf 2>/dev/null || echo '(file not found)'"; exit 1; }
 
           kill "$(cat .vm/qemu-target.pid)" 2>/dev/null || true
           echo ""
