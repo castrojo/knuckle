@@ -20,6 +20,7 @@ import (
 // Config is the JSON schema for headless install configuration.
 // It maps closely to model.InstallConfig but uses simpler types for JSON.
 type Config struct {
+	OS                  string          `json:"os,omitempty"`          // "flatcar" or "fcos"; defaults to "flatcar"
 	Arch                string          `json:"arch,omitempty"` // "amd64" or "arm64"; defaults to "amd64"
 	Channel             string          `json:"channel"`
 	Version             string          `json:"version,omitempty"`
@@ -217,14 +218,21 @@ func (c *Config) Validate() error {
 	if c.Arch != "" && c.Arch != "amd64" && c.Arch != "arm64" {
 		return fmt.Errorf("arch: must be \"amd64\" or \"arm64\" (got %q)", c.Arch)
 	}
-	if c.Arch == "arm64" && c.Channel == "lts" {
+	// LTS is not available for arm64 on Flatcar (FCOS has no lts stream)
+	if c.Arch == "arm64" && c.Channel == "lts" && c.OS != model.OSFCOS {
 		return fmt.Errorf("arch: LTS channel is not available for arm64")
 	}
 
-	// Channel
+	// Channel / Stream
 	if c.Channel != "" {
-		if err := validate.Channel(c.Channel); err != nil {
-			return fmt.Errorf("channel: %w", err)
+		if c.OS == model.OSFCOS {
+			if err := validate.FCOSStream(c.Channel); err != nil {
+				return fmt.Errorf("channel: %w", err)
+			}
+		} else {
+			if err := validate.Channel(c.Channel); err != nil {
+				return fmt.Errorf("channel: %w", err)
+			}
 		}
 	}
 

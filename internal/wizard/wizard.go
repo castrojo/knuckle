@@ -187,8 +187,14 @@ func (w *Wizard) ValidateCurrentStep() error {
 }
 
 func (w *Wizard) validateWelcome() error {
-	if err := validate.Channel(w.State.Config.Channel); err != nil {
-		return err
+	if w.State.Config.OS == model.OSFCOS {
+		if err := validate.FCOSStream(w.State.Config.Channel); err != nil {
+			return err
+		}
+	} else {
+		if err := validate.Channel(w.State.Config.Channel); err != nil {
+			return err
+		}
 	}
 	if w.State.Config.IgnitionURL != "" {
 		if err := validate.IgnitionURL(w.State.Config.IgnitionURL); err != nil {

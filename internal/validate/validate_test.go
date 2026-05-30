@@ -292,6 +292,30 @@ func TestChannel(t *testing.T) {
 	}
 }
 
+func TestFCOSStream(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"stable", "stable", false},
+		{"testing", "testing", false},
+		{"next", "next", false},
+		{"invalid empty", "", true},
+		{"invalid beta", "beta", true},
+		{"invalid edge", "edge", true},
+		{"invalid lts", "lts", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := FCOSStream(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("FCOSStream(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestURL(t *testing.T) {
 	tests := []struct {
 		name    string
