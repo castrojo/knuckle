@@ -159,3 +159,20 @@ func TestDefaultNvidiaDriverSeries_IsRecommended(t *testing.T) {
 	}
 	t.Fatalf("DefaultNvidiaDriverSeries %q not found", DefaultNvidiaDriverSeries)
 }
+
+func TestDriverSeriesMap(t *testing.T) {
+	m := DriverSeriesMap()
+	if len(m) != len(NvidiaDriverOptions) {
+		t.Errorf("expected map length %d, got %d", len(NvidiaDriverOptions), len(m))
+	}
+	for _, opt := range NvidiaDriverOptions {
+		label, exists := m[opt.ID]
+		if !exists {
+			t.Errorf("expected key %q to exist in map", opt.ID)
+		}
+		if label != opt.Label {
+			t.Errorf("expected key %q to have label %q, got %q", opt.ID, opt.Label, label)
+		}
+	}
+}
+
