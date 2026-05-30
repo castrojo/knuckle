@@ -235,6 +235,7 @@ func TestClient_FetchKeys_NonOKNonNotFound(t *testing.T) {
 	_, err := client.FetchKeys(context.Background(), "someuser")
 	if err == nil {
 		t.Fatal("expected error for 503 response, got nil")
+		return
 	}
 	if !strings.Contains(err.Error(), "503") {
 		t.Errorf("error should mention status code 503, got: %v", err)
