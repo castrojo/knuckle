@@ -1,17 +1,42 @@
-# PR Test Matrix — knuckle ghost testlab
+# PR Test Matrix — knuckle VM e2e
 
-> **Audience:** Agents and maintainers running PR tests on ghost (192.168.1.102).
+> **Audience:** Agents and maintainers running PR tests locally (KVM) or via GitHub Actions.
 > **Scope:** Defines exactly what to run, what to capture, and what constitutes
 > PASS/FAIL for each GitHub label domain.
 
 ---
 
+## Running VM e2e Tests
+
+### Option A — GitHub Actions (on-demand)
+
+```bash
+# Trigger all 4 passes via workflow_dispatch
+gh workflow run vm-e2e.yml --repo projectbluefin/knuckle
+
+# On a specific branch
+gh workflow run vm-e2e.yml --repo projectbluefin/knuckle --ref feat/my-branch
+
+# Watch progress
+gh run list --repo projectbluefin/knuckle --workflow vm-e2e.yml --limit 3
+```
+
+### Option B — Local machine (KVM required)
+
+```bash
+just vm-e2e    # runs all 4 passes: DHCP → Static → Sysext → NVIDIA
+```
+
+Any Linux machine with `/dev/kvm` accessible works. Ghost (192.168.1.102) remains available as a dedicated test host but is no longer required.
+
+---
+
 ## Conventions
 
-### Ghost Layout
+### QA Host Layout (local or ghost)
 
 ```
-/var/tmp/knuckle-test/
+.vm/   (local)  or  /var/tmp/knuckle-test/  (dedicated host)
 ├── flatcar_base_amd64.img          ← shared read-only base (CoW backing)
 ├── pr-NNN/                         ← one dir per PR under test
 │   ├── knuckle                     ← built binary for this PR
