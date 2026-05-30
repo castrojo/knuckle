@@ -49,8 +49,15 @@ func (s WizardStep) String() string {
 	}
 }
 
+// OS target constants for the OS discriminator field.
+const (
+	OSFlatcar = "flatcar"
+	OSFCOS    = "fcos"
+)
+
 // InstallConfig is the complete installation configuration built by the wizard.
 type InstallConfig struct {
+	OS                  string // "flatcar" | "fcos"; defaults to "flatcar" for backward compatibility
 	Arch                string // amd64 or arm64 (determined at ISO build time; default "amd64")
 	Channel             string // stable, beta, alpha, edge
 	Version             string // optional: pin to specific Flatcar version (flatcar-install -V)
@@ -111,7 +118,8 @@ const (
 	TailscaleModeSubnetRouter = "subnet-router"
 )
 
-// UpdateStrategy holds OS update and reboot settings for Flatcar.
+// UpdateStrategy holds OS update and reboot settings.
+// Flatcar uses update-engine; FCOS uses zincati instead.
 type UpdateStrategy struct {
 	RebootStrategy string // "reboot", "off", "etcd-lock"
 	RebootWindow   string // optional: "Mon-Fri 04:00-05:00" format
