@@ -115,7 +115,7 @@ cover-check:
     declare -A targets=(
         [model]=100 [validate]=100 [ignition]=100 [github]=96
         [bakery]=100 [probe]=100   [runner]=100   [install]=100
-        [headless]=99 [wizard]=99  [iso]=100      [tui]=98
+        [headless]=99 [wizard]=99  [iso]=100      [tui]=99
         [demo]=100
     )
     fail=0
@@ -150,7 +150,7 @@ cover-check:
         echo "ok    ${script_pkg}  ${script_pct}%  (target ${script_target}%)"
     fi
     cmd_pkg=cmd/knuckle
-    cmd_target=50
+    cmd_target=85
     cmd_pct=$(go test -count=1 -cover ./${cmd_pkg}/... 2>/dev/null \
         | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
     cmd_pct=${cmd_pct%.*}
@@ -162,6 +162,20 @@ cover-check:
         fail=1
     else
         echo "ok    ${cmd_pkg}  ${cmd_pct}%  (target ${cmd_target}%)"
+    fi
+    cbf_pkg=cmd/compile-butane-fresh
+    cbf_target=100
+    cbf_pct=$(go test -count=1 -cover ./${cbf_pkg}/... 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    cbf_pct=${cbf_pct%.*}
+    if [[ -z "$cbf_pct" ]]; then
+        echo "FAIL  ${cbf_pkg}   no coverage reported"
+        fail=1
+    elif (( cbf_pct < cbf_target )); then
+        echo "FAIL  ${cbf_pkg}  ${cbf_pct}%  (target ${cbf_target}%)"
+        fail=1
+    else
+        echo "ok    ${cbf_pkg}  ${cbf_pct}%  (target ${cbf_target}%)"
     fi
     exit $fail
 
