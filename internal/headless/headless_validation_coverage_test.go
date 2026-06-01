@@ -174,3 +174,77 @@ func (s *skipBlockDeviceInstaller) Install(_ context.Context, _ *model.InstallCo
 	progress("mock install")
 	return nil
 }
+
+func TestValidate_NewOSAndArchValidation(t *testing.T) {
+	// 1. Arm64 + LTS on Flatcar should fail
+	cfgArmLTS := &Config{
+		OS:             "flatcar",
+		Arch:           "arm64",
+		Channel:        "lts",
+		Hostname:       "node01",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "reboot",
+	}
+	err := cfgArmLTS.Validate()
+	if err == nil {
+		t.Fatal("expected error for arm64 + LTS channel on Flatcar")
+	}
+	if !strings.Contains(err.Error(), "LTS channel is not available for arm64") {
+		t.Errorf("expected LTS warning for arm64, got: %v", err)
+	}
+
+	// 2. FCOS stream success
+	cfgFCOSSuccess := &Config{
+		OS:             "fcos",
+		Arch:           "amd64",
+		Channel:        "stable",
+		Hostname:       "node01",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "reboot",
+	}
+	if err := cfgFCOSSuccess.Validate(); err != nil {
+		t.Errorf("expected no error for FCOS stable channel, got: %v", err)
+	}
+
+	// 3. FCOS stream failure (LTS does not exist in FCOS)
+	cfgFCOSFail := &Config{
+		OS:             "fcos",
+		Arch:           "amd64",
+		Channel:        "lts",
+		Hostname:       "node01",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "reboot",
+	}
+	err = cfgFCOSFail.Validate()
+	if err == nil {
+		t.Fatal("expected error for FCOS + LTS channel")
+	}
+	if !strings.Contains(err.Error(), "channel: invalid FCOS stream") {
+		t.Errorf("expected invalid FCOS stream error, got: %v", err)
+	}
+
+	// 4. Flatcar channel failure
+	cfgFlatcarFail := &Config{
+		OS:             "flatcar",
+		Arch:           "amd64",
+		Channel:        "invalid-channel",
+		Hostname:       "node01",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "reboot",
+	}
+	err = cfgFlatcarFail.Validate()
+	if err == nil {
+		t.Fatal("expected error for invalid Flatcar channel")
+	}
+	if !strings.Contains(err.Error(), "channel: invalid channel") {
+		t.Errorf("expected invalid channel error, got: %v", err)
+	}
+}
