@@ -1058,7 +1058,10 @@ catalog-check-strict:
 # Verify model.go NvidiaDriverOptions against the Flatcar NVIDIA docs.
 # Reports driver series mentioned in upstream docs vs what is in model.go.
 nvidia-check:
-    ./scripts/nvidia_check.sh
+    #!/usr/bin/env bash
+    GOOS=linux GOARCH={{KNUCKLE_ARCH}} CGO_ENABLED=0 go build \
+        -o bin/nvidia-check ./cmd/nvidia-check
+    ./bin/nvidia-check
 
 # Full pre-release preflight: catalog coverage + nvidia versions + CI gate.
 # Run this before tagging any release.

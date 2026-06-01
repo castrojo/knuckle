@@ -37,3 +37,5 @@ cover_tui.out
 # Local worktrees (never committed)
 .worktrees/
 coverage.txt
+bin/
+nvidia-check
