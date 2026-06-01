@@ -659,7 +659,6 @@ func TestValidateWelcomeFCOS(t *testing.T) {
 	}
 }
 
-
 func TestNextSkipsNvidiaWhenNotSelected(t *testing.T) {
 	w, _, _, _ := newTestWizard()
 	// Set up valid config to advance to StepSysext

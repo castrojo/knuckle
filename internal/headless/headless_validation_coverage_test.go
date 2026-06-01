@@ -248,4 +248,3 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 		t.Errorf("expected invalid channel error, got: %v", err)
 	}
 }
-
