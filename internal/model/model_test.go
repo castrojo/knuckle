@@ -175,4 +175,3 @@ func TestDriverSeriesMap(t *testing.T) {
 		}
 	}
 }
-
