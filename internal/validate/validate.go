@@ -167,6 +167,17 @@ func Channel(s string) error {
 	return fmt.Errorf("invalid channel %q: must be one of stable, beta, alpha, lts, edge", s)
 }
 
+// FCOSStream validates a Fedora CoreOS stream name.
+func FCOSStream(s string) error {
+	valid := []string{"stable", "testing", "next"}
+	for _, v := range valid {
+		if s == v {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid FCOS stream %q: must be one of stable, testing, next", s)
+}
+
 // URL validates a basic URL format (must start with http:// or https://).
 func URL(s string) error {
 	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
