@@ -225,6 +225,15 @@ var NvidiaDriverOptions = []NvidiaDriverSeries{
 	},
 }
 
+// DriverSeriesMap returns a map of NvidiaDriverSeries ID to Label for verification tools.
+func DriverSeriesMap() map[string]string {
+	m := make(map[string]string, len(NvidiaDriverOptions))
+	for _, s := range NvidiaDriverOptions {
+		m[s.ID] = s.Label
+	}
+	return m
+}
+
 // DefaultNvidiaDriverSeries is the driver series selected when auto-detecting an NVIDIA GPU.
 const DefaultNvidiaDriverSeries = "570-open"
 
