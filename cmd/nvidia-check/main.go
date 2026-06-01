@@ -13,9 +13,8 @@ import (
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
-const (
+var (
 	docsURL = "https://api.github.com/repos/flatcar/flatcar-website/contents/content/docs/latest/setup/customization/using-nvidia.md"
-	modelGo = "internal/model/model.go"
 )
 
 // ghContentResponse is the minimal GitHub API response for file contents.
