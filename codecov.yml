@@ -13,7 +13,7 @@ coverage:
     patch:
       default:
         target: 80%
-        informational: true
+        informational: false
 
 comment:
   layout: "reach,diff,flags,files"
