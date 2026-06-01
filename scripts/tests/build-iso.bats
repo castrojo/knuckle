@@ -61,3 +61,44 @@ run_expect_fail() {
   # beta should be accepted; riscv64 should fail
   [[ "$output" == *"must be amd64 or arm64"* ]]
 }
+
+# ── --binary argument forms (issue #671) ─────────────────────────────────────
+
+@test "--binary value (space-separated) does not trigger unknown-argument error" {
+  run bash "$SCRIPT" --binary /tmp/fake-knuckle 2>&1 || true
+  [[ "$output" != *"Unknown argument"* ]]
+}
+
+@test "--binary=value (equals form) does not trigger unknown-argument error" {
+  run bash "$SCRIPT" --binary=/tmp/fake-knuckle 2>&1 || true
+  [[ "$output" != *"Unknown argument"* ]]
+}
+
+@test "--binary combined with valid flags does not trigger arg-parse error" {
+  run bash "$SCRIPT" --binary /tmp/fake-knuckle --channel stable --arch amd64 2>&1 || true
+  [[ "$output" != *"Unknown argument"* ]]
+  [[ "$output" != *"must be amd64 or arm64"* ]]
+  [[ "$output" != *"must be stable, beta, alpha, lts, or edge"* ]]
+}
+
+# ── arm64 valid channel combinations (issue #671) ────────────────────────────
+
+@test "arm64 + stable is a valid combination" {
+  run bash "$SCRIPT" --arch arm64 --channel stable 2>&1 || true
+  [[ "$output" != *"LTS channel is not available for arm64"* ]]
+}
+
+@test "arm64 + beta is a valid combination" {
+  run bash "$SCRIPT" --arch arm64 --channel beta 2>&1 || true
+  [[ "$output" != *"LTS channel is not available for arm64"* ]]
+}
+
+@test "arm64 + alpha is a valid combination" {
+  run bash "$SCRIPT" --arch arm64 --channel alpha 2>&1 || true
+  [[ "$output" != *"LTS channel is not available for arm64"* ]]
+}
+
+@test "arm64 + edge is a valid combination" {
+  run bash "$SCRIPT" --arch arm64 --channel edge 2>&1 || true
+  [[ "$output" != *"LTS channel is not available for arm64"* ]]
+}

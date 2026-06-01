@@ -461,3 +461,31 @@ GITEOF
   # Cleanup (in case test logic changes)
   rm -rf "$WORKTREE_PATH" 2>/dev/null || true
 }
+
+# ── domain:iso tier routing (issue #672) ─────────────────────────────────────
+
+@test "domain:iso routes to Tier 3 with needs_boot" {
+  export MOCK_GH_PR_JSON='{"title":"iso","headRefName":"feat/iso","labels":[{"name":"domain:iso"},{"name":"size:S"}],"body":"","author":{"login":"dev"}}'
+  export MOCK_PR_TITLE="iso"
+  export MOCK_PR_BRANCH="feat/iso"
+  export MOCK_PR_LABELS="domain:iso, size:S"
+  export MOCK_PR_SIZE="size:S"
+  export MOCK_GH_DIFF_FILES=""
+  run bash "$SCRIPT" 999 2>&1
+  [[ "$output" == *"tier=3"* ]]
+  [[ "$output" == *"needs_boot=1"* ]]
+}
+
+@test "non-routing domain labels (bakery, wizard, validate, ci) stay at Tier 0" {
+  for label in domain:bakery domain:wizard domain:validate domain:ci; do
+    export MOCK_GH_PR_JSON="{\"title\":\"x\",\"headRefName\":\"feat/x\",\"labels\":[{\"name\":\"${label}\"},{\"name\":\"size:S\"}],\"body\":\"\",\"author\":{\"login\":\"dev\"}}"
+    export MOCK_PR_TITLE="x"
+    export MOCK_PR_BRANCH="feat/x"
+    export MOCK_PR_LABELS="${label}, size:S"
+    export MOCK_PR_SIZE="size:S"
+    export MOCK_GH_DIFF_FILES=""
+    run bash "$SCRIPT" 999 2>&1
+    [[ "$output" != *"tier=3"* ]] || { echo "FAIL: ${label} should not route to tier=3"; exit 1; }
+    [[ "$output" != *"tier=1"* ]] || { echo "FAIL: ${label} should not route to tier=1"; exit 1; }
+  done
+}
