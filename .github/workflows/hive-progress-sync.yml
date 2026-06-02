@@ -1,7 +1,7 @@
 # hive-progress-sync — posts Knuckle queue stats to the projectbluefin org
 # project board (todo.projectbluefin.io) hourly and on every push to main.
 #
-# Tracks: queue/agent-ready, queue/claimed, priority:p0 counts
+# Tracks: queue/agent-ready, queue/claimed, hive/p0, hive/p1 counts
 # CI status: ci.yml (knuckle's primary build+test workflow)
 #
 # Requires: PROJECT_TOKEN secret with project + read:project OAuth scopes
@@ -25,7 +25,8 @@ jobs:
     steps:
       - name: Post knuckle queue status to project board
         env:
-          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
         run: |
           python3 << 'PYEOF'
           import json, subprocess, sys, os
@@ -65,13 +66,15 @@ jobs:
 
           n_ready   = count_label("queue/agent-ready")
           n_claimed = count_label("queue/claimed")
-          n_p0      = count_label("priority:p0")
+          n_p0      = count_label("hive/p0")
+          n_p1      = count_label("hive/p1")
 
           now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
           # Body
           p0_fragment = f" · ▲ {n_p0} P0" if n_p0 > 0 else ""
-          status_line = f"`{ci}` · {n_ready} ready · {n_claimed} claimed{p0_fragment}"
+          p1_fragment = f" · {n_p1} P1" if n_p1 > 0 else ""
+          status_line = f"`{ci}` · {n_ready} ready · {n_claimed} claimed{p0_fragment}{p1_fragment}"
 
           body = "\n".join([
               f"### Knuckle 🦖",
@@ -91,9 +94,9 @@ jobs:
           else:
               status = "AT_RISK"
 
-          # Guard: skip if PROJECT_TOKEN is not set
-          if not os.environ.get("GH_TOKEN"):
-              print("WARNING: PROJECT_TOKEN secret not set — skipping", file=sys.stderr)
+          project_token = os.environ.get("PROJECT_TOKEN", "")
+          if not project_token:
+              print("WARNING: PROJECT_TOKEN not set — skipping project board post", file=sys.stderr)
               sys.exit(0)
 
           mutation = """
@@ -114,7 +117,8 @@ jobs:
                "-f", f"projectId={PROJECT_ID}",
                "-f", f"body={body}",
                "-f", f"status={status}"],
-              capture_output=True, text=True
+              capture_output=True, text=True,
+              env={**os.environ, "GH_TOKEN": project_token}
           )
 
           if result.returncode != 0 or '"errors"' in result.stdout:
