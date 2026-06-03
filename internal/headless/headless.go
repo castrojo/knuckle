@@ -91,8 +91,12 @@ func LoadConfig(path string) (*Config, error) {
 
 // ToInstallConfig converts a headless Config to a model.InstallConfig.
 func (c *Config) ToInstallConfig() *model.InstallConfig {
+	os := c.OS
+	if os == "" {
+		os = model.OSFlatcar
+	}
 	cfg := &model.InstallConfig{
-		OS:       model.OSFlatcar,
+		OS:       os,
 		Arch:     c.Arch,
 		Channel:  c.Channel,
 		Version:  c.Version,

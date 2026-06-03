@@ -2270,3 +2270,38 @@ func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
 		})
 	}
 }
+
+func TestNvidiaSkippedForFCOS(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.Config.Hostname = "test"
+	w.State.Config.Users = []model.UserConfig{
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
+	}
+	w.State.Config.Channel = "stable"
+	w.State.CurrentStep = model.StepSysext
+
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next from Sysext: %v", err)
+	}
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("FCOS should skip StepNvidia even when nvidia-runtime is selected")
+	}
+}
+
+func TestNvidiaGoToStepRefusedForFCOS(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.CurrentStep = model.StepSysext
+
+	w.GoToStep(model.StepNvidia)
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("GoToStep should refuse StepNvidia for FCOS")
+	}
+}

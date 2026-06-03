@@ -1,6 +1,0 @@
-# SC2086: intentional word-splitting for SSH option variables ($GOPTS, $SSH_OPTS)
-disable=SC2086
-# SC2029: intentional client-side expansion in _ghost() and ssh wrapper calls
-disable=SC2029
-# SC1091: dynamic source paths — handled per-file with # shellcheck source= directives
-disable=SC1091
