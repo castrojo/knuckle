@@ -30,7 +30,7 @@ func (d *DispatchingClient) FetchCatalogForOS(ctx context.Context, arch, os stri
 	switch os {
 	case model.OSFCOS:
 		if d.FCOS == nil {
-			return nil, fmt.Errorf("FCOS bakery client not configured")
+			return nil, fmt.Errorf("fcos bakery client not configured")
 		}
 		return d.FCOS.FetchCatalogArch(ctx, arch)
 	case model.OSFlatcar, "":

@@ -18,12 +18,12 @@ func (d *DispatchingInstaller) Install(ctx context.Context, cfg *model.InstallCo
 	switch cfg.OS {
 	case model.OSFCOS:
 		if d.FCOS == nil {
-			return fmt.Errorf("FCOS installer not configured")
+			return fmt.Errorf("fcos installer not configured")
 		}
 		return d.FCOS.Install(ctx, cfg, progress)
 	case model.OSFlatcar, "":
 		if d.Flatcar == nil {
-			return fmt.Errorf("Flatcar installer not configured")
+			return fmt.Errorf("flatcar installer not configured")
 		}
 		return d.Flatcar.Install(ctx, cfg, progress)
 	default:
