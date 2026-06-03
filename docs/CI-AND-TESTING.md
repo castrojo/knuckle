@@ -71,10 +71,22 @@ rises and stays there, raise the gate in `Justfile :: cover-check`.
 | `coverage`          | `just cover-check` + uploads `cover.out` artifact (14-day retention)         |        ✅         |
 | `headless-e2e`      | `just headless-test` — build + canned JSON config, validates config generation |        ✅         |
 | `iso-smoke recipe`  | `just --dry-run iso-smoke …` — keeps the headless ISO smoke recipe wired into CI |        ✅         |
+| `headless ISO boot smoke` | Full ISO boot via serial console, fetches Flatcar PXE artifacts from CDN | ❌ non-required |
+
+> **Known flake — `headless ISO boot smoke`:** This check fetches Flatcar PXE
+> artifacts from the upstream CDN. It fails intermittently with `curl: (22) 404`
+> when the CDN returns a 404 (artifact not yet propagated or CDN hiccup). This
+> is **not a required check** — it does not block merges. Do not hold PRs for
+> this failure; verify it also fails on `main` before investigating.
 
 **Tool version pinning:** `govulncheck` is pinned in `go.mod` via `go tool`.
 `golangci-lint` is pinned in `Justfile::GOLANGCI_LINT_VERSION` (local) and
 `ci.yml::golangci-lint-action version` (CI). Bump both together.
+
+**Go toolchain pinning:** Go version is pinned in both `go.mod` (`go` + `toolchain`
+directives) and `ci.yml` (`go-version`). Update all three together when bumping.
+`govulncheck` gates on stdlib CVEs — a stale toolchain will fail the `vuln` check
+even when no application-level vulnerabilities exist.
 
 Concurrency: per-ref, with `cancel-in-progress: true` — pushes to the same
 branch cancel earlier in-flight runs.
@@ -82,6 +94,27 @@ branch cancel earlier in-flight runs.
 Permissions: `contents: read` at workflow scope. Each job specifies its own
 needs. `persist-credentials: false` on every `actions/checkout` — keeps the
 `GITHUB_TOKEN` out of the working directory.
+
+### `.github/workflows/bonedigger.yml`
+
+Issue lifecycle automation (added 2026-06-03):
+
+| Trigger | What it does |
+| ------- | ------------ |
+| Issue events | Pipeline state widget embedded in issue bodies |
+| `/claim`, `/unclaim` | Assign/unassign the commenter as owner |
+| `/approve`, `/lgtm` | Move issue to approved/queued state |
+| `/wontfix` | Close as won't fix with label |
+| Stale scan | Detects and cleans up stale claims |
+
+### `.github/workflows/skill-drift.yml`
+
+Skill drift detection (added 2026-06-03): fails when code paths change without
+corresponding updates to `docs/*.md` or `AGENTS.md`.
+
+| Code paths watched | Doc paths watched |
+| --- | --- |
+| `.github/workflows`, `cmd`, `internal`, `Justfile`, `scripts` | `docs/*.md`, `AGENTS.md` |
 
 ### `.github/workflows/security.yml`
 
@@ -139,7 +172,8 @@ just cover-check # per-package thresholds
 ```
 
 If `just ci` passes locally but fails in CI, the gap is one of:
-- Go version drift (CI pins `1.26`; bump locally with `go env GOROOT`)
+- Go version drift (CI pins exact patch version, e.g. `1.26.4`; check `go env GOVERSION`)
+- `govulncheck` failing on stdlib CVEs — means your local Go is older than CI; run `go get toolchain@go1.X.Y`
 - A network-dependent test running unintentionally (check for missing
   `//go:build integration` tag)
 - An untracked file in your checkout that CI doesn't see

@@ -131,7 +131,8 @@ tui      ← cmd/knuckle
 3. **One PR per issue.** Branch `feat/<slug>` or `fix/<slug>`. Conventional commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `ci:`, `chore:`).
 4. **`just ci` is the gate.** If it fails, fix it; don't push.
 5. **Push to `origin` (projectbluefin/knuckle) only.** No upstream pushes from automation.
-6. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
+6. **Governance PRs from hive agents** may contain stray Go source changes from a diverged upstream base. When merging, inspect `git diff origin/main --name-only` and strip any Go source files — keep only the intended config file (workflow yml, CODEOWNERS, issue template, etc.). Use `--admin` merge if needed.
+7. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
 7. **New external command?** Wire through `runner.Runner`. Period.
 8. **New disk-touching code?** Test in QEMU via `just vm` or `just vm-e2e`. Unit tests use `SpyRunner`.
 
@@ -163,6 +164,11 @@ go get -u ./... && go mod tidy && just ci && just vm
 
 # Tool version bumps — update GOLANGCI_LINT_VERSION in Justfile AND .github/workflows/ci.yml together
 just tools && just ci
+
+# Go toolchain bump — update ALL THREE together:
+#   go.mod: `go X.Y.Z` + `toolchain goX.Y.Z`
+#   .github/workflows/ci.yml: `go-version: "X.Y.Z"` (two occurrences)
+# govulncheck gates on stdlib CVEs — a stale Go version fails even with no app-level vulns.
 
 # Flatcar release tracking — fetched live by bakery; to force a check:
 go test ./internal/bakery/... -run TestFetch
