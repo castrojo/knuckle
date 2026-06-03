@@ -118,12 +118,19 @@ const (
 	TailscaleModeSubnetRouter = "subnet-router"
 )
 
+// FCOS zincati update strategy constants.
+const (
+	FCOSStrategyImmediate = "immediate" // reboot immediately after update
+	FCOSStrategyNever     = "never"     // disable automatic updates
+)
+
 // UpdateStrategy holds OS update and reboot settings.
 // Flatcar uses update-engine; FCOS uses zincati instead.
 type UpdateStrategy struct {
-	RebootStrategy string // "reboot", "off", "etcd-lock"
-	RebootWindow   string // optional: "Mon-Fri 04:00-05:00" format
-	LocksmithGroup string // optional: used with etcd-lock
+	RebootStrategy     string // "reboot", "off", "etcd-lock" (Flatcar)
+	FCOSUpdateStrategy string // "immediate", "never" (FCOS zincati)
+	RebootWindow       string // optional: "Mon-Fri 04:00-05:00" format
+	LocksmithGroup     string // optional: used with etcd-lock
 }
 
 // NetworkConfig holds network settings.
