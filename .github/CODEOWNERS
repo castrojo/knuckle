@@ -1,0 +1,17 @@
+# Default: knuckle maintainers review all changes
+* @castrojo @jreilly1821 @ahmedadan
+
+# Sensitive governance and CI paths — require explicit maintainer review
+.github/                @castrojo @jreilly1821 @ahmedadan
+Justfile                @castrojo @jreilly1821 @ahmedadan
+.pre-commit-config.yaml @castrojo @jreilly1821 @ahmedadan
+renovate.json           @castrojo @jreilly1821 @ahmedadan
+codecov.yml             @castrojo @jreilly1821 @ahmedadan
+
+# Core installation and system interaction
+internal/install/       @castrojo @jreilly1821
+internal/runner/        @castrojo @jreilly1821
+internal/ignition/      @castrojo @jreilly1821
+
+# Release and build artifacts
+cmd/                    @castrojo @jreilly1821
