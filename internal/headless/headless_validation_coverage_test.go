@@ -270,9 +270,9 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 
 func TestToInstallConfig_OSPropagation(t *testing.T) {
 	tests := []struct {
-		name     string
-		inputOS  string
-		wantOS   string
+		name    string
+		inputOS string
+		wantOS  string
 	}{
 		{"empty defaults to flatcar", "", model.OSFlatcar},
 		{"flatcar passes through", model.OSFlatcar, model.OSFlatcar},
