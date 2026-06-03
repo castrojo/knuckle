@@ -63,10 +63,11 @@ func (b *Builder) SetPasswdUsers(fragment string) {
 	b.passwdUsersYAML = fragment
 }
 
-// Build assembles the final Butane YAML document.
-func (b *Builder) Build() string {
+// BuildWithVariant assembles the final Butane YAML document using the given
+// variant header (e.g. "variant: fcos\nversion: 1.5.0\n").
+func (b *Builder) BuildWithVariant(header string) string {
 	var doc strings.Builder
-	doc.WriteString("variant: flatcar\nversion: 1.1.0\n")
+	doc.WriteString(header)
 
 	if len(b.storageFiles) > 0 || len(b.storageLinks) > 0 {
 		doc.WriteString("storage:\n")
@@ -97,6 +98,16 @@ func (b *Builder) Build() string {
 	}
 
 	return doc.String()
+}
+
+// Build assembles the final Butane YAML document with the Flatcar variant header.
+func (b *Builder) Build() string {
+	return b.BuildWithVariant("variant: flatcar\nversion: 1.1.0\n")
+}
+
+// BuildFCOS assembles the final Butane YAML document with the FCOS variant header.
+func (b *Builder) BuildFCOS() string {
+	return b.BuildWithVariant("variant: fcos\nversion: 1.5.0\n")
 }
 
 // indentFragment ensures every line of fragment is at least baseIndent spaces

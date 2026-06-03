@@ -68,9 +68,15 @@ func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig
 		// External ignition URL mode — pass directly to flatcar-install
 		progress("Using external Ignition config...")
 	} else {
-		// Generate Butane YAML
+		// Generate Butane YAML — dispatch based on target OS.
 		progress("Generating Butane config...")
-		butaneYAML, err := i.Generator.GenerateButane(cfg)
+		var butaneYAML string
+		var err error
+		if cfg.OS == model.OSFCOS {
+			butaneYAML, err = i.Generator.GenerateFCOSButane(cfg)
+		} else {
+			butaneYAML, err = i.Generator.GenerateButane(cfg)
+		}
 		if err != nil {
 			return fmt.Errorf("generating butane config: %w", err)
 		}
