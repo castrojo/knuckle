@@ -62,11 +62,7 @@ fi
 
 # Flatcar release server arch directory: "amd64-usr" or "arm64-usr"
 ARCH_DIR="${ARCH}-usr"
-if [[ "$CHANNEL" == "lts" ]]; then
-    BASE_URL="https://lts.release.flatcar-linux.net/${ARCH_DIR}/current"
-else
-    BASE_URL="https://${CHANNEL}.release.flatcar-linux.net/${ARCH_DIR}/current"
-fi
+BASE_URL="https://flatcar.cdn.cncf.io/${CHANNEL}/${ARCH_DIR}/current"
 
 # ── Dependency check ─────────────────────────────────────────────────────────
 for cmd in xorriso mformat mcopy mmd cpio gzip; do
@@ -209,11 +205,11 @@ KERNEL="$BUILD_DIR/vmlinuz"
 INITRD="$BUILD_DIR/initrd.cpio.gz"
 
 if [[ ! -f "$KERNEL" ]]; then
-    curl -fsSL -o "$KERNEL" "$BASE_URL/flatcar_production_pxe.vmlinuz"
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$KERNEL" "$BASE_URL/flatcar_production_pxe.vmlinuz"
     verify_pxe_file "$KERNEL" "$BASE_URL/flatcar_production_pxe.vmlinuz" "flatcar_production_pxe.vmlinuz"
 fi
 if [[ ! -f "$INITRD" ]]; then
-    curl -fsSL -o "$INITRD" "$BASE_URL/flatcar_production_pxe_image.cpio.gz"
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$INITRD" "$BASE_URL/flatcar_production_pxe_image.cpio.gz"
     verify_pxe_file "$INITRD" "$BASE_URL/flatcar_production_pxe_image.cpio.gz" "flatcar_production_pxe_image.cpio.gz"
 fi
 
