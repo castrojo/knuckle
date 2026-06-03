@@ -91,8 +91,13 @@ func LoadConfig(path string) (*Config, error) {
 
 // ToInstallConfig converts a headless Config to a model.InstallConfig.
 func (c *Config) ToInstallConfig() *model.InstallConfig {
+	os := c.OS
+	if os == "" {
+		os = model.OSFlatcar
+	}
+
 	cfg := &model.InstallConfig{
-		OS:       model.OSFlatcar,
+		OS:       os,
 		Arch:     c.Arch,
 		Channel:  c.Channel,
 		Version:  c.Version,
@@ -214,6 +219,11 @@ func resolveSysexts(ctx context.Context, names []string, client bakery.Client, a
 // Validate checks the headless config for errors using the same validation
 // as the TUI wizard path.
 func (c *Config) Validate() error {
+	// OS
+	if c.OS != "" && c.OS != model.OSFlatcar && c.OS != model.OSFCOS {
+		return fmt.Errorf("os: must be %q or %q (got %q)", model.OSFlatcar, model.OSFCOS, c.OS)
+	}
+
 	// Arch
 	if c.Arch != "" && c.Arch != "amd64" && c.Arch != "arm64" {
 		return fmt.Errorf("arch: must be \"amd64\" or \"arm64\" (got %q)", c.Arch)
