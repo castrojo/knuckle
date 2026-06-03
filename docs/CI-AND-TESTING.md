@@ -73,11 +73,10 @@ rises and stays there, raise the gate in `Justfile :: cover-check`.
 | `iso-smoke recipe`  | `just --dry-run iso-smoke …` — keeps the headless ISO smoke recipe wired into CI |        ✅         |
 | `headless ISO boot smoke` | Full ISO boot via serial console, fetches Flatcar PXE artifacts from CDN | ❌ non-required |
 
-> **Known flake — `headless ISO boot smoke`:** This check fetches Flatcar PXE
-> artifacts from the upstream CDN. It fails intermittently with `curl: (22) 404`
-> when the CDN returns a 404 (artifact not yet propagated or CDN hiccup). This
-> is **not a required check** — it does not block merges. Do not hold PRs for
-> this failure; verify it also fails on `main` before investigating.
+> **`headless ISO boot smoke`:** Fetches Flatcar PXE artifacts from
+> `flatcar.cdn.cncf.io/{channel}/{arch}-usr/current/`. Not a required check —
+> does not block merges. If it fails, verify the failure also reproduces on
+> `main` before investigating.
 
 **Tool version pinning:** `govulncheck` is pinned in `go.mod` via `go tool`.
 `golangci-lint` is pinned in `Justfile::GOLANGCI_LINT_VERSION` (local) and
@@ -343,6 +342,9 @@ Tracked in `docs/REVIEW-2026-05-19.md` (passes 1-2) and session notes from
 - ~~Blocker B2~~ Reboot via runner — **closed**.
 - ~~Blocker B3~~ `validate.DiskPath()` in headless — **closed**.
 - ~~Blocker B4~~ SSH keys reaching Ignition — **closed** (2026-05-20).
+- ~~ISO smoke CI failing with `curl: (22) 404` on PXE artifacts~~ — **fixed** (#712, 2026-06-03).
+  `build-iso.sh` now fetches PXE files from `flatcar.cdn.cncf.io/{channel}/{arch}-usr/current/`
+  directly (the release mirror redirected to versioned CDN paths that lack PXE artifacts).
 - Land `FuzzHostname`, `FuzzCIDR`, `FuzzSSHKey` and run with `-fuzztime=30s`
   in a nightly job.
 - N-SEC1 MEDIUM: add max-length check on sysext download URLs in `bakery.go`.

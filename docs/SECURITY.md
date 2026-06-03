@@ -134,6 +134,8 @@ Both end up in an Ignition JSON file. Knuckle's invariants:
   - `https://github.com` — SSH keys
   - `https://api.github.com` — sysext catalog
   - `https://{stable,beta,alpha,lts}.release.flatcar-linux.net` — releases
+    (version.txt, image packages, `.DIGESTS.asc`; runtime only)
+  - `https://flatcar.cdn.cncf.io` — PXE artifacts for ISO builds (`build-iso.sh`; build-time only)
 
 When adding a new endpoint, list it here. PRs that add a host without
 updating this section should be blocked.
