@@ -119,16 +119,18 @@ const (
 )
 
 // FCOS zincati update strategy constants.
+// Valid zincati [updates].strategy values: "immediate", "periodic", "fleet_lock".
+// To disable updates, zincati uses [updates] enabled = false (not a strategy value).
 const (
 	FCOSStrategyImmediate = "immediate" // reboot immediately after update
-	FCOSStrategyNever     = "never"     // disable automatic updates
+	FCOSStrategyDisabled  = "disabled"  // disable automatic updates via [updates] enabled = false
 )
 
 // UpdateStrategy holds OS update and reboot settings.
 // Flatcar uses update-engine; FCOS uses zincati instead.
 type UpdateStrategy struct {
 	RebootStrategy     string // "reboot", "off", "etcd-lock" (Flatcar)
-	FCOSUpdateStrategy string // "immediate", "never" (FCOS zincati)
+	FCOSUpdateStrategy string // "immediate" or "disabled" (FCOS zincati)
 	RebootWindow       string // optional: "Mon-Fri 04:00-05:00" format
 	LocksmithGroup     string // optional: used with etcd-lock
 }

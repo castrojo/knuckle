@@ -1178,15 +1178,15 @@ func TestGenerateFCOSButane_NilConfig(t *testing.T) {
 	}
 }
 
-func TestGenerateFCOSButane_ZincatiStrategyNever(t *testing.T) {
+func TestGenerateFCOSButane_ZincatiStrategyDisabled(t *testing.T) {
 	g := NewGenerator()
 	cfg := &model.InstallConfig{
 		OS:       model.OSFCOS,
-		Hostname: "fcos-never",
+		Hostname: "fcos-disabled",
 		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
 		Users:    []model.UserConfig{{Username: "core"}},
 		UpdateStrategy: model.UpdateStrategy{
-			FCOSUpdateStrategy: model.FCOSStrategyNever,
+			FCOSUpdateStrategy: model.FCOSStrategyDisabled,
 		},
 	}
 
@@ -1195,8 +1195,14 @@ func TestGenerateFCOSButane_ZincatiStrategyNever(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(output, `strategy = "never"`) {
-		t.Errorf("expected zincati strategy 'never', got:\n%s", output)
+	if !strings.Contains(output, `enabled = false`) {
+		t.Errorf("expected zincati 'enabled = false' for disabled strategy, got:\n%s", output)
+	}
+	if strings.Contains(output, `strategy = "never"`) {
+		t.Error("disabled strategy must NOT produce strategy = \"never\" (not a valid zincati value)")
+	}
+	if strings.Contains(output, `strategy = "disabled"`) {
+		t.Error("disabled strategy must NOT produce strategy = \"disabled\" (not a valid zincati value)")
 	}
 }
 
@@ -1401,8 +1407,8 @@ func TestFCOSStrategyConstants(t *testing.T) {
 	if model.FCOSStrategyImmediate != "immediate" {
 		t.Errorf("FCOSStrategyImmediate = %q, want %q", model.FCOSStrategyImmediate, "immediate")
 	}
-	if model.FCOSStrategyNever != "never" {
-		t.Errorf("FCOSStrategyNever = %q, want %q", model.FCOSStrategyNever, "never")
+	if model.FCOSStrategyDisabled != "disabled" {
+		t.Errorf("FCOSStrategyDisabled = %q, want %q", model.FCOSStrategyDisabled, "disabled")
 	}
 }
 
@@ -1447,6 +1453,30 @@ func TestGenerateFCOSButane_ZincatiTemplateError(t *testing.T) {
 	_, err := g.GenerateFCOSButane(cfg)
 	if err == nil {
 		t.Fatal("expected zincati template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering zincati config") {
+		t.Errorf("error should mention zincati config, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_ZincatiDisabledTemplateError(t *testing.T) {
+	orig := zincatiDisabledTemplate
+	zincatiDisabledTemplate = "{{unclosed"
+	t.Cleanup(func() { zincatiDisabledTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-disabled-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		UpdateStrategy: model.UpdateStrategy{
+			FCOSUpdateStrategy: model.FCOSStrategyDisabled,
+		},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected zincati disabled template error, got nil")
 	}
 	if !strings.Contains(err.Error(), "rendering zincati config") {
 		t.Errorf("error should mention zincati config, got: %v", err)

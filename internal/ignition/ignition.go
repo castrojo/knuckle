@@ -188,7 +188,13 @@ func (g *Generator) GenerateFCOSButane(cfg *model.InstallConfig) (string, error)
 		fcosStrategy = model.FCOSStrategyImmediate
 	}
 
-	zincatiTOML, err := renderTemplate("zincati", zincatiTemplate, struct{ FCOSUpdateStrategy string }{
+	var zincatiTmpl string
+	if fcosStrategy == model.FCOSStrategyDisabled {
+		zincatiTmpl = zincatiDisabledTemplate
+	} else {
+		zincatiTmpl = zincatiTemplate
+	}
+	zincatiTOML, err := renderTemplate("zincati", zincatiTmpl, struct{ FCOSUpdateStrategy string }{
 		FCOSUpdateStrategy: fcosStrategy,
 	})
 	if err != nil {
@@ -215,6 +221,15 @@ var zincatiTemplate = `- path: /etc/zincati/config.d/55-updates.toml
     inline: |
       [updates]
       strategy = "{{.FCOSUpdateStrategy | yamlEscape}}"`
+
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var zincatiDisabledTemplate = `- path: /etc/zincati/config.d/55-updates.toml
+  mode: 0644
+  overwrite: true
+  contents:
+    inline: |
+      [updates]
+      enabled = false`
 
 // Fragment templates used by addSharedFragments. Vars (not const) to allow
 // test injection of error paths, following the same pattern as butaneTemplate.
