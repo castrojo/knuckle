@@ -49,6 +49,14 @@ just ci
 
 `just ci` runs: `go mod tidy` check → `gofmt` → `go vet` → `golangci-lint` → `govulncheck` → `go test -race` → coverage gate → headless e2e.
 
+If you are working on the TUI itself, you can also run the full wizard locally in demo mode after building:
+
+```bash
+./bin/knuckle --demo
+```
+
+`--demo` uses mocked hardware and catalog data, so you can iterate on the TUI without QEMU, network access, or real disks.
+
 If `just ci` passes locally, your change is ready for a PR.
 
 ## Optional: VM Testing
@@ -59,7 +67,7 @@ just vm-e2e      # 4-pass automated: DHCP, static, docker sysext, NVIDIA
 just boot-iso    # boot installer ISO in QEMU GTK window
 ```
 
-Requires QEMU/KVM. See [docs/CI-AND-TESTING.md](docs/CI-AND-TESTING.md) for the full test pyramid.
+Requires QEMU/KVM. See [docs/CI-AND-TESTING.md](docs/CI-AND-TESTING.md) for the full test pyramid, and [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common local and CI issues.
 
 ## Submitting a PR
 
