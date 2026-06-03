@@ -229,7 +229,26 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 		t.Errorf("expected invalid FCOS stream error, got: %v", err)
 	}
 
-	// 4. Flatcar channel failure
+	// 4. Invalid OS
+	cfgBadOS := &Config{
+		OS:             "nixos",
+		Arch:           "amd64",
+		Channel:        "stable",
+		Hostname:       "node01",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "reboot",
+	}
+	err = cfgBadOS.Validate()
+	if err == nil {
+		t.Fatal("expected error for invalid OS")
+	}
+	if !strings.Contains(err.Error(), "os: must be") {
+		t.Errorf("expected OS validation error, got: %v", err)
+	}
+
+	// 5. Flatcar channel failure
 	cfgFlatcarFail := &Config{
 		OS:             "flatcar",
 		Arch:           "amd64",
@@ -246,5 +265,33 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "channel: invalid channel") {
 		t.Errorf("expected invalid channel error, got: %v", err)
+	}
+}
+
+func TestToInstallConfig_OSPropagation(t *testing.T) {
+	tests := []struct {
+		name    string
+		inputOS string
+		wantOS  string
+	}{
+		{"empty defaults to flatcar", "", model.OSFlatcar},
+		{"flatcar passes through", model.OSFlatcar, model.OSFlatcar},
+		{"fcos passes through", model.OSFCOS, model.OSFCOS},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				OS:       tt.inputOS,
+				Channel:  "stable",
+				Hostname: "node01",
+				Network:  NetworkConfig{Mode: "dhcp"},
+				Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+				Disk:     "/dev/vdb",
+			}
+			ic := cfg.ToInstallConfig()
+			if ic.OS != tt.wantOS {
+				t.Errorf("ToInstallConfig().OS = %q, want %q", ic.OS, tt.wantOS)
+			}
+		})
 	}
 }
