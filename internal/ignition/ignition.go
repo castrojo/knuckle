@@ -207,7 +207,8 @@ func (g *Generator) GenerateFCOSButane(cfg *model.InstallConfig) (string, error)
 	return b.BuildFCOS(), nil
 }
 
-const zincatiTemplate = `- path: /etc/zincati/config.d/55-updates.toml
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var zincatiTemplate = `- path: /etc/zincati/config.d/55-updates.toml
   mode: 0644
   overwrite: true
   contents:
@@ -215,14 +216,50 @@ const zincatiTemplate = `- path: /etc/zincati/config.d/55-updates.toml
       [updates]
       strategy = "{{.FCOSUpdateStrategy | yamlEscape}}"`
 
-// addSharedFragments adds storage files, links, and passwd entries that are
-// common to both Flatcar and FCOS variants.
-func addSharedFragments(b *Builder, cfg *model.InstallConfig) error {
-	hostnameFrag, err := renderTemplate("hostname", `- path: /etc/hostname
+// Fragment templates used by addSharedFragments. Vars (not const) to allow
+// test injection of error paths, following the same pattern as butaneTemplate.
+//
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var (
+	hostnameTemplate = `- path: /etc/hostname
   mode: 0644
   overwrite: true
   contents:
-    inline: "{{.Hostname | yamlEscape}}"`, struct{ Hostname string }{Hostname: cfg.Hostname})
+    inline: "{{.Hostname | yamlEscape}}"`
+
+	sshHardeningTemplate = `- path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
+  mode: 0600
+  overwrite: true
+  contents:
+    inline: |
+      PasswordAuthentication {{if .HasPassword}}yes{{else}}no{{end}}
+      PermitRootLogin no
+      PubkeyAuthentication yes`
+
+	staticNetTemplate = `- path: /etc/systemd/network/10-static.network
+  mode: 0644
+  contents:
+    inline: |
+      [Match]
+      Name={{.Interface}}
+
+      [Network]
+      Address={{.Address}}
+      Gateway={{.Gateway}}
+{{- range .DNS}}
+      DNS={{.}}
+{{- end}}`
+
+	timezoneTemplate = `- path: /etc/localtime
+  target: "/usr/share/zoneinfo/{{.Timezone | yamlEscape}}"
+  overwrite: true`
+)
+
+// addSharedFragments adds storage files, links, and passwd entries that are
+// common to both Flatcar and FCOS variants.
+func addSharedFragments(b *Builder, cfg *model.InstallConfig) error {
+	hostnameFrag, err := renderTemplate("hostname", hostnameTemplate,
+		struct{ Hostname string }{Hostname: cfg.Hostname})
 	if err != nil {
 		return fmt.Errorf("rendering hostname: %w", err)
 	}
@@ -235,33 +272,15 @@ func addSharedFragments(b *Builder, cfg *model.InstallConfig) error {
 			break
 		}
 	}
-	sshFrag, err := renderTemplate("ssh-hardening", `- path: /etc/ssh/sshd_config.d/99-knuckle-hardening.conf
-  mode: 0600
-  overwrite: true
-  contents:
-    inline: |
-      PasswordAuthentication {{if .HasPassword}}yes{{else}}no{{end}}
-      PermitRootLogin no
-      PubkeyAuthentication yes`, struct{ HasPassword bool }{HasPassword: hasPassword})
+	sshFrag, err := renderTemplate("ssh-hardening", sshHardeningTemplate,
+		struct{ HasPassword bool }{HasPassword: hasPassword})
 	if err != nil {
 		return fmt.Errorf("rendering ssh hardening: %w", err)
 	}
 	b.AddStorageFile(sshFrag)
 
 	if cfg.Network.Mode == model.NetworkStatic {
-		netFrag, err := renderTemplate("static-net", `- path: /etc/systemd/network/10-static.network
-  mode: 0644
-  contents:
-    inline: |
-      [Match]
-      Name={{.Interface}}
-
-      [Network]
-      Address={{.Address}}
-      Gateway={{.Gateway}}
-{{- range .DNS}}
-      DNS={{.}}
-{{- end}}`, cfg.Network)
+		netFrag, err := renderTemplate("static-net", staticNetTemplate, cfg.Network)
 		if err != nil {
 			return fmt.Errorf("rendering static network: %w", err)
 		}
@@ -309,9 +328,8 @@ func addSharedFragments(b *Builder, cfg *model.InstallConfig) error {
 	}
 
 	if cfg.Timezone != "" {
-		tzFrag, err := renderTemplate("timezone", `- path: /etc/localtime
-  target: "/usr/share/zoneinfo/{{.Timezone | yamlEscape}}"
-  overwrite: true`, struct{ Timezone string }{Timezone: cfg.Timezone})
+		tzFrag, err := renderTemplate("timezone", timezoneTemplate,
+			struct{ Timezone string }{Timezone: cfg.Timezone})
 		if err != nil {
 			return fmt.Errorf("rendering timezone: %w", err)
 		}
@@ -330,7 +348,8 @@ func addSharedFragments(b *Builder, cfg *model.InstallConfig) error {
 	return nil
 }
 
-const sysextTemplate = `- path: /etc/extensions/{{.Name}}.raw
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var sysextTemplate = `- path: /etc/extensions/{{.Name}}.raw
   contents:
     source: "{{.URL | yamlEscape}}"
 {{- if .Sha256}}
@@ -338,7 +357,8 @@ const sysextTemplate = `- path: /etc/extensions/{{.Name}}.raw
       hash: "sha256-{{.Sha256}}"
 {{- end}}`
 
-const tailscaleEnvTemplate = `- path: /etc/tailscale/tailscale.env
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var tailscaleEnvTemplate = `- path: /etc/tailscale/tailscale.env
   mode: 0600
   overwrite: true
   contents:
@@ -349,7 +369,8 @@ const tailscaleEnvTemplate = `- path: /etc/tailscale/tailscale.env
       TS_EXTRA_ARGS={{.TailscaleExtraArgs | yamlEscape}}
 {{- end}}`
 
-const passwdTemplate = `{{- if .Users}}{{- range .Users}}- name: "{{.Username | yamlEscape}}"
+//nolint:gochecknoglobals // var to allow test injection of error paths.
+var passwdTemplate = `{{- if .Users}}{{- range .Users}}- name: "{{.Username | yamlEscape}}"
 {{- if .Groups}}
   groups:
 {{- range .Groups}}
