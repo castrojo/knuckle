@@ -705,6 +705,28 @@ func TestNextVisitsNvidiaWhenSelected(t *testing.T) {
 	}
 }
 
+func TestNextSkipsNvidiaForFCOS(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Network.Mode = model.NetworkDHCP
+	w.State.Config.Disk.DevPath = "/dev/sda"
+	w.State.Config.Users = []model.UserConfig{
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
+	}
+	w.State.Config.Channel = "stable"
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.CurrentStep = model.StepSysext
+
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next from Sysext: %v", err)
+	}
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("FCOS should skip StepNvidia even when nvidia-runtime is selected")
+	}
+}
+
 func TestGoToStepRefusesNvidiaWhenNotSelected(t *testing.T) {
 	w, _, _, _ := newTestWizard()
 	w.State.CurrentStep = model.StepSysext
