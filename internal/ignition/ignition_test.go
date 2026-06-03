@@ -1109,3 +1109,705 @@ func TestGenerateButane_TemplateExecuteError(t *testing.T) {
 		t.Errorf("error should mention 'executing template', got: %v", err)
 	}
 }
+
+// ── GenerateFCOSButane tests ─────────────────────────────────────────────────
+
+func TestGenerateFCOSButane_BasicDHCP(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-node01",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{
+				Username: "core",
+				SSHKeys:  []string{"ssh-ed25519 AAAAC3test core@host"},
+				Groups:   []string{"sudo", "docker"},
+			},
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "variant: fcos") {
+		t.Error("missing variant: fcos header")
+	}
+	if !strings.Contains(output, "version: 1.5.0") {
+		t.Error("missing version: 1.5.0 header")
+	}
+	if strings.Contains(output, "variant: flatcar") {
+		t.Error("FCOS output must not contain variant: flatcar")
+	}
+	if !strings.Contains(output, `/etc/zincati/config.d/55-updates.toml`) {
+		t.Error("missing zincati config path")
+	}
+	if !strings.Contains(output, `strategy = "immediate"`) {
+		t.Error("missing default zincati strategy (immediate)")
+	}
+	if !strings.Contains(output, "zincati.service") {
+		t.Error("missing zincati.service unit")
+	}
+	if strings.Contains(output, "update-engine.service") {
+		t.Error("FCOS output must not contain update-engine.service")
+	}
+	if strings.Contains(output, "/etc/flatcar/update.conf") {
+		t.Error("FCOS output must not contain /etc/flatcar/update.conf")
+	}
+	if strings.Contains(output, "/etc/flatcar/enabled-sysext.conf") {
+		t.Error("FCOS output must not contain /etc/flatcar/enabled-sysext.conf")
+	}
+	if !strings.Contains(output, `inline: "fcos-node01"`) {
+		t.Error("missing hostname")
+	}
+	if !strings.Contains(output, `name: "core"`) {
+		t.Error("missing user")
+	}
+}
+
+func TestGenerateFCOSButane_NilConfig(t *testing.T) {
+	g := NewGenerator()
+	_, err := g.GenerateFCOSButane(nil)
+	if err == nil {
+		t.Fatal("expected error for nil config")
+	}
+	if !strings.Contains(err.Error(), "config cannot be nil") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_ZincatiStrategyDisabled(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-disabled",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		UpdateStrategy: model.UpdateStrategy{
+			FCOSUpdateStrategy: model.FCOSStrategyDisabled,
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, `enabled = false`) {
+		t.Errorf("expected zincati 'enabled = false' for disabled strategy, got:\n%s", output)
+	}
+	if strings.Contains(output, `strategy = "never"`) {
+		t.Error("disabled strategy must NOT produce strategy = \"never\" (not a valid zincati value)")
+	}
+	if strings.Contains(output, `strategy = "disabled"`) {
+		t.Error("disabled strategy must NOT produce strategy = \"disabled\" (not a valid zincati value)")
+	}
+}
+
+func TestGenerateFCOSButane_NoFlatcarPaths(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:                  model.OSFCOS,
+		Hostname:            "fcos-clean",
+		Network:             model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:               []model.UserConfig{{Username: "core"}},
+		NvidiaDriverVersion: "570-open",
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	flatcarPaths := []string{
+		"/etc/flatcar/update.conf",
+		"/etc/flatcar/enabled-sysext.conf",
+		"update-engine.service",
+		"nvidia-drivers-",
+	}
+	for _, p := range flatcarPaths {
+		if strings.Contains(output, p) {
+			t.Errorf("FCOS output must not contain Flatcar-specific path %q", p)
+		}
+	}
+}
+
+func TestGenerateFCOSButane_WithSysexts(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-sysext",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "docker", Version: "24.0.7", URL: "https://example.com/docker.raw", Selected: true},
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "/etc/extensions/docker.raw") {
+		t.Error("missing sysext file entry")
+	}
+	if !strings.Contains(output, "systemd-sysext.service") {
+		t.Error("missing systemd-sysext.service for sysexts")
+	}
+}
+
+func TestGenerateFCOSButane_StaticNetwork(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-static",
+		Network: model.NetworkConfig{
+			Mode:      model.NetworkStatic,
+			Interface: "eth0",
+			Address:   "192.168.1.50/24",
+			Gateway:   "192.168.1.1",
+			DNS:       []string{"8.8.8.8"},
+		},
+		Users: []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "10-static.network") {
+		t.Error("missing static network config")
+	}
+	if !strings.Contains(output, "Address=192.168.1.50/24") {
+		t.Error("missing address in static config")
+	}
+}
+
+func TestGenerateFCOSButane_SwapEnabled(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-swap",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Swap:     model.SwapConfig{Enabled: true, SizeMB: 2048},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "/var/swapfile") {
+		t.Error("missing /var/swapfile")
+	}
+	if !strings.Contains(output, "fallocate -l 2048M") {
+		t.Error("missing swap fallocate with correct size")
+	}
+	if !strings.Contains(output, "var-swapfile.swap") {
+		t.Error("missing var-swapfile.swap unit")
+	}
+}
+
+func TestGenerateFCOSButane_Tailscale(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-ts",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abc123-secret",
+			Mode:    model.TailscaleModeExitNode,
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "/etc/tailscale/tailscale.env") {
+		t.Error("missing tailscale env file")
+	}
+	if !strings.Contains(output, "tailscaled.service") {
+		t.Error("missing tailscaled.service")
+	}
+	if !strings.Contains(output, "--advertise-exit-node") {
+		t.Error("missing exit node flag")
+	}
+	if !strings.Contains(output, "net.ipv4.ip_forward") {
+		t.Error("missing ip_forward sysctl for exit node")
+	}
+}
+
+func TestGenerateFCOSButane_Timezone(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-tz",
+		Timezone: "America/Chicago",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "/usr/share/zoneinfo/America/Chicago") {
+		t.Error("missing timezone link target")
+	}
+}
+
+func TestGenerateFCOSButane_HTTPSysextRejected(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-bad-url",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "bad", URL: "http://evil.example.com/bad.raw", Selected: true},
+		},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Error("expected error for non-HTTPS sysext URL, got nil")
+	}
+}
+
+func TestGenerateFCOSButane_DefaultCoreUser(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-default",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		SSHKeys:  []string{"ssh-ed25519 AAAA user@laptop"},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, `name: "core"`) {
+		t.Error("expected default 'core' user when no users specified")
+	}
+}
+
+// ── FCOS strategy constants ──────────────────────────────────────────────────
+
+func TestFCOSStrategyConstants(t *testing.T) {
+	if model.FCOSStrategyImmediate != "immediate" {
+		t.Errorf("FCOSStrategyImmediate = %q, want %q", model.FCOSStrategyImmediate, "immediate")
+	}
+	if model.FCOSStrategyDisabled != "disabled" {
+		t.Errorf("FCOSStrategyDisabled = %q, want %q", model.FCOSStrategyDisabled, "disabled")
+	}
+}
+
+// ── Builder FCOS variant ─────────────────────────────────────────────────────
+
+func TestBuilderBuildFCOS(t *testing.T) {
+	b := NewBuilder(&model.InstallConfig{})
+	got := b.BuildFCOS()
+	wantPrefix := "variant: fcos\nversion: 1.5.0\n"
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("expected document to start with %q, got %q", wantPrefix, got)
+	}
+}
+
+func TestBuilderBuildWithVariant(t *testing.T) {
+	b := NewBuilder(&model.InstallConfig{})
+	b.AddStorageFile(`- path: /etc/test
+  mode: 0644`)
+	got := b.BuildWithVariant("variant: fcos\nversion: 1.5.0\n")
+	if !strings.Contains(got, "variant: fcos") {
+		t.Error("expected variant: fcos in output")
+	}
+	if !strings.Contains(got, "/etc/test") {
+		t.Error("expected storage file in output")
+	}
+}
+
+// ── FCOS error path coverage ─────────────────────────────────────────────────
+
+func TestGenerateFCOSButane_ZincatiTemplateError(t *testing.T) {
+	orig := zincatiTemplate
+	zincatiTemplate = "{{unclosed"
+	t.Cleanup(func() { zincatiTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected zincati template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering zincati config") {
+		t.Errorf("error should mention zincati config, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_ZincatiDisabledTemplateError(t *testing.T) {
+	orig := zincatiDisabledTemplate
+	zincatiDisabledTemplate = "{{unclosed"
+	t.Cleanup(func() { zincatiDisabledTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-disabled-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		UpdateStrategy: model.UpdateStrategy{
+			FCOSUpdateStrategy: model.FCOSStrategyDisabled,
+		},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected zincati disabled template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering zincati config") {
+		t.Errorf("error should mention zincati config, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_PasswdTemplateError(t *testing.T) {
+	orig := passwdTemplate
+	passwdTemplate = "{{unclosed"
+	t.Cleanup(func() { passwdTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-passwd-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected passwd template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering passwd") {
+		t.Errorf("error should mention rendering passwd, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_SysextTemplateError(t *testing.T) {
+	orig := sysextTemplate
+	sysextTemplate = "{{unclosed"
+	t.Cleanup(func() { sysextTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-sysext-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "docker", URL: "https://example.com/docker.raw", Selected: true},
+		},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected sysext template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering sysext") {
+		t.Errorf("error should mention rendering sysext, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_TailscaleEnvTemplateError(t *testing.T) {
+	orig := tailscaleEnvTemplate
+	tailscaleEnvTemplate = "{{unclosed"
+	t.Cleanup(func() { tailscaleEnvTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-ts-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abc-secret",
+			Mode:    model.TailscaleModeConnect,
+		},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected tailscale env template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering tailscale env") {
+		t.Errorf("error should mention rendering tailscale env, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_HostnameTemplateError(t *testing.T) {
+	orig := hostnameTemplate
+	hostnameTemplate = "{{unclosed"
+	t.Cleanup(func() { hostnameTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected hostname template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering hostname") {
+		t.Errorf("error should mention rendering hostname, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_SSHHardeningTemplateError(t *testing.T) {
+	orig := sshHardeningTemplate
+	sshHardeningTemplate = "{{unclosed"
+	t.Cleanup(func() { sshHardeningTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-err",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected ssh hardening template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering ssh hardening") {
+		t.Errorf("error should mention rendering ssh hardening, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_StaticNetTemplateError(t *testing.T) {
+	orig := staticNetTemplate
+	staticNetTemplate = "{{unclosed"
+	t.Cleanup(func() { staticNetTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-err",
+		Network: model.NetworkConfig{
+			Mode:      model.NetworkStatic,
+			Interface: "eth0",
+			Address:   "10.0.0.1/24",
+			Gateway:   "10.0.0.254",
+			DNS:       []string{"8.8.8.8"},
+		},
+		Users: []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected static network template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering static network") {
+		t.Errorf("error should mention rendering static network, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_TimezoneTemplateError(t *testing.T) {
+	orig := timezoneTemplate
+	timezoneTemplate = "{{unclosed"
+	t.Cleanup(func() { timezoneTemplate = orig })
+
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-err",
+		Timezone: "UTC",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+	_, err := g.GenerateFCOSButane(cfg)
+	if err == nil {
+		t.Fatal("expected timezone template error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rendering timezone") {
+		t.Errorf("error should mention rendering timezone, got: %v", err)
+	}
+}
+
+func TestGenerateFCOSButane_PasswordUser(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-pw",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users: []model.UserConfig{
+			{
+				Username:     "admin",
+				PasswordHash: "$2a$10$somehash",
+				SSHKeys:      []string{"ssh-ed25519 AAAA test"},
+				Groups:       []string{"sudo", "docker"},
+			},
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "PasswordAuthentication yes") {
+		t.Error("expected PasswordAuthentication yes when user has password")
+	}
+	if !strings.Contains(output, `password_hash: "$2a$10$somehash"`) {
+		t.Error("expected password_hash in output")
+	}
+	if !strings.Contains(output, `- "sudo"`) {
+		t.Error("expected sudo group in output")
+	}
+}
+
+func TestGenerateFCOSButane_NoSysextsNoSysextService(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-nosysext",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(output, "systemd-sysext.service") {
+		t.Error("systemd-sysext.service must NOT appear when no sysexts are selected")
+	}
+}
+
+func TestGenerateFCOSButane_SubnetRouter(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-subnet",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{
+			AuthKey: "tskey-auth-abc-secret",
+			Mode:    model.TailscaleModeSubnetRouter,
+			Routes:  "10.0.0.0/24",
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "--advertise-routes=10.0.0.0/24") {
+		t.Error("expected advertise-routes in output")
+	}
+	if !strings.Contains(output, "net.ipv4.ip_forward") {
+		t.Error("expected ip_forward for subnet router")
+	}
+}
+
+func TestGenerateFCOSButane_SwapDefaultSize(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-swap-default",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Swap:     model.SwapConfig{Enabled: true, SizeMB: 0},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, fmt.Sprintf("fallocate -l %dM", model.DefaultSwapSizeMB)) {
+		t.Errorf("expected default swap size %d MiB", model.DefaultSwapSizeMB)
+	}
+}
+
+func TestGenerateFCOSButane_SwapDisabled(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-noswap",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Swap:     model.SwapConfig{Enabled: false},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(output, "/var/swapfile") {
+		t.Error("/var/swapfile must not appear when swap is disabled")
+	}
+}
+
+func TestGenerateFCOSButane_TailscaleSkippedNoAuthKey(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:        model.OSFCOS,
+		Hostname:  "fcos-nots",
+		Network:   model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:     []model.UserConfig{{Username: "core"}},
+		Tailscale: model.TailscaleConfig{},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(output, "tailscale.env") {
+		t.Error("tailscale.env must not appear when AuthKey is empty")
+	}
+	if strings.Contains(output, "tailscaled.service") {
+		t.Error("tailscaled.service must not appear when AuthKey is empty")
+	}
+}
+
+func TestGenerateFCOSButane_SysextSHA256(t *testing.T) {
+	g := NewGenerator()
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Hostname: "fcos-sha",
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{
+				Name:     "wasmtime",
+				URL:      "https://example.com/wasmtime.raw",
+				Sha256:   "abc123def456",
+				Selected: true,
+			},
+		},
+	}
+
+	output, err := g.GenerateFCOSButane(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(output, "sha256-abc123def456") {
+		t.Error("expected sha256 verification hash in output")
+	}
+}

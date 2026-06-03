@@ -773,3 +773,57 @@ func TestCleanupIgnitionFile_RemoveFailsNonNotExist(t *testing.T) {
 		t.Error("ignitionPath should be cleared after cleanupIgnitionFile, even on Remove failure")
 	}
 }
+
+func TestInstallFCOSDispatch(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-install-test",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify flatcar-install was called (install flow works for FCOS too)
+	found := false
+	for i := range spy.Calls {
+		if spy.Calls[i].Name == "flatcar-install" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("flatcar-install was not called for FCOS config")
+	}
+}
+
+func TestInstallFCOS_GenerateButaneError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFlatcarInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-err-test",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "bad", URL: "http://insecure.example.com/bad.raw", Selected: true},
+		},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from FCOS butane generation, got nil")
+	}
+	if !strings.Contains(err.Error(), "generating butane config") {
+		t.Errorf("error should mention generating butane config, got: %v", err)
+	}
+}
