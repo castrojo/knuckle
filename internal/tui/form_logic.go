@@ -36,7 +36,11 @@ func (m *Model) initForm() {
 			m.usernameInput = "core"
 		}
 		if m.Wizard.State.Config.Hostname == "" {
-			m.Wizard.State.Config.Hostname = "flatcar"
+			if m.Wizard.State.Config.OS == model.OSFCOS {
+				m.Wizard.State.Config.Hostname = "fcos"
+			} else {
+				m.Wizard.State.Config.Hostname = "flatcar"
+			}
 		}
 		if m.Wizard.State.Config.Timezone == "" {
 			m.Wizard.State.Config.Timezone = "UTC"

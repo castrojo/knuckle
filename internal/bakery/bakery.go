@@ -39,6 +39,9 @@ type Client interface {
 	// FetchCatalogArch fetches the catalog and selects assets for the given arch.
 	// arch must be "amd64" or "arm64". Falls back to x86-64 assets for amd64.
 	FetchCatalogArch(ctx context.Context, arch string) ([]model.SysextEntry, error)
+	// FetchCatalogFCOS fetches sysexts for the given arch and Fedora major version
+	// from the fedora-sysexts/community catalog.
+	FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error)
 }
 
 // HTTPClient fetches the catalog from the GitHub Releases API
@@ -89,6 +92,12 @@ type githubRelease struct {
 
 func (c *HTTPClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, error) {
 	return c.FetchCatalogArch(ctx, "amd64")
+}
+
+// FetchCatalogFCOS fetches sysexts for the given arch and Fedora major version.
+// TODO(#641): wire to fedora-sysexts/community catalog with version filtering.
+func (c *HTTPClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return c.FetchCatalogArch(ctx, arch)
 }
 
 // FetchCatalogArch fetches the catalog and selects assets for the given arch.
@@ -361,6 +370,11 @@ type MockClient struct {
 
 func (m *MockClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, error) {
 	return m.Entries, m.Err
+}
+
+// FetchCatalogFCOS delegates to FetchCatalogArch in the mock (ignores fedoraVersion).
+func (m *MockClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return m.FetchCatalogArch(ctx, arch)
 }
 
 // FetchCatalogArch returns entries whose URL contains the arch-specific suffix,

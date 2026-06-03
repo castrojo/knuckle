@@ -1228,6 +1228,10 @@ func (m *archCaptureMockClient) FetchCatalogArch(ctx context.Context, arch strin
 	return []model.SysextEntry{{Name: "docker", Version: "24.0", URL: "https://example.com/docker-arm64.raw"}}, nil
 }
 
+func (m *archCaptureMockClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return m.FetchCatalogArch(ctx, arch)
+}
+
 func TestRun_DryRunSkipsReboot(t *testing.T) {
 	// DryRun=true with Reboot=true should NOT reboot.
 	cfg := &Config{

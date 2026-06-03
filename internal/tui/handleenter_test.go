@@ -127,12 +127,33 @@ func TestHandleEnter_Welcome_ChannelSelection(t *testing.T) {
 	w.State.Config.Hostname = "test"
 
 	m := New(w)
-	m.cursor = 2 // "beta" (channels are: stable, lts, beta, alpha)
+	m.osSelected = true // OS already picked
+	m.cursor = 2        // "beta" (channels are: stable, lts, beta, alpha)
 
 	_, _ = m.handleEnter()
 
 	if m.Wizard.State.Config.Channel != "beta" {
 		t.Errorf("expected channel beta, got %q", m.Wizard.State.Config.Channel)
+	}
+}
+
+func TestHandleEnter_Welcome_OSPicker(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepWelcome
+
+	m := New(w)
+	m.cursor = 1 // FCOS
+
+	_, _ = m.handleEnter()
+
+	if m.Wizard.State.Config.OS != model.OSFCOS {
+		t.Errorf("expected OS=%q, got %q", model.OSFCOS, m.Wizard.State.Config.OS)
+	}
+	if !m.osSelected {
+		t.Error("expected osSelected=true after OS pick")
+	}
+	if m.cursor != 0 {
+		t.Errorf("cursor should reset to 0 after OS pick, got %d", m.cursor)
 	}
 }
 
@@ -143,6 +164,7 @@ func TestHandleEnter_Welcome_WithIgnitionURL(t *testing.T) {
 	w.State.Config.IgnitionURL = "https://example.com/config.ign"
 
 	m := New(w)
+	m.osSelected = true // OS already picked
 	m.cursor = 0
 
 	_, _ = m.handleEnter()
@@ -243,7 +265,7 @@ func TestMaxCursor_AllSteps(t *testing.T) {
 		disks  int
 		expect int
 	}{
-		{model.StepWelcome, 0, 4}, // 4 channels
+		{model.StepWelcome, 0, 2}, // 2 OS options (before osSelected)
 		{model.StepStorage, 3, 3}, // number of disks
 		{model.StepStorage, 0, 0}, // no disks
 		{model.StepSysext, 0, 0},  // empty sysexts

@@ -11,6 +11,20 @@ import (
 	"github.com/projectbluefin/knuckle/internal/validate"
 )
 
+func (m *Model) hostnamePlaceholder() string {
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		return "fcos-node-01"
+	}
+	return "flatcar-node01"
+}
+
+func (m *Model) osDisplayName() string {
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		return "Fedora CoreOS"
+	}
+	return "Flatcar"
+}
+
 // buildNetworkForm creates the huh form for the Network step.
 func (m *Model) buildNetworkForm() *huh.Form {
 	// Build interface options from detected interfaces
@@ -91,7 +105,7 @@ func (m *Model) buildUserForm() *huh.Form {
 				Description("Configure the hostname and primary user account."),
 			huh.NewInput().
 				Title("Hostname").
-				Placeholder("flatcar-node01").
+				Placeholder(m.hostnamePlaceholder()).
 				Value(&m.Wizard.State.Config.Hostname).
 				Validate(func(s string) error {
 					if s == "" {
@@ -196,7 +210,7 @@ func (m *Model) buildReviewForm() *huh.Form {
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("⚠️  DESTRUCTIVE OPERATION — Install Flatcar to disk?").
+				Title(fmt.Sprintf("⚠️  DESTRUCTIVE OPERATION — Install %s to disk?", m.osDisplayName())).
 				Description(m.reviewSummary()).
 				Affirmative("Yes, install").
 				Negative("Go back").
@@ -208,7 +222,8 @@ func (m *Model) buildReviewForm() *huh.Form {
 func (m *Model) reviewSummary() string {
 	cfg := &m.Wizard.State.Config
 	var b strings.Builder
-	fmt.Fprintf(&b, "Channel: %s", cfg.Channel)
+	fmt.Fprintf(&b, "Operating System: %s", m.osDisplayName())
+	fmt.Fprintf(&b, "\nChannel: %s", cfg.Channel)
 	if cfg.Version != "" {
 		fmt.Fprintf(&b, " (v%s)", cfg.Version)
 	}
@@ -368,6 +383,9 @@ func (m *Model) renderZenChrome() string {
 
 // channelList returns the ordered list of channel keys for the card selector.
 func (m *Model) channelList() []string {
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		return []string{"stable", "testing", "next"}
+	}
 	return []string{"stable", "lts", "beta", "alpha"}
 }
 
@@ -391,7 +409,29 @@ func (m *Model) getChannelMeta() []channelMeta {
 	channels := m.channelList()
 	metas := make([]channelMeta, len(channels))
 
-	// Default descriptions
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		descs := map[string]string{
+			"stable":  "Production-ready. Promoted from testing after validation.",
+			"testing": "Next stable candidate. Test before production.",
+			"next":    "Tracks the upcoming Fedora release. Bleeding edge.",
+		}
+		for i, ch := range channels {
+			metas[i] = channelMeta{
+				name: ch,
+				desc: descs[ch],
+			}
+			// Fill in FCOS stream version info
+			for _, info := range m.Wizard.State.FCOSStreams {
+				if info.Stream == ch {
+					metas[i].version = info.Version
+					break
+				}
+			}
+		}
+		return metas
+	}
+
+	// Flatcar channel metadata
 	descs := map[string]string{
 		"stable": "Tested for production. Default for most deployments.",
 		"lts":    "Long-term support. Extended maintenance window.",
@@ -416,6 +456,64 @@ func (m *Model) getChannelMeta() []channelMeta {
 		}
 	}
 	return metas
+}
+
+// viewOSPicker renders the OS selection sub-view within StepWelcome.
+func (m *Model) viewOSPicker() string {
+	var b strings.Builder
+
+	selectedBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("51")).
+		Padding(0, 1).
+		Width(60)
+	normalBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(60)
+	nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+	nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	cursorStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+
+	b.WriteString("  Select a target operating system:\n\n")
+
+	type osOption struct {
+		name string
+		desc string
+	}
+	options := []osOption{
+		{"Flatcar Container Linux", "Immutable Linux for containers. Auto-updates via update-engine."},
+		{"Fedora CoreOS", "Minimal Fedora for containers. Auto-updates via rpm-ostree + zincati."},
+	}
+
+	for i, opt := range options {
+		selected := i == m.cursor
+		cursor := "  "
+		style := nameNormal
+		if selected {
+			cursor = cursorStyle.Render("▸ ")
+			style = nameSelected
+		}
+		var card strings.Builder
+		card.WriteString(cursor + style.Render(opt.name) + "\n")
+		card.WriteString("  " + descStyle.Render(opt.desc))
+
+		if selected {
+			b.WriteString(selectedBorder.Render(card.String()))
+		} else {
+			b.WriteString(normalBorder.Render(card.String()))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	b.WriteString(dim.Render("  ↑↓/jk select · enter continue"))
+	b.WriteString("\n")
+
+	return b.String()
 }
 
 // viewChannelCards renders Flatcar-website-style channel selector cards.
@@ -510,7 +608,11 @@ func (m *Model) viewChannelCards() string {
 	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	b.WriteString(dim.Render("  Ctrl+A advanced options · ↑↓/jk select · enter continue"))
 	b.WriteString("\n")
-	b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		b.WriteString(dim.Render("  Join the Fedora CoreOS community: ") + link.Render("https://discussion.fedoraproject.org"))
+	} else {
+		b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
+	}
 	b.WriteString("\n")
 
 	return b.String()

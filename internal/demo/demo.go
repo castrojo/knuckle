@@ -50,6 +50,10 @@ func (b *Bakery) FetchCatalog(ctx context.Context) ([]model.SysextEntry, error) 
 	return b.FetchCatalogArch(ctx, "amd64")
 }
 
+func (b *Bakery) FetchCatalogFCOS(_ context.Context, _ string, _ int) ([]model.SysextEntry, error) {
+	return b.FetchCatalogArch(context.Background(), "amd64")
+}
+
 func (b *Bakery) FetchCatalogArch(_ context.Context, _ string) ([]model.SysextEntry, error) {
 	return []model.SysextEntry{
 		{

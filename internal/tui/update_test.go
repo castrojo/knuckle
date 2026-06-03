@@ -174,7 +174,7 @@ func TestMaxCursor(t *testing.T) {
 	}{
 		{
 			step:     model.StepWelcome,
-			expected: 4, // stable, lts, beta, alpha
+			expected: 2, // OS picker: Flatcar, FCOS (before osSelected)
 		},
 		{
 			step: model.StepStorage,

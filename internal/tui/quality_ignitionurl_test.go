@@ -15,6 +15,7 @@ func TestHandleEnter_Welcome_IgnitionURL_SkipsToStorage(t *testing.T) {
 	w.State.Config.Channel = "stable"
 
 	m := New(w)
+	m.osSelected = true // OS already picked
 	_, _ = m.handleEnter()
 
 	if m.Wizard.State.CurrentStep != model.StepStorage {

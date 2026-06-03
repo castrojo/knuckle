@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/fcos"
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/install"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -33,6 +34,13 @@ type State struct {
 	// on the installed system too — used to auto-select the nvidia-runtime sysext.
 	NvidiaGPUDetected bool
 	NvidiaGPUs        []probe.NvidiaGPUInfo // detected GPU details for display in GPU Setup screen
+
+	// FedoraVersion is the Fedora major version for the chosen FCOS stream
+	// (e.g. 44 for stable). Populated by FetchFCOSStreams; zero for Flatcar.
+	FedoraVersion int
+
+	// FCOS stream version info (fetched at startup)
+	FCOSStreams []FCOSStreamInfo
 
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
@@ -372,7 +380,14 @@ func (w *Wizard) runSystemChecks() {
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
 // auto-selected and the default driver series is pre-configured.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
-	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	var sysexts []model.SysextEntry
+	var err error
+
+	if w.State.Config.OS == model.OSFCOS && w.State.FedoraVersion > 0 {
+		sysexts, err = w.Bakery.FetchCatalogFCOS(ctx, w.State.Config.Arch, w.State.FedoraVersion)
+	} else {
+		sysexts, err = w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	}
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)
 	}
@@ -404,6 +419,49 @@ func (w *Wizard) FetchChannels(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+// FCOSStreamInfo holds version info for an FCOS stream, displayed in the TUI.
+type FCOSStreamInfo struct {
+	Stream  string // "stable", "testing", "next"
+	Version string // full release version (e.g. "44.20260510.3.1")
+}
+
+// fetchFCOSStreamVersionFn is injectable for tests.
+var fetchFCOSStreamVersionFn = fcos.FetchStreamVersion
+
+// FetchFCOSStreams loads version info for FCOS streams (stable, testing, next).
+// Also sets FedoraVersion from the selected stream.
+func (w *Wizard) FetchFCOSStreams(ctx context.Context) error {
+	streams := []string{"stable", "testing", "next"}
+	var infos []FCOSStreamInfo
+	var lastErr error
+
+	for _, s := range streams {
+		ver, err := fetchFCOSStreamVersionFn(ctx, s)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		infos = append(infos, FCOSStreamInfo{Stream: s, Version: ver})
+	}
+
+	w.State.FCOSStreams = infos
+
+	// Set FedoraVersion from the configured channel's stream.
+	channel := w.State.Config.Channel
+	if channel == "" {
+		channel = "stable"
+	}
+	fedVer, err := fcos.FetchStreamFedoraVersion(ctx, channel)
+	if err == nil {
+		w.State.FedoraVersion = fedVer
+	}
+
+	if len(infos) > 0 {
+		return nil
+	}
+	return lastErr
 }
 
 // Execute runs the installation
