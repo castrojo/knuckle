@@ -96,11 +96,16 @@ func (c *Config) ToInstallConfig() *model.InstallConfig {
 		os = model.OSFlatcar
 	}
 
+	version := c.Version
+	if os == model.OSFCOS {
+		version = "" // FCOS v1 does not support version pinning
+	}
+
 	cfg := &model.InstallConfig{
 		OS:       os,
 		Arch:     c.Arch,
 		Channel:  c.Channel,
-		Version:  c.Version,
+		Version:  version,
 		Hostname: c.Hostname,
 		Timezone: c.Timezone,
 		DryRun:   c.DryRun,
@@ -180,11 +185,19 @@ func (c *Config) ToInstallConfig() *model.InstallConfig {
 		cfg.SSHKeys = append(cfg.SSHKeys, u.SSHKeys...)
 	}
 
-	// Update strategy
-	if c.UpdateStrategy != "" {
-		cfg.UpdateStrategy.RebootStrategy = c.UpdateStrategy
+	// Update strategy — FCOS uses FCOSUpdateStrategy; Flatcar uses RebootStrategy
+	if os == model.OSFCOS {
+		if c.UpdateStrategy != "" {
+			cfg.UpdateStrategy.FCOSUpdateStrategy = c.UpdateStrategy
+		} else {
+			cfg.UpdateStrategy.FCOSUpdateStrategy = model.FCOSStrategyImmediate
+		}
 	} else {
-		cfg.UpdateStrategy.RebootStrategy = "reboot"
+		if c.UpdateStrategy != "" {
+			cfg.UpdateStrategy.RebootStrategy = c.UpdateStrategy
+		} else {
+			cfg.UpdateStrategy.RebootStrategy = "reboot"
+		}
 	}
 
 	return cfg
@@ -246,8 +259,10 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Version
-	if err := validate.FlatcarVersion(c.Version); err != nil {
+	// Version — FCOS does not support version pinning via coreos-installer
+	if c.OS == model.OSFCOS {
+		// Silently accept empty; non-empty is validated below at CheckConsistency
+	} else if err := validate.FlatcarVersion(c.Version); err != nil {
 		return fmt.Errorf("version: %w", err)
 	}
 
@@ -344,10 +359,18 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Update strategy
-	validStrategies := map[string]bool{"reboot": true, "off": true, "etcd-lock": true, "": true}
-	if !validStrategies[c.UpdateStrategy] {
-		return fmt.Errorf("update_strategy: must be reboot, off, or etcd-lock (got %q)", c.UpdateStrategy)
+	// Update strategy — OS-specific valid values
+	if c.OS == model.OSFCOS {
+		validFCOS := map[string]bool{model.FCOSStrategyImmediate: true, model.FCOSStrategyDisabled: true, "": true}
+		if !validFCOS[c.UpdateStrategy] {
+			return fmt.Errorf("update_strategy: must be %q or %q for FCOS (got %q)",
+				model.FCOSStrategyImmediate, model.FCOSStrategyDisabled, c.UpdateStrategy)
+		}
+	} else {
+		validStrategies := map[string]bool{"reboot": true, "off": true, "etcd-lock": true, "": true}
+		if !validStrategies[c.UpdateStrategy] {
+			return fmt.Errorf("update_strategy: must be reboot, off, or etcd-lock (got %q)", c.UpdateStrategy)
+		}
 	}
 
 	// Swap size must be within [0, MaxSwapSizeMB]
@@ -380,8 +403,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// NVIDIA driver version must be a known series
+	// NVIDIA driver version — not supported on FCOS
 	if c.NvidiaDriverVersion != "" {
+		if c.OS == model.OSFCOS {
+			return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
+		}
 		valid := false
 		for _, opt := range model.NvidiaDriverOptions {
 			if opt.ID == c.NvidiaDriverVersion {
@@ -407,11 +433,16 @@ func (c *Config) Validate() error {
 // 6. Optionally reboot
 func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *slog.Logger) error {
 	logger.Info("headless install starting",
+		"os", cfg.OS,
 		"channel", cfg.Channel,
 		"disk", cfg.Disk,
 		"hostname", cfg.Hostname,
 		"dry_run", cfg.DryRun,
 	)
+
+	if cfg.OS == model.OSFCOS && cfg.Version != "" {
+		logger.Warn("FCOS version pinning is not supported; ignoring version field", "version", cfg.Version)
+	}
 
 	// Step 1: Validate input config
 	fmt.Println("→ Validating configuration...")

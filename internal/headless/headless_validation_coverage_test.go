@@ -204,7 +204,7 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 		Network:        NetworkConfig{Mode: "dhcp"},
 		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
 		Disk:           "/dev/vdb",
-		UpdateStrategy: "reboot",
+		UpdateStrategy: "immediate",
 	}
 	if err := cfgFCOSSuccess.Validate(); err != nil {
 		t.Errorf("expected no error for FCOS stable channel, got: %v", err)
@@ -219,7 +219,7 @@ func TestValidate_NewOSAndArchValidation(t *testing.T) {
 		Network:        NetworkConfig{Mode: "dhcp"},
 		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
 		Disk:           "/dev/vdb",
-		UpdateStrategy: "reboot",
+		UpdateStrategy: "immediate",
 	}
 	err = cfgFCOSFail.Validate()
 	if err == nil {

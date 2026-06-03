@@ -1,7 +1,8 @@
 # Headless Mode — JSON Config Schema
 
 Knuckle's headless mode (`--headless --config <file.json>`) performs a fully
-automated, non-interactive Flatcar install driven by a JSON configuration file.
+automated, non-interactive install driven by a JSON configuration file.
+It supports both Flatcar Container Linux and Fedora CoreOS.
 This document is the authoritative reference for every field in that file.
 
 ## Quick-start examples
@@ -69,6 +70,31 @@ This document is the authoritative reference for every field in that file.
 }
 ```
 
+### Fedora CoreOS (FCOS) install
+
+```json
+{
+  "os": "fcos",
+  "channel": "stable",
+  "hostname": "fcos-node-1",
+  "disk": "/dev/disk/by-id/ata-VBOX_HARDDISK_VB12345678-90abcdef",
+  "network": { "mode": "dhcp" },
+  "users": [
+    {
+      "username": "core",
+      "ssh_keys": ["ssh-ed25519 AAAA... you@host"]
+    }
+  ],
+  "update_strategy": "immediate"
+}
+```
+
+**FCOS limitations:**
+- **No version pinning** — the `version` field is ignored for FCOS. `coreos-installer` v1 does not support stream version pinning.
+- **No NVIDIA kernel driver** — `nvidia_driver_version` must not be set for FCOS.
+- **No etcd-lock** — FCOS uses zincati for updates. Valid strategies are `immediate` (default) and `disabled`.
+- **Streams, not channels** — FCOS uses `stable`, `testing`, and `next` (not `beta`, `alpha`, `lts`, `edge`).
+
 ---
 
 ## Full field reference
@@ -77,17 +103,18 @@ This document is the authoritative reference for every field in that file.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `channel` | string | no | `"stable"` | Flatcar release channel. One of `stable`, `beta`, `alpha`, `lts`, `edge`. |
-| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Omit to use the latest for the channel. |
+| `os` | string | no | `"flatcar"` | Target operating system. One of `flatcar` or `fcos`. |
+| `channel` | string | no | `"stable"` | Release channel/stream. Flatcar: `stable`, `beta`, `alpha`, `lts`, `edge`. FCOS: `stable`, `testing`, `next`. |
+| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Ignored for FCOS (version pinning not supported). |
 | `hostname` | string | yes | — | Machine hostname. Must be a valid RFC 1123 hostname label. |
 | `disk` | string | yes* | — | Target disk path. Use a stable `/dev/disk/by-id/...` path in production. `*` Not required when `ignition_url` is set. |
 | `network` | object | yes | — | See [Network](#network). |
 | `users` | array | yes* | — | One or more user accounts. `*` Not required when `ignition_url` is set. |
-| `update_strategy` | string | no | `"reboot"` | Flatcar update strategy. One of `reboot`, `off`, `etcd-lock`. |
+| `update_strategy` | string | no | `"reboot"` / `"immediate"` | Flatcar: `reboot`, `off`, `etcd-lock`. FCOS: `immediate`, `disabled`. |
 | `arch` | string | no | `"amd64"` | CPU architecture. One of `amd64`, `arm64`. `arm64` is not available on the `lts` channel. |
 | `timezone` | string | no | `"UTC"` | System timezone (IANA format, e.g. `"America/New_York"`). |
 | `sysexts` | string[] | no | `[]` | List of system extension names from the bakery catalog (e.g. `["docker", "kubernetes"]`). |
-| `nvidia_driver_version` | string | no | _(none)_ | NVIDIA kernel driver series. One of `570-open` (default/recommended), `550-open`, `535-open`, `460`. Omit to skip NVIDIA setup. |
+| `nvidia_driver_version` | string | no | _(none)_ | NVIDIA kernel driver series (Flatcar only). One of `570-open` (recommended), `550-open`, `535-open`, `460`. Must not be set for FCOS. |
 | `tailscale` | object | no | — | See [Tailscale](#tailscale). Omit or leave `auth_key` blank to skip. |
 | `swap` | object | no | _(enabled, 4 GiB)_ | See [Swap](#swap). Omit for the default (4 GiB enabled). |
 | `ignition_url` | string | no | — | URL of an external Ignition config. When set, knuckle downloads this config instead of generating one — only `disk` is then required. Must be HTTPS. |
