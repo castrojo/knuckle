@@ -114,7 +114,10 @@ func main() {
 		realRunner := runner.NewRealRunner(logger)
 		prober = probe.NewSystemProber(realRunner)
 		bakeryClient = bakery.NewHTTPClient()
-		installer = install.NewFlatcarInstaller(cmdRunner, logger)
+		installer = &install.DispatchingInstaller{
+			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
+			FCOS:    install.NewFCOSInstaller(cmdRunner, logger),
+		}
 	}
 
 	// Create wizard
@@ -209,7 +212,10 @@ func runHeadlessWithRunner(configPath string, dryRun bool, logFile string, cmdRu
 		}
 	}
 
-	installer := install.NewFlatcarInstaller(cmdRunner, logger)
+	installer := &install.DispatchingInstaller{
+		Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
+		FCOS:    install.NewFCOSInstaller(cmdRunner, logger),
+	}
 
 	// Run headless install with a 30-minute wall-clock timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)

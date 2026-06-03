@@ -124,7 +124,12 @@ func (w *Wizard) Previous() {
 }
 
 // isNvidiaSelected returns true when the nvidia-runtime sysext is toggled on.
+// Always returns false for FCOS — NVIDIA kernel driver activation via
+// /etc/flatcar/enabled-sysext.conf is Flatcar-only.
 func (w *Wizard) isNvidiaSelected() bool {
+	if w.State.Config.OS == model.OSFCOS {
+		return false
+	}
 	for _, s := range w.State.Sysexts {
 		if s.Name == "nvidia-runtime" && s.Selected {
 			return true

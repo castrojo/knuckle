@@ -13,9 +13,25 @@ import (
 	"github.com/projectbluefin/knuckle/internal/runner"
 )
 
-// Installer orchestrates the Flatcar installation process.
+// Installer orchestrates an OS installation.
 type Installer interface {
 	Install(ctx context.Context, cfg *model.InstallConfig, progress func(step string)) error
+}
+
+// DispatchingInstaller delegates to the correct OS-specific installer based
+// on cfg.OS at Install() call time. This lets main.go construct both impls
+// before the user chooses an OS in the wizard.
+type DispatchingInstaller struct {
+	Flatcar Installer
+	FCOS    Installer
+}
+
+// Install dispatches to the Flatcar or FCOS installer based on cfg.OS.
+func (d *DispatchingInstaller) Install(ctx context.Context, cfg *model.InstallConfig, progress func(string)) error {
+	if cfg.OS == model.OSFCOS {
+		return d.FCOS.Install(ctx, cfg, progress)
+	}
+	return d.Flatcar.Install(ctx, cfg, progress)
 }
 
 // FlatcarInstaller runs flatcar-install via the runner.

@@ -723,6 +723,44 @@ func TestGoToStepRefusesNvidiaWhenNotSelected(t *testing.T) {
 	}
 }
 
+func TestNextSkipsNvidiaForFCOS(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Network.Mode = model.NetworkDHCP
+	w.State.Config.Disk.DevPath = "/dev/sda"
+	w.State.Config.Users = []model.UserConfig{
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
+	}
+	w.State.Config.Channel = "stable"
+	// nvidia-runtime IS selected but OS is FCOS — should still skip
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.CurrentStep = model.StepSysext
+
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next from Sysext: %v", err)
+	}
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("FCOS should skip StepNvidia even when nvidia-runtime is selected")
+	}
+	// Should land on StepTailscale or StepUpdate (depends on tailscale selection)
+	if w.State.CurrentStep != model.StepUpdate {
+		t.Errorf("expected StepUpdate for FCOS (skipping nvidia+tailscale), got %v", w.State.CurrentStep)
+	}
+}
+
+func TestIsNvidiaSelectedReturnsFalseForFCOS(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	if w.isNvidiaSelected() {
+		t.Error("isNvidiaSelected() should return false for FCOS regardless of sysext selection")
+	}
+}
+
 // --- QA Gap Tests: State Machine Invariants ---
 
 // Q1: Can we reach StepInstall without a disk? GoToStep has no validation gate.
