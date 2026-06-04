@@ -386,3 +386,21 @@ func (m *MockClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 	}
 	return filtered, nil
 }
+
+// MockFCOSClient is a test double that implements FCOSClient.
+// FetchCatalogFCOS records the arch and fedoraVersion arguments for assertions.
+type MockFCOSClient struct {
+	MockClient
+	FCOSEntries     []model.SysextEntry
+	FCOSErr         error
+	CalledArch      string
+	CalledFedoraVer int
+}
+
+func (m *MockFCOSClient) FetchCatalogFCOS(_ context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	m.CalledArch = arch
+	m.CalledFedoraVer = fedoraVersion
+	return m.FCOSEntries, m.FCOSErr
+}
+
+var _ FCOSClient = (*MockFCOSClient)(nil)

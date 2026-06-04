@@ -2270,3 +2270,163 @@ func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
 		})
 	}
 }
+
+// --- FCOS FetchSysexts tests ---
+
+// mockFCOSBakery implements both bakery.Client and bakery.FCOSClient.
+type mockFCOSBakery struct {
+	mockBakery
+	fcosSysexts     []model.SysextEntry
+	fcosErr         error
+	calledArch      string
+	calledFedoraVer int
+}
+
+func (m *mockFCOSBakery) FetchCatalogFCOS(_ context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	m.calledArch = arch
+	m.calledFedoraVer = fedoraVersion
+	return m.fcosSysexts, m.fcosErr
+}
+
+var _ bakery.FCOSClient = (*mockFCOSBakery)(nil)
+
+func TestFetchSysexts_FCOS_UsesFCOSClient(t *testing.T) {
+	wantEntries := []model.SysextEntry{{Name: "docker-ce", Version: "29.5"}}
+	fb := &mockFCOSBakery{fcosSysexts: wantEntries}
+	w := New(&mockProber{}, fb, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "stable"
+	w.State.Config.Arch = "amd64"
+
+	origFn := fetchFCOSVersionFn
+	fetchFCOSVersionFn = func(_ context.Context, _ string) (int, error) { return 44, nil }
+	t.Cleanup(func() { fetchFCOSVersionFn = origFn })
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts: %v", err)
+	}
+
+	if len(w.State.Sysexts) != 1 || w.State.Sysexts[0].Name != "docker-ce" {
+		t.Errorf("expected FCOS sysexts, got %v", w.State.Sysexts)
+	}
+	if fb.calledArch != "amd64" {
+		t.Errorf("expected arch amd64, got %q", fb.calledArch)
+	}
+	if fb.calledFedoraVer != 44 {
+		t.Errorf("expected fedoraVersion 44, got %d", fb.calledFedoraVer)
+	}
+	if w.State.FCOSFedoraVersion != 44 {
+		t.Errorf("expected State.FCOSFedoraVersion=44, got %d", w.State.FCOSFedoraVersion)
+	}
+}
+
+func TestFetchSysexts_FCOS_CachesFedoraVersion(t *testing.T) {
+	fb := &mockFCOSBakery{fcosSysexts: []model.SysextEntry{{Name: "tailscale"}}}
+	w := New(&mockProber{}, fb, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "stable"
+	w.State.Config.Arch = "amd64"
+	w.State.FCOSFedoraVersion = 44 // pre-cached
+
+	callCount := 0
+	origFn := fetchFCOSVersionFn
+	fetchFCOSVersionFn = func(_ context.Context, _ string) (int, error) {
+		callCount++
+		return 44, nil
+	}
+	t.Cleanup(func() { fetchFCOSVersionFn = origFn })
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts: %v", err)
+	}
+
+	if callCount != 0 {
+		t.Errorf("expected 0 stream API calls when version cached, got %d", callCount)
+	}
+}
+
+func TestFetchSysexts_FCOS_UsesChannelAsStream(t *testing.T) {
+	fb := &mockFCOSBakery{fcosSysexts: []model.SysextEntry{{Name: "docker-ce"}}}
+	w := New(&mockProber{}, fb, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "testing"
+	w.State.Config.Arch = "amd64"
+
+	var calledStream string
+	origFn := fetchFCOSVersionFn
+	fetchFCOSVersionFn = func(_ context.Context, stream string) (int, error) {
+		calledStream = stream
+		return 44, nil
+	}
+	t.Cleanup(func() { fetchFCOSVersionFn = origFn })
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts: %v", err)
+	}
+
+	if calledStream != "testing" {
+		t.Errorf("expected stream 'testing', got %q", calledStream)
+	}
+}
+
+func TestFetchSysexts_FCOS_DefaultsStreamToStable(t *testing.T) {
+	fb := &mockFCOSBakery{fcosSysexts: []model.SysextEntry{{Name: "docker-ce"}}}
+	w := New(&mockProber{}, fb, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "" // not set — should default to stable
+	w.State.Config.Arch = "amd64"
+
+	var calledStream string
+	origFn := fetchFCOSVersionFn
+	fetchFCOSVersionFn = func(_ context.Context, stream string) (int, error) {
+		calledStream = stream
+		return 44, nil
+	}
+	t.Cleanup(func() { fetchFCOSVersionFn = origFn })
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts: %v", err)
+	}
+
+	if calledStream != "stable" {
+		t.Errorf("expected stream 'stable', got %q", calledStream)
+	}
+}
+
+func TestFetchSysexts_FCOS_StreamVersionError(t *testing.T) {
+	fb := &mockFCOSBakery{}
+	w := New(&mockProber{}, fb, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "stable"
+
+	origFn := fetchFCOSVersionFn
+	fetchFCOSVersionFn = func(_ context.Context, _ string) (int, error) {
+		return 0, fmt.Errorf("stream API unreachable")
+	}
+	t.Cleanup(func() { fetchFCOSVersionFn = origFn })
+
+	err := w.FetchSysexts(context.Background())
+	if err == nil {
+		t.Fatal("expected error when stream API fails")
+	}
+	if !strings.Contains(err.Error(), "fetching FCOS stream version") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestFetchSysexts_FCOS_FallsBackWhenNotFCOSClient(t *testing.T) {
+	// mockBakery does not implement FCOSClient; should fall back to FetchCatalogArch.
+	entries := []model.SysextEntry{{Name: "docker"}}
+	b := &mockBakery{sysexts: entries}
+	w := New(&mockProber{}, b, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Arch = "amd64"
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts: %v", err)
+	}
+
+	if len(w.State.Sysexts) != 1 || w.State.Sysexts[0].Name != "docker" {
+		t.Errorf("expected fallback entries, got %v", w.State.Sysexts)
+	}
+}

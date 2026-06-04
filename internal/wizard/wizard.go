@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/fcos"
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/install"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -17,6 +18,9 @@ import (
 
 // fetchAllChannelsFn is a package-level hook so tests can inject a mock.
 var fetchAllChannelsFn = bakery.FetchAllChannels
+
+// fetchFCOSVersionFn is a package-level hook so tests can inject a mock.
+var fetchFCOSVersionFn = fcos.FetchStreamFedoraVersion
 
 // State holds the complete wizard state
 type State struct {
@@ -36,6 +40,10 @@ type State struct {
 
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
+
+	// FCOSFedoraVersion holds the parsed major Fedora version from the stable FCOS stream.
+	// Populated lazily by FetchSysexts when OS == FCOS.
+	FCOSFedoraVersion int
 
 	// System checks (populated at startup)
 	SystemChecks []SystemCheck
@@ -369,10 +377,38 @@ func (w *Wizard) runSystemChecks() {
 }
 
 // FetchSysexts loads the sysext catalog for the configured architecture.
+// For FCOS, it fetches the current Fedora version from the stable stream and
+// calls FetchCatalogFCOS on the bakery if it implements bakery.FCOSClient.
+// For Flatcar (and the default), it calls FetchCatalogArch as before.
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
 // auto-selected and the default driver series is pre-configured.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
-	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	var (
+		sysexts []model.SysextEntry
+		err     error
+	)
+
+	if w.State.Config.OS == model.OSFCOS {
+		if fcosClient, ok := w.Bakery.(bakery.FCOSClient); ok {
+			if w.State.FCOSFedoraVersion == 0 {
+				stream := w.State.Config.Channel
+				if stream == "" {
+					stream = "stable"
+				}
+				ver, verErr := fetchFCOSVersionFn(ctx, stream)
+				if verErr != nil {
+					return fmt.Errorf("fetching FCOS stream version: %w", verErr)
+				}
+				w.State.FCOSFedoraVersion = ver
+			}
+			sysexts, err = fcosClient.FetchCatalogFCOS(ctx, w.State.Config.Arch, w.State.FCOSFedoraVersion)
+		} else {
+			sysexts, err = w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+		}
+	} else {
+		sysexts, err = w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	}
+
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)
 	}

@@ -106,3 +106,65 @@ func TestDispatchingClient_FetchCatalogArchDelegatesToFlatcar(t *testing.T) {
 }
 
 var _ bakery.Client = (*bakery.DispatchingClient)(nil)
+var _ bakery.FCOSClient = (*bakery.DispatchingClient)(nil)
+
+func TestDispatchingClient_FetchCatalogFCOS_DelegatesToFCOSClient(t *testing.T) {
+	wantEntries := []model.SysextEntry{{Name: "docker-ce"}}
+	fcosClient := &bakery.MockFCOSClient{FCOSEntries: wantEntries}
+	d := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{},
+		FCOS:    fcosClient,
+	}
+
+	entries, err := d.FetchCatalogFCOS(context.Background(), "amd64", 44)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name != "docker-ce" {
+		t.Fatalf("expected fcos entries, got %v", entries)
+	}
+	if fcosClient.CalledArch != "amd64" {
+		t.Errorf("expected arch amd64, got %q", fcosClient.CalledArch)
+	}
+	if fcosClient.CalledFedoraVer != 44 {
+		t.Errorf("expected fedoraVersion 44, got %d", fcosClient.CalledFedoraVer)
+	}
+}
+
+func TestDispatchingClient_FetchCatalogFCOS_FallsBackWhenNotFCOSClient(t *testing.T) {
+	flatEntries := []model.SysextEntry{{Name: "docker"}}
+	fcosGeneric := &bakery.MockClient{Entries: flatEntries}
+	d := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{},
+		FCOS:    fcosGeneric,
+	}
+
+	// MockClient does not implement FCOSClient; should fall back to FetchCatalogArch.
+	entries, err := d.FetchCatalogFCOS(context.Background(), "amd64", 44)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name != "docker" {
+		t.Fatalf("expected fallback entries, got %v", entries)
+	}
+}
+
+func TestDispatchingClient_FetchCatalogFCOS_NilFCOS(t *testing.T) {
+	d := &bakery.DispatchingClient{Flatcar: &bakery.MockClient{}}
+	_, err := d.FetchCatalogFCOS(context.Background(), "amd64", 44)
+	if err == nil {
+		t.Fatal("expected error when FCOS client is nil")
+	}
+}
+
+func TestDispatchingClient_FetchCatalogFCOS_PropagatesError(t *testing.T) {
+	fcosClient := &bakery.MockFCOSClient{FCOSErr: fmt.Errorf("catalog error")}
+	d := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{},
+		FCOS:    fcosClient,
+	}
+	_, err := d.FetchCatalogFCOS(context.Background(), "amd64", 44)
+	if err == nil || err.Error() != "catalog error" {
+		t.Fatalf("expected 'catalog error', got %v", err)
+	}
+}
