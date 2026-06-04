@@ -1,4 +1,4 @@
-// Package install orchestrates the flatcar-install command through the runner abstraction.
+// Package install orchestrates OS installation through the runner abstraction.
 package install
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/projectbluefin/knuckle/internal/runner"
 )
 
-// Installer orchestrates the Flatcar installation process.
+// Installer orchestrates an OS installation process.
 type Installer interface {
 	Install(ctx context.Context, cfg *model.InstallConfig, progress func(step string)) error
 }
