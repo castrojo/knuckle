@@ -217,6 +217,12 @@ jobs:
       - name: install ISO build dependencies
         run: sudo apt-get update && sudo apt-get install -y xorriso mtools cpio systemd-boot-efi
 
+      - name: install coreos-installer
+        run: |
+          curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
+            -o /usr/local/bin/coreos-installer
+          chmod +x /usr/local/bin/coreos-installer
+
       - name: build installer ISO (amd64, stable)
         run: |
           chmod +x ./scripts/build-iso.sh
