@@ -77,8 +77,8 @@ This document is the authoritative reference for every field in that file.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `channel` | string | no | `"stable"` | Flatcar release channel. One of `stable`, `beta`, `alpha`, `lts`, `edge`. |
-| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Omit to use the latest for the channel. |
+| `channel` | string | no | `"stable"` | Flatcar release channel. One of `stable`, `beta`, `alpha`, `lts`, `edge`. For FCOS installs, one of `stable`, `testing`, `next`. |
+| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Omit to use the latest for the channel. **Not supported for FCOS** — `coreos-installer` has no equivalent version-pinning flag for stream-based installs; this field is silently ignored when `os` is `fcos`. |
 | `hostname` | string | yes | — | Machine hostname. Must be a valid RFC 1123 hostname label. |
 | `disk` | string | yes* | — | Target disk path. Use a stable `/dev/disk/by-id/...` path in production. `*` Not required when `ignition_url` is set. |
 | `network` | object | yes | — | See [Network](#network). |

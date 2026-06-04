@@ -119,7 +119,7 @@ func main() {
 		}
 		installer = &install.DispatchingInstaller{
 			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
-			// FCOS: install.NewFCOSInstaller(cmdRunner, logger), // wired by #639
+			FCOS:    install.NewFCOSInstaller(cmdRunner, logger),
 		}
 	}
 
@@ -223,7 +223,7 @@ func runHeadlessWithRunner(configPath string, dryRun bool, logFile string, cmdRu
 
 	installer := &install.DispatchingInstaller{
 		Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
-		// FCOS: install.NewFCOSInstaller(cmdRunner, logger), // wired by #639
+		FCOS:    install.NewFCOSInstaller(cmdRunner, logger),
 	}
 
 	// Run headless install with a 30-minute wall-clock timeout.
