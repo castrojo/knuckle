@@ -245,6 +245,18 @@ Knuckle validates the config before touching the disk. Key rules:
 
 ---
 
+## FCOS version pinning
+
+When `os` is `fcos`, the `version` field is **not supported** in v1. `coreos-installer`
+installs the latest image for the requested stream by default; there is no `-V` equivalent
+for stream-based version pinning without constructing an explicit `--image-url`.
+
+If `version` is set alongside `os: fcos`, knuckle logs a warning and proceeds with the
+stream default (i.e., the version value is silently ignored). A future release may support
+explicit image URLs for reproducible FCOS installs.
+
+---
+
 ## CLI flags override JSON
 
 Two CLI flags can override JSON config fields:
