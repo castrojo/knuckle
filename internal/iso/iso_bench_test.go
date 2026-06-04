@@ -9,7 +9,7 @@ func BenchmarkGenerateInstallerIgnition(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := GenerateInstallerIgnition(sshKey)
+		_, err := GenerateInstallerIgnition("flatcar", sshKey)
 		if err != nil {
 			b.Fatalf("GenerateInstallerIgnition() error: %v", err)
 		}
@@ -19,7 +19,17 @@ func BenchmarkGenerateInstallerIgnition(b *testing.B) {
 func BenchmarkGenerateInstallerIgnitionNoSSH(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := GenerateInstallerIgnition("")
+		_, err := GenerateInstallerIgnition("flatcar", "")
+		if err != nil {
+			b.Fatalf("GenerateInstallerIgnition() error: %v", err)
+		}
+	}
+}
+
+func BenchmarkGenerateInstallerIgnitionFCOS(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := GenerateInstallerIgnition("fcos", "")
 		if err != nil {
 			b.Fatalf("GenerateInstallerIgnition() error: %v", err)
 		}

@@ -23,6 +23,11 @@ default:
     @echo "  just hardware-repro — boot installer ISO in a hardware-like VM and capture install logs"
     @echo "  just e2e       — full end-to-end: build ISO → boot → install → verify"
     @echo ""
+    @echo "FCOS:"
+    @echo "  just tools-fcos          — install coreos-installer"
+    @echo "  just build-fcos-iso      — build FCOS live ISO (stable, amd64)"
+    @echo "  just build-fcos-iso arch=arm64 stream=testing"
+    @echo ""
     @echo "Pre-release (requires network):"
     @echo "  just catalog-check       — report new bakery extensions missing descriptions"
     @echo "  just nvidia-check        — verify NVIDIA driver series vs Flatcar docs"
@@ -809,6 +814,31 @@ e2e:
 # KNUCKLE_ARCH=arm64 just iso  — builds arm64 ISO
 iso *CHANNEL='stable':
     ./scripts/build-iso.sh --channel {{CHANNEL}} --arch {{KNUCKLE_ARCH}}
+
+# Check that coreos-installer is installed (required for FCOS ISO builds)
+check-fcos-tools:
+    @which coreos-installer || (echo "coreos-installer not found — run: just tools-fcos" && exit 1)
+
+# Install coreos-installer static binary to /usr/local/bin (idempotent)
+tools-fcos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v coreos-installer &>/dev/null; then
+        echo "coreos-installer already installed: $(coreos-installer --version)"
+        exit 0
+    fi
+    echo "Installing coreos-installer..."
+    curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
+        -o /usr/local/bin/coreos-installer
+    chmod +x /usr/local/bin/coreos-installer
+    coreos-installer --version
+    echo "tools-fcos ok"
+
+# Build FCOS installer ISO (requires coreos-installer — run: just tools-fcos)
+# Produces output/knuckle-fcos-installer-<stream>-<arch>.iso
+# Override stream/arch: just build-fcos-iso arch="arm64" stream="testing"
+build-fcos-iso arch="amd64" stream="stable": check-fcos-tools
+    ./scripts/build-fcos-iso.sh --arch {{arch}} --stream {{stream}}
 
 # Boot ISO in QEMU with UEFI (Ctrl-a x to quit)
 # KNUCKLE_ARCH=arm64 just boot-iso  — boots arm64 ISO (requires qemu-system-aarch64)
