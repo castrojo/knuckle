@@ -380,6 +380,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// NVIDIA driver is Flatcar-only — not supported on FCOS
+	if c.OS == model.OSFCOS && c.NvidiaDriverVersion != "" {
+		return fmt.Errorf("nvidia_driver_version: not supported for FCOS")
+	}
+
 	// NVIDIA driver version must be a known series
 	if c.NvidiaDriverVersion != "" {
 		valid := false

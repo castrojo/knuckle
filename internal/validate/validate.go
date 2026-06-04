@@ -13,6 +13,9 @@ import (
 	"github.com/projectbluefin/knuckle/internal/model"
 )
 
+// statFunc is the os.Stat implementation used by BlockDevice. Tests may replace it.
+var statFunc = os.Stat
+
 // Compiled regex patterns — evaluated once at init to catch malformed patterns early.
 var (
 	reHostname       = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$`)
@@ -142,7 +145,7 @@ func DiskPath(s string) error {
 // Call this after DiskPath() in contexts where the local filesystem is available
 // (headless mode, pre-install checks). Do not call from pure format validators.
 func BlockDevice(path string) error {
-	info, err := os.Stat(path)
+	info, err := statFunc(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("disk %s not found — check available disks with `lsblk`", path)

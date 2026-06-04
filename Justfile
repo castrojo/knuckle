@@ -716,6 +716,168 @@ vm-e2e:
     echo ""
     echo "✅ ALL vm-e2e passes PASSED (DHCP · static network · sysext · NVIDIA)"
 
+# FCOS automated e2e: headless install → boot → verify zincati / no update-engine
+vm-e2e-fcos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Cleanup on any exit — kills QEMU if still running
+    cleanup() {
+        if [ -f .vm/fcos-qemu.pid ]; then
+            kill "$(cat .vm/fcos-qemu.pid)" 2>/dev/null || true
+            rm -f .vm/fcos-qemu.pid
+        fi
+    }
+    trap cleanup EXIT
+
+    echo "=== knuckle vm-e2e-fcos: headless FCOS install → boot → verify ==="
+    echo ""
+
+    just build
+
+    # ── Fetch FCOS QEMU image ──────────────────────────────────────────────────
+    FCOS_STREAM="stable"
+    FCOS_ARCH="{{KNUCKLE_ARCH}}"
+    # Normalise arch for the Fedora CDN path (amd64 → x86_64, arm64 → aarch64)
+    if [[ "$FCOS_ARCH" == "amd64" ]]; then
+        FCOS_CDN_ARCH="x86_64"
+    else
+        FCOS_CDN_ARCH="aarch64"
+    fi
+
+    FCOS_META_URL="https://builds.coreos.fedoraproject.org/streams/${FCOS_STREAM}.json"
+    echo "[0/5] Resolving FCOS ${FCOS_STREAM} image URL..."
+    FCOS_VERSION=$(curl -fsSL "$FCOS_META_URL" | \
+        python3 -c "import json,sys; d=json.load(sys.stdin); print(d['architectures']['${FCOS_CDN_ARCH}']['artifacts']['qemu']['release'])")
+    echo "  FCOS version: $FCOS_VERSION"
+
+    FCOS_IMAGE_URL="https://builds.coreos.fedoraproject.org/prod/streams/${FCOS_STREAM}/builds/${FCOS_VERSION}/${FCOS_CDN_ARCH}/fedora-coreos-${FCOS_VERSION}-qemu.${FCOS_CDN_ARCH}.qcow2.xz"
+    FCOS_IMAGE_XZ=".vm/fcos-${FCOS_VERSION}-${FCOS_CDN_ARCH}.qcow2.xz"
+    FCOS_IMAGE=".vm/fcos-${FCOS_VERSION}-${FCOS_CDN_ARCH}.qcow2"
+
+    mkdir -p .vm
+    if [[ ! -f "$FCOS_IMAGE" ]]; then
+        echo "  Downloading FCOS QEMU image (may take a while)..."
+        curl -fsSL -o "$FCOS_IMAGE_XZ" "$FCOS_IMAGE_URL"
+        xz -d "$FCOS_IMAGE_XZ"
+        echo "  Download complete: $FCOS_IMAGE"
+    else
+        echo "  Cached image found: $FCOS_IMAGE"
+    fi
+
+    # Ephemeral SSH key
+    rm -f .vm/fcos_e2e_key .vm/fcos_e2e_key.pub
+    ssh-keygen -t ed25519 -f .vm/fcos_e2e_key -N "" -C "knuckle-fcos-e2e" -q
+    E2E_PUB=$(cat .vm/fcos_e2e_key.pub)
+
+    # CoW overlay + blank target disk
+    rm -f .vm/fcos-boot.qcow2 .vm/fcos-target.qcow2
+    qemu-img create -f qcow2 -b "$(pwd)/$FCOS_IMAGE" -F qcow2 .vm/fcos-boot.qcow2 >/dev/null
+    qemu-img create -f qcow2 .vm/fcos-target.qcow2 20G >/dev/null
+
+    # Ignition for installer VM: core user + sshd
+    # FCOS uses opt/com.coreos/config (not opt/org.flatcar-linux/config)
+    printf '{"ignition":{"version":"3.4.0"},"passwd":{"users":[{"name":"core","sshAuthorizedKeys":["%s"]}]},"systemd":{"units":[{"name":"sshd.service","enabled":true}]}}\n' \
+        "$E2E_PUB" > .vm/fcos-e2e-installer.ign
+
+    # Headless config: FCOS install targeting /dev/vdb
+    printf '{"os":"fcos","channel":"stable","hostname":"fcos-e2e","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["%s"]}],"disk":"/dev/vdb","update_strategy":"off","reboot":false}\n' \
+        "$E2E_PUB" > .vm/fcos-e2e-config.json
+
+    E2E_SSH="ssh {{SSH_OPTS}} -i .vm/fcos_e2e_key -p 2223 -o ServerAliveInterval=30 -o ServerAliveCountMax=10 core@127.0.0.1"
+    E2E_SSH_LONG="$E2E_SSH -o ServerAliveInterval=60 -o ServerAliveCountMax=120"
+    E2E_SCP="scp {{SSH_OPTS}} -i .vm/fcos_e2e_key -P 2223"
+
+    # ── Step 1: Boot installer VM ──────────────────────────────────────────────
+    echo "[1/5] Booting FCOS installer VM..."
+    E2E_QEMU_ARGS=(-m 4096 -smp 2)
+    if [[ "{{KNUCKLE_ARCH}}" == "arm64" ]]; then
+        E2E_QEMU_ARGS+=(-M virt -cpu cortex-a57)
+        E2E_AAVMF=""
+        for candidate in /usr/share/AAVMF/AAVMF_CODE.fd /usr/share/qemu-efi-aarch64/QEMU_EFI.fd; do
+            [ -f "$candidate" ] && E2E_AAVMF="$candidate" && break
+        done
+        [ -n "$E2E_AAVMF" ] && E2E_QEMU_ARGS+=(-drive "if=pflash,format=raw,readonly=on,file=$E2E_AAVMF")
+    else
+        E2E_QEMU_ARGS+=(-enable-kvm)
+    fi
+    {{QEMU}} \
+        "${E2E_QEMU_ARGS[@]}" \
+        -drive if=virtio,file=.vm/fcos-boot.qcow2,format=qcow2 \
+        -drive if=virtio,file=.vm/fcos-target.qcow2,format=qcow2 \
+        -fw_cfg name=opt/com.coreos/config,file=.vm/fcos-e2e-installer.ign \
+        -net nic,model=virtio -net user,hostfwd=tcp::2223-:22 \
+        -display none -daemonize -pidfile .vm/fcos-qemu.pid \
+        -serial file:.vm/fcos-e2e-installer-serial.log
+
+    # ── Step 2: Wait for installer VM SSH ─────────────────────────────────────
+    echo "[2/5] Waiting for installer VM SSH..."
+    ok=0
+    for i in $(seq 1 60); do
+        if $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null; then ok=1; break; fi
+        sleep 3
+    done
+    [ "$ok" -eq 1 ] || { echo "❌ Installer VM SSH timeout"; cat .vm/fcos-e2e-installer-serial.log; exit 1; }
+
+    # ── Step 3: Copy knuckle + config and run install ─────────────────────────
+    echo "[3/5] Running FCOS headless install..."
+    $E2E_SCP ./knuckle core@127.0.0.1:~/knuckle
+    $E2E_SCP .vm/fcos-e2e-config.json core@127.0.0.1:~/fcos-e2e-config.json
+    $E2E_SSH_LONG "sudo ./knuckle headless fcos-e2e-config.json" 2>&1 | tee .vm/fcos-install.log
+    if grep -q "error\|Error\|FAIL" .vm/fcos-install.log; then
+        echo "❌ FCOS install appears to have failed. See .vm/fcos-install.log"
+        exit 1
+    fi
+    kill "$(cat .vm/fcos-qemu.pid)" 2>/dev/null || true
+    rm -f .vm/fcos-qemu.pid
+
+    # ── Step 4: Boot installed FCOS target ─────────────────────────────────────
+    echo "[4/5] Booting installed FCOS target..."
+    {{QEMU}} \
+        "${E2E_QEMU_ARGS[@]}" \
+        -drive if=virtio,file=.vm/fcos-target.qcow2,format=qcow2 \
+        -net nic,model=virtio -net user,hostfwd=tcp::2223-:22 \
+        -display none -daemonize -pidfile .vm/fcos-qemu.pid \
+        -serial file:.vm/fcos-e2e-target-serial.log
+    ok=0
+    for i in $(seq 1 90); do
+        if $E2E_SSH -o ConnectTimeout=3 true 2>/dev/null; then ok=1; break; fi
+        sleep 3
+    done
+    [ "$ok" -eq 1 ] || { echo "❌ Installed FCOS target SSH timeout"; cat .vm/fcos-e2e-target-serial.log; exit 1; }
+
+    # ── Step 5: Verify FCOS-specific services ─────────────────────────────────
+    echo "[5/5] Verifying FCOS-specific services..."
+
+    # zincati.service must be active
+    if $E2E_SSH "systemctl is-active zincati.service" 2>/dev/null | grep -q "^active"; then
+        echo "  ✓ zincati.service is active"
+    else
+        echo "❌ zincati.service is not active on installed FCOS system"
+        $E2E_SSH "systemctl status zincati.service" || true
+        exit 1
+    fi
+
+    # update-engine.service must NOT exist (Flatcar-only)
+    if $E2E_SSH "systemctl cat update-engine.service" 2>/dev/null; then
+        echo "❌ update-engine.service must not exist on FCOS (Flatcar-only)"
+        exit 1
+    else
+        echo "  ✓ update-engine.service absent (correct for FCOS)"
+    fi
+
+    # hostname must match
+    INSTALLED_HOSTNAME=$($E2E_SSH "hostname" 2>/dev/null || echo "")
+    if [[ "$INSTALLED_HOSTNAME" == "fcos-e2e" ]]; then
+        echo "  ✓ hostname = $INSTALLED_HOSTNAME"
+    else
+        echo "❌ hostname mismatch: expected fcos-e2e, got $INSTALLED_HOSTNAME"
+        exit 1
+    fi
+
+    echo ""
+    echo "✅ vm-e2e-fcos PASSED (zincati active · update-engine absent · hostname correct)"
+
 # SSH into running VM
 ssh:
     ssh -t {{SSH_OPTS}} -p 2222 core@127.0.0.1

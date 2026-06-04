@@ -1,11 +1,13 @@
 package validate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/knuckle/internal/model"
 )
@@ -212,6 +214,43 @@ func TestBlockDevice_StatError(t *testing.T) {
 	err := BlockDevice(path)
 	if err == nil {
 		t.Fatal("expected error for inaccessible path, got nil")
+	}
+}
+
+func TestBlockDevice_GenericStatError(t *testing.T) {
+	orig := statFunc
+	t.Cleanup(func() { statFunc = orig })
+	statFunc = func(string) (os.FileInfo, error) {
+		return nil, fmt.Errorf("injected non-ENOENT stat error")
+	}
+	err := BlockDevice("/dev/any")
+	if err == nil {
+		t.Fatal("expected error from injected stat func, got nil")
+	}
+	if !strings.Contains(err.Error(), "injected non-ENOENT stat error") {
+		t.Errorf("expected injected error in message, got: %v", err)
+	}
+}
+
+// fakeBlockDeviceInfo implements os.FileInfo to simulate a block device for tests.
+type fakeBlockDeviceInfo struct{}
+
+func (fakeBlockDeviceInfo) Name() string       { return "fake-blk" }
+func (fakeBlockDeviceInfo) Size() int64        { return 0 }
+func (fakeBlockDeviceInfo) Mode() os.FileMode  { return 0 }
+func (fakeBlockDeviceInfo) ModTime() time.Time { return time.Time{} }
+func (fakeBlockDeviceInfo) IsDir() bool        { return false }
+func (fakeBlockDeviceInfo) Sys() any           { return &syscall.Stat_t{Mode: syscall.S_IFBLK} }
+
+func TestBlockDevice_SuccessViaInjection(t *testing.T) {
+	orig := statFunc
+	t.Cleanup(func() { statFunc = orig })
+	statFunc = func(string) (os.FileInfo, error) {
+		return fakeBlockDeviceInfo{}, nil
+	}
+	err := BlockDevice("/dev/fake-blk")
+	if err != nil {
+		t.Errorf("expected nil error for fake block device, got: %v", err)
 	}
 }
 

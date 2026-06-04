@@ -295,3 +295,23 @@ func TestToInstallConfig_OSPropagation(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate_FCOS_NvidiaRejected(t *testing.T) {
+cfg := &Config{
+OS:                  "fcos",
+Channel:             "stable",
+Hostname:            "fcos-node",
+Network:             NetworkConfig{Mode: "dhcp"},
+Users:               []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:                "/dev/vdb",
+UpdateStrategy:      "reboot",
+NvidiaDriverVersion: "570-open",
+}
+err := cfg.Validate()
+if err == nil {
+t.Fatal("expected error for FCOS + nvidia_driver_version, got nil")
+}
+if !strings.Contains(err.Error(), "nvidia_driver_version: not supported for FCOS") {
+t.Errorf("expected FCOS nvidia rejection message, got: %v", err)
+}
+}
