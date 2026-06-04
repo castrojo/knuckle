@@ -295,3 +295,108 @@ func TestToInstallConfig_OSPropagation(t *testing.T) {
 		})
 	}
 }
+
+// fcosBase returns a minimal valid FCOS headless Config for use in test helpers.
+func fcosBase() *Config {
+	return &Config{
+		OS:       "fcos",
+		Channel:  "stable",
+		Hostname: "fcos-node",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:     "/dev/vdb",
+	}
+}
+
+func TestValidate_FCOSVersionPassthrough(t *testing.T) {
+	// FCOS version strings do not match the Flatcar semver regex (MAJOR.MINOR.PATCH).
+	// Validate() must not call FlatcarVersion for FCOS — it should accept any non-empty
+	// version string without error (the FCOSInstaller will warn and ignore it).
+	cfg := fcosBase()
+	cfg.Version = "38.20230514.3.0"
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("FCOS with version string should pass Validate(), got: %v", err)
+	}
+}
+
+func TestValidate_FCOSNvidiaRejected(t *testing.T) {
+	cfg := fcosBase()
+	cfg.NvidiaDriverVersion = "570-open"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for nvidia_driver_version on FCOS, got nil")
+	}
+	if !strings.Contains(err.Error(), "nvidia_driver_version") {
+		t.Errorf("expected nvidia_driver_version error, got: %v", err)
+	}
+}
+
+func TestValidate_FCOSEtcdLockRejected(t *testing.T) {
+	cfg := fcosBase()
+	cfg.UpdateStrategy = "etcd-lock"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error for etcd-lock on FCOS, got nil")
+	}
+	if !strings.Contains(err.Error(), "etcd-lock") {
+		t.Errorf("expected etcd-lock error, got: %v", err)
+	}
+}
+
+func TestValidate_FCOSUpdateStrategyOffOK(t *testing.T) {
+	cfg := fcosBase()
+	cfg.UpdateStrategy = "off"
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("FCOS update_strategy=off should pass Validate(), got: %v", err)
+	}
+}
+
+func TestValidate_FCOSUpdateStrategyRebootOK(t *testing.T) {
+	cfg := fcosBase()
+	cfg.UpdateStrategy = "reboot"
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("FCOS update_strategy=reboot should pass Validate(), got: %v", err)
+	}
+}
+
+func TestToInstallConfig_FCOSUpdateStrategyMapping(t *testing.T) {
+	tests := []struct {
+		name           string
+		updateStrategy string
+		wantFCOS       string
+		wantFlatcar    string
+	}{
+		{"fcos reboot → immediate", "reboot", model.FCOSStrategyImmediate, ""},
+		{"fcos empty → immediate", "", model.FCOSStrategyImmediate, ""},
+		{"fcos off → disabled", "off", model.FCOSStrategyDisabled, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := fcosBase()
+			cfg.UpdateStrategy = tt.updateStrategy
+			ic := cfg.ToInstallConfig()
+			if ic.UpdateStrategy.FCOSUpdateStrategy != tt.wantFCOS {
+				t.Errorf("FCOSUpdateStrategy = %q, want %q", ic.UpdateStrategy.FCOSUpdateStrategy, tt.wantFCOS)
+			}
+		})
+	}
+}
+
+func TestToInstallConfig_FlatcarUpdateStrategyUnchanged(t *testing.T) {
+	cfg := &Config{
+		OS:             "flatcar",
+		Channel:        "stable",
+		Hostname:       "node",
+		Network:        NetworkConfig{Mode: "dhcp"},
+		Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		Disk:           "/dev/vdb",
+		UpdateStrategy: "etcd-lock",
+	}
+	ic := cfg.ToInstallConfig()
+	if ic.UpdateStrategy.RebootStrategy != "etcd-lock" {
+		t.Errorf("Flatcar RebootStrategy = %q, want etcd-lock", ic.UpdateStrategy.RebootStrategy)
+	}
+	if ic.UpdateStrategy.FCOSUpdateStrategy != "" {
+		t.Errorf("Flatcar FCOSUpdateStrategy should be empty, got %q", ic.UpdateStrategy.FCOSUpdateStrategy)
+	}
+}
