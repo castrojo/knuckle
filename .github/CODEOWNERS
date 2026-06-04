@@ -1,17 +1,9 @@
-# Default: knuckle maintainers review all changes
-* @castrojo @jreilly1821 @ahmedadan
+* @castrojo @p5 @m2Giles @tulilirockz
 
-# Sensitive governance and CI paths — require explicit maintainer review
-.github/                @castrojo @jreilly1821 @ahmedadan
-Justfile                @castrojo @jreilly1821 @ahmedadan
-.pre-commit-config.yaml @castrojo @jreilly1821 @ahmedadan
-renovate.json           @castrojo @jreilly1821 @ahmedadan
-codecov.yml             @castrojo @jreilly1821 @ahmedadan
+.github/workflows/ @castrojo @p5 @m2Giles @tulilirockz
+Justfile           @castrojo @p5 @m2Giles @tulilirockz
 
-# Core installation and system interaction
-internal/install/       @castrojo @jreilly1821
-internal/runner/        @castrojo @jreilly1821
-internal/ignition/      @castrojo @jreilly1821
-
-# Release and build artifacts
-cmd/                    @castrojo @jreilly1821
+# BEGIN TRIAGERS — managed by projectbluefin/common, do not edit manually in downstream repos
+docs/**  @inffy @renner0e @ledif @castrojo @hanthor @ahmedadan
+*.md     @inffy @renner0e @ledif @castrojo @hanthor @ahmedadan
+# END TRIAGERS
