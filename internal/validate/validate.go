@@ -244,6 +244,11 @@ func GroupName(name string) error {
 
 // CheckConsistency validates the overall config for conflicting settings.
 func CheckConsistency(cfg *model.InstallConfig) error {
+	// NVIDIA driver version is Flatcar-only regardless of ignition_url mode
+	if cfg.OS == model.OSFCOS && cfg.NvidiaDriverVersion != "" {
+		return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
+	}
+
 	// External Ignition URL mode: only disk is required, skip auth/network checks
 	if cfg.IgnitionURL != "" {
 		if cfg.Disk.DevPath == "" {

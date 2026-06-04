@@ -181,10 +181,20 @@ func (c *Config) ToInstallConfig() *model.InstallConfig {
 	}
 
 	// Update strategy
-	if c.UpdateStrategy != "" {
-		cfg.UpdateStrategy.RebootStrategy = c.UpdateStrategy
+	if c.OS == model.OSFCOS {
+		// Map headless update_strategy to FCOS zincati strategy
+		switch c.UpdateStrategy {
+		case "off":
+			cfg.UpdateStrategy.FCOSUpdateStrategy = model.FCOSStrategyDisabled
+		default: // "reboot", "" → immediate (coreos-installer default)
+			cfg.UpdateStrategy.FCOSUpdateStrategy = model.FCOSStrategyImmediate
+		}
 	} else {
-		cfg.UpdateStrategy.RebootStrategy = "reboot"
+		if c.UpdateStrategy != "" {
+			cfg.UpdateStrategy.RebootStrategy = c.UpdateStrategy
+		} else {
+			cfg.UpdateStrategy.RebootStrategy = "reboot"
+		}
 	}
 
 	return cfg
@@ -246,9 +256,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Version
-	if err := validate.FlatcarVersion(c.Version); err != nil {
-		return fmt.Errorf("version: %w", err)
+	// Version (Flatcar-only; FCOS version pinning is not supported by coreos-installer)
+	if c.OS != model.OSFCOS {
+		if err := validate.FlatcarVersion(c.Version); err != nil {
+			return fmt.Errorf("version: %w", err)
+		}
 	}
 
 	// Hostname
@@ -349,6 +361,10 @@ func (c *Config) Validate() error {
 	if !validStrategies[c.UpdateStrategy] {
 		return fmt.Errorf("update_strategy: must be reboot, off, or etcd-lock (got %q)", c.UpdateStrategy)
 	}
+	// etcd-lock is Flatcar-only (zincati, used by FCOS, has no equivalent)
+	if c.OS == model.OSFCOS && c.UpdateStrategy == "etcd-lock" {
+		return fmt.Errorf("update_strategy: etcd-lock is not supported for FCOS (use reboot or off)")
+	}
 
 	// Swap size must be within [0, MaxSwapSizeMB]
 	if c.Swap != nil {
@@ -378,6 +394,11 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("tailscale routes: %w", err)
 			}
 		}
+	}
+
+	// NVIDIA driver version is Flatcar-only (FCOS uses out-of-tree modules or layering)
+	if c.OS == model.OSFCOS && c.NvidiaDriverVersion != "" {
+		return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
 	}
 
 	// NVIDIA driver version must be a known series

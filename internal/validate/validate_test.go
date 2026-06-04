@@ -620,6 +620,33 @@ func TestCheckConsistency(t *testing.T) {
 			},
 			wantErr: "",
 		},
+		{
+			name: "FCOS nvidia driver version rejected",
+			modify: func(cfg *model.InstallConfig) {
+				cfg.OS = model.OSFCOS
+				cfg.NvidiaDriverVersion = "570-open"
+			},
+			wantErr: "nvidia_driver_version: not supported on FCOS",
+		},
+		{
+			name: "FCOS nvidia driver version empty is OK",
+			modify: func(cfg *model.InstallConfig) {
+				cfg.OS = model.OSFCOS
+			},
+			wantErr: "",
+		},
+		{
+			name: "FCOS nvidia driver version rejected even with ignition_url",
+			modify: func(cfg *model.InstallConfig) {
+				cfg.OS = model.OSFCOS
+				cfg.IgnitionURL = "https://example.com/fcos.ign"
+				cfg.NvidiaDriverVersion = "570-open"
+				cfg.SSHKeys = nil
+				cfg.Users = nil
+				cfg.Channel = ""
+			},
+			wantErr: "nvidia_driver_version: not supported on FCOS",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
