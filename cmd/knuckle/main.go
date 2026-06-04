@@ -113,7 +113,10 @@ func main() {
 	} else {
 		realRunner := runner.NewRealRunner(logger)
 		prober = probe.NewSystemProber(realRunner)
-		bakeryClient = bakery.NewHTTPClient()
+		bakeryClient = &bakery.DispatchingClient{
+			Flatcar: bakery.NewHTTPClient(),
+			FCOS:    bakery.NewFCOSHTTPClient(),
+		}
 		installer = &install.DispatchingInstaller{
 			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
 			// FCOS: install.NewFCOSInstaller(cmdRunner, logger), // wired by #639
@@ -146,6 +149,12 @@ func main() {
 		// Fetch sysext catalog (non-fatal if it fails)
 		if err := w.FetchSysexts(ctx); err != nil {
 			logger.Warn("sysext catalog fetch failed", "error", err)
+		}
+
+		// Fetch FCOS stream info when OS is FCOS (non-fatal if it fails).
+		// FetchSysexts also resolves this lazily, so this is a best-effort pre-fetch.
+		if err := w.FetchFCOSStream(ctx); err != nil {
+			logger.Warn("FCOS stream info fetch failed", "error", err)
 		}
 
 		// Fetch channel version info (non-fatal if it fails)

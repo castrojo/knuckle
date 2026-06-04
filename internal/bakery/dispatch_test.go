@@ -14,7 +14,7 @@ func TestDispatchingClient_FlatcarDefault(t *testing.T) {
 	fcos := &bakery.MockClient{Entries: []model.SysextEntry{{Name: "podman"}}}
 	d := &bakery.DispatchingClient{Flatcar: flatcar, FCOS: fcos}
 
-	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFlatcar)
+	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFlatcar, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -27,7 +27,7 @@ func TestDispatchingClient_EmptyOSDefaultsToFlatcar(t *testing.T) {
 	flatcar := &bakery.MockClient{Entries: []model.SysextEntry{{Name: "docker"}}}
 	d := &bakery.DispatchingClient{Flatcar: flatcar, FCOS: &bakery.MockClient{}}
 
-	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", "")
+	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", "", 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestDispatchingClient_FCOS(t *testing.T) {
 	fcos := &bakery.MockClient{Entries: []model.SysextEntry{{Name: "podman"}}}
 	d := &bakery.DispatchingClient{Flatcar: flatcar, FCOS: fcos}
 
-	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFCOS)
+	entries, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFCOS, 44)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestDispatchingClient_UnsupportedOS(t *testing.T) {
 		Flatcar: &bakery.MockClient{},
 		FCOS:    &bakery.MockClient{},
 	}
-	_, err := d.FetchCatalogForOS(context.Background(), "amd64", "nixos")
+	_, err := d.FetchCatalogForOS(context.Background(), "amd64", "nixos", 0)
 	if err == nil {
 		t.Fatal("expected error for unsupported OS")
 	}
@@ -63,7 +63,7 @@ func TestDispatchingClient_UnsupportedOS(t *testing.T) {
 
 func TestDispatchingClient_NilFCOS(t *testing.T) {
 	d := &bakery.DispatchingClient{Flatcar: &bakery.MockClient{}}
-	_, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFCOS)
+	_, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFCOS, 44)
 	if err == nil {
 		t.Fatal("expected error when FCOS client is nil")
 	}
@@ -73,7 +73,7 @@ func TestDispatchingClient_PropagatesError(t *testing.T) {
 	flatcar := &bakery.MockClient{Err: fmt.Errorf("network error")}
 	d := &bakery.DispatchingClient{Flatcar: flatcar}
 
-	_, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFlatcar)
+	_, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFlatcar, 0)
 	if err == nil || err.Error() != "network error" {
 		t.Fatalf("expected 'network error', got: %v", err)
 	}

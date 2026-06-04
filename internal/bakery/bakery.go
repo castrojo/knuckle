@@ -386,3 +386,8 @@ func (m *MockClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 	}
 	return filtered, nil
 }
+
+// FetchCatalogFCOS implements FCOSCatalogClient; delegates to FetchCatalogArch and ignores fedoraVersion.
+func (m *MockClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return m.FetchCatalogArch(ctx, arch)
+}
