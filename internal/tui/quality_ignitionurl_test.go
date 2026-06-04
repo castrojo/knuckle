@@ -13,8 +13,10 @@ func TestHandleEnter_Welcome_IgnitionURL_SkipsToStorage(t *testing.T) {
 	w.State.CurrentStep = model.StepWelcome
 	w.State.Config.IgnitionURL = "https://example.com/config.ign"
 	w.State.Config.Channel = "stable"
+	w.State.Config.OS = model.OSFlatcar
 
 	m := New(w)
+	m.welcomeSubView = 1 // already past OS selection
 	_, _ = m.handleEnter()
 
 	if m.Wizard.State.CurrentStep != model.StepStorage {

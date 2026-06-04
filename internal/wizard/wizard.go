@@ -37,6 +37,10 @@ type State struct {
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
 
+	// FCOSStreams holds FCOS stream metadata (stable/testing/next) fetched at startup.
+	// Populated by FetchFCOSStreams; empty until #641 wires the FCOS stream API.
+	FCOSStreams []bakery.ChannelInfo
+
 	// System checks (populated at startup)
 	SystemChecks []SystemCheck
 
@@ -368,10 +372,26 @@ func (w *Wizard) runSystemChecks() {
 	}
 }
 
+// FetchFCOSStreams fetches FCOS stream metadata (stable/testing/next) and stores
+// it in w.State.FCOSStreams. The FCOS stream API requires the bakery FCOS client
+// from #641; until that lands this is a no-op that clears any stale state.
+func (w *Wizard) FetchFCOSStreams(_ context.Context) error {
+	w.State.FCOSStreams = nil // populated by bakery FCOS client in #641
+	return nil
+}
+
 // FetchSysexts loads the sysext catalog for the configured architecture.
+// For FCOS the catalog is fetched via the FCOS bakery client (requires #641);
+// until that lands the sysext list is left empty so the step gracefully degrades.
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
-// auto-selected and the default driver series is pre-configured.
+// auto-selected and the default driver series is pre-configured (Flatcar only).
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
+	if w.State.Config.OS == model.OSFCOS {
+		// FCOS sysext catalog fetch requires FetchCatalogFCOS from #641.
+		// Leave Sysexts empty; StepSysext will render a "no extensions" notice.
+		w.State.Sysexts = nil
+		return nil
+	}
 	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)

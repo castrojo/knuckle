@@ -68,6 +68,10 @@ type Model struct {
 	tailscaleRoutesIn  string
 	showAdvanced       bool
 
+	// welcomeSubView tracks sub-steps inside StepWelcome:
+	// 0 = OS picker (Flatcar / FCOS), 1 = channel / stream picker
+	welcomeSubView int
+
 	// Sysext list (bubbles/list)
 	sysextList      list.Model
 	sysextListReady bool
@@ -221,6 +225,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Intercept shift+tab before huh form — always means "go back a step"
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "shift+tab" {
+		// On StepWelcome sub-view 1, shift+tab goes back to OS picker
+		if m.Wizard.State.CurrentStep == model.StepWelcome && m.welcomeSubView == 1 {
+			m.welcomeSubView = 0
+			m.cursor = 0
+			m.err = nil
+			return m, nil
+		}
 		if m.Wizard.State.CurrentStep > model.StepWelcome {
 			m.Wizard.Previous()
 			m.err = nil
@@ -374,6 +385,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.cursor = m.sysextListCursorIdx()
 			return m, cmd
 		}
+		// On StepWelcome sub-view 1, go back to sub-view 0 instead of Previous step.
+		if m.Wizard.State.CurrentStep == model.StepWelcome && m.welcomeSubView == 1 {
+			m.welcomeSubView = 0
+			m.cursor = 0
+			m.err = nil
+			return m, nil
+		}
 		m.Wizard.Previous()
 		m.err = nil
 		m.initStepFields()
@@ -424,6 +442,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) maxCursor() int {
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
+		if m.welcomeSubView == 0 {
+			return m.osCardCount()
+		}
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			return m.fcosStreamCount()
+		}
 		return m.channelCardCount()
 	case model.StepStorage:
 		return len(m.Wizard.State.Disks)
@@ -432,6 +456,9 @@ func (m *Model) maxCursor() int {
 	case model.StepNvidia:
 		return len(model.NvidiaDriverOptions)
 	case model.StepUpdate:
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			return 2
+		}
 		return 3
 	default:
 		return 1
@@ -444,10 +471,27 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 
 	switch step {
 	case model.StepWelcome:
-		// Apply channel selection from card cursor
-		channels := m.channelList()
-		if m.cursor >= 0 && m.cursor < len(channels) {
-			m.Wizard.State.Config.Channel = channels[m.cursor]
+		if m.welcomeSubView == 0 {
+			// Sub-view 0: OS selection — set OS and advance to channel/stream picker
+			osList := []string{model.OSFlatcar, model.OSFCOS}
+			if m.cursor >= 0 && m.cursor < len(osList) {
+				m.Wizard.State.Config.OS = osList[m.cursor]
+			}
+			m.welcomeSubView = 1
+			m.cursor = 0
+			return m, nil
+		}
+		// Sub-view 1: channel / stream selection
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			streams := m.fcosStreamList()
+			if m.cursor >= 0 && m.cursor < len(streams) {
+				m.Wizard.State.Config.Channel = streams[m.cursor]
+			}
+		} else {
+			channels := m.channelList()
+			if m.cursor >= 0 && m.cursor < len(channels) {
+				m.Wizard.State.Config.Channel = channels[m.cursor]
+			}
 		}
 		// If IgnitionURL is set, skip directly to Storage
 		if m.Wizard.State.Config.IgnitionURL != "" {
@@ -481,9 +525,16 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.Wizard.State.Config.NvidiaDriverVersion = model.NvidiaDriverOptions[m.cursor].ID
 		}
 	case model.StepUpdate:
-		strategies := []string{"reboot", "off", "etcd-lock"}
-		if m.cursor >= 0 && m.cursor < len(strategies) {
-			m.Wizard.State.Config.UpdateStrategy.RebootStrategy = strategies[m.cursor]
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			fcosStrategies := []string{model.FCOSStrategyImmediate, model.FCOSStrategyDisabled}
+			if m.cursor >= 0 && m.cursor < len(fcosStrategies) {
+				m.Wizard.State.Config.UpdateStrategy.FCOSUpdateStrategy = fcosStrategies[m.cursor]
+			}
+		} else {
+			strategies := []string{"reboot", "off", "etcd-lock"}
+			if m.cursor >= 0 && m.cursor < len(strategies) {
+				m.Wizard.State.Config.UpdateStrategy.RebootStrategy = strategies[m.cursor]
+			}
 		}
 	case model.StepUser:
 		// Collect local keys first so they're always included even without GitHub.
@@ -695,7 +746,8 @@ func (m *Model) initStepFields() {
 	m.fieldIdx = 0
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
-		// Card-based channel selector — no text fields
+		// Card-based OS + channel selector — no text fields; reset sub-view
+		m.welcomeSubView = 0
 		m.fields = nil
 	case model.StepNvidia:
 		// Position cursor at the currently configured driver version.
@@ -765,7 +817,13 @@ func (m *Model) render() string {
 
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
-		b.WriteString(m.viewChannelCards())
+		if m.welcomeSubView == 0 {
+			b.WriteString(m.viewOSCards())
+		} else if m.Wizard.State.Config.OS == model.OSFCOS {
+			b.WriteString(m.viewFCOSStreamCards())
+		} else {
+			b.WriteString(m.viewChannelCards())
+		}
 	case model.StepStorage:
 		b.WriteString(m.viewStorage())
 	case model.StepSysext:
@@ -1129,6 +1187,13 @@ func wordWrap(s string, width int) []string {
 }
 
 func (m *Model) viewUpdate() string {
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		return m.viewUpdateFCOS()
+	}
+	return m.viewUpdateFlatcar()
+}
+
+func (m *Model) viewUpdateFlatcar() string {
 	var b strings.Builder
 	b.WriteString("Update Strategy\n\nChoose how Flatcar will handle OS updates:\n\n")
 
@@ -1173,11 +1238,55 @@ func (m *Model) viewUpdate() string {
 	return b.String()
 }
 
+func (m *Model) viewUpdateFCOS() string {
+	var b strings.Builder
+	b.WriteString("Update Strategy\n\nChoose how Fedora CoreOS (zincati) handles OS updates:\n\n")
+
+	type option struct {
+		name string
+		desc []string
+	}
+	options := []option{
+		{"immediate (Recommended)", []string{
+			"Auto-update and reboot immediately via zincati.",
+			"Best for: single nodes, dev environments",
+		}},
+		{"disabled", []string{
+			"Disable automatic updates via zincati ([updates] enabled = false).",
+			"You must apply updates and reboot manually.",
+			"Best for: manually managed infrastructure",
+		}},
+	}
+
+	for i, opt := range options {
+		cursor := "  "
+		if i == m.cursor {
+			cursor = "▸ "
+		}
+		line := fmt.Sprintf("%s%s", cursor, opt.name)
+		if i == m.cursor {
+			b.WriteString(selectedStyle.Render(line))
+		} else {
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
+		for _, d := range opt.desc {
+			fmt.Fprintf(&b, "    %s\n", d)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 func (m *Model) viewInstall() string {
 	var b strings.Builder
 	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 
-	b.WriteString("Installing Flatcar Container Linux...\n\n")
+	osName := "Flatcar Container Linux"
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		osName = "Fedora CoreOS"
+	}
+	fmt.Fprintf(&b, "Installing %s...\n\n", osName)
 
 	// Completed phases with green checkmarks
 	for _, msg := range m.Wizard.State.ProgressMessages {
@@ -1200,13 +1309,19 @@ func (m *Model) viewDone() string {
 	var b strings.Builder
 	cfg := &m.Wizard.State.Config
 
+	isFCOS := cfg.OS == model.OSFCOS
+	osName := "Flatcar Container Linux"
+	if isFCOS {
+		osName = "Fedora CoreOS"
+	}
+
 	if cfg.DryRun {
 		b.WriteString("\n✅ Installation Complete! (dry-run — no changes made)\n\n")
 	} else {
 		b.WriteString("\n✅ Installation Complete!\n\n")
 	}
 
-	b.WriteString("Flatcar Container Linux has been installed:\n\n")
+	fmt.Fprintf(&b, "%s has been installed:\n\n", osName)
 
 	if cfg.Disk.Model != "" {
 		fmt.Fprintf(&b, "  Disk:     %s (%s)\n", cfg.Disk.Model, cfg.Disk.SizeHuman)
@@ -1236,8 +1351,13 @@ func (m *Model) viewDone() string {
 	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	b.WriteString("\n")
 	b.WriteString(dim.Render("Community & help:") + "\n")
-	b.WriteString("  " + link.Render("https://flatcar.org/discord") + dim.Render("  — Flatcar community on Discord") + "\n")
-	b.WriteString("  " + link.Render("https://www.flatcar.org/docs/") + dim.Render("  — Flatcar documentation") + "\n")
+	if isFCOS {
+		b.WriteString("  " + link.Render("https://discussion.fedoraproject.org") + dim.Render("  — Fedora CoreOS community") + "\n")
+		b.WriteString("  " + link.Render("https://docs.fedoraproject.org/en-US/fedora-coreos/") + dim.Render("  — Fedora CoreOS documentation") + "\n")
+	} else {
+		b.WriteString("  " + link.Render("https://flatcar.org/discord") + dim.Render("  — Flatcar community on Discord") + "\n")
+		b.WriteString("  " + link.Render("https://www.flatcar.org/docs/") + dim.Render("  — Flatcar documentation") + "\n")
+	}
 
 	b.WriteString("\n")
 	if cfg.DryRun {

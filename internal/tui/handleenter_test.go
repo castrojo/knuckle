@@ -125,9 +125,11 @@ func TestHandleEnter_Welcome_ChannelSelection(t *testing.T) {
 	w.State.CurrentStep = model.StepWelcome
 	w.State.Config.Channel = "stable" // pre-set to pass validation
 	w.State.Config.Hostname = "test"
+	w.State.Config.OS = model.OSFlatcar
 
 	m := New(w)
-	m.cursor = 2 // "beta" (channels are: stable, lts, beta, alpha)
+	m.welcomeSubView = 1 // already past OS selection
+	m.cursor = 2         // "beta" (channels are: stable, lts, beta, alpha)
 
 	_, _ = m.handleEnter()
 
@@ -140,9 +142,11 @@ func TestHandleEnter_Welcome_WithIgnitionURL(t *testing.T) {
 	w := newTestWizard()
 	w.State.CurrentStep = model.StepWelcome
 	w.State.Config.Channel = "stable"
+	w.State.Config.OS = model.OSFlatcar
 	w.State.Config.IgnitionURL = "https://example.com/config.ign"
 
 	m := New(w)
+	m.welcomeSubView = 1 // already past OS selection
 	m.cursor = 0
 
 	_, _ = m.handleEnter()
@@ -243,7 +247,7 @@ func TestMaxCursor_AllSteps(t *testing.T) {
 		disks  int
 		expect int
 	}{
-		{model.StepWelcome, 0, 4}, // 4 channels
+		{model.StepWelcome, 0, 2}, // 2 OS options (sub-view 0: Flatcar / FCOS)
 		{model.StepStorage, 3, 3}, // number of disks
 		{model.StepStorage, 0, 0}, // no disks
 		{model.StepSysext, 0, 0},  // empty sysexts

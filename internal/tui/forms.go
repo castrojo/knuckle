@@ -366,6 +366,187 @@ func (m *Model) renderZenChrome() string {
 	return b.String()
 }
 
+// viewOSCards renders the OS selection cards (Flatcar Container Linux / Fedora CoreOS).
+// This is the first sub-view inside StepWelcome.
+func (m *Model) viewOSCards() string {
+	var b strings.Builder
+
+	selectedBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("51")).
+		Padding(0, 1).
+		Width(60)
+	normalBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(60)
+	nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+	nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
+
+	type osOption struct {
+		id   string
+		name string
+		desc string
+	}
+	options := []osOption{
+		{
+			id:   "flatcar",
+			name: "Flatcar Container Linux",
+			desc: "Immutable, auto-updating Linux for containers. Official Flatcar release.",
+		},
+		{
+			id:   "fcos",
+			name: "Fedora CoreOS",
+			desc: "Automatically updating, minimal, container-focused OS from the Fedora Project.",
+		},
+	}
+
+	b.WriteString("  Select operating system:\n\n")
+
+	for i, opt := range options {
+		selected := i == m.cursor
+
+		var card strings.Builder
+		cursor := "  "
+		nameStyle := nameNormal
+		if selected {
+			cursor = cursorStyle.Render("▸ ")
+			nameStyle = nameSelected
+		}
+		card.WriteString(cursor + nameStyle.Render(opt.name))
+		card.WriteString("\n")
+		card.WriteString("  " + descStyle.Render(opt.desc))
+
+		if selected {
+			b.WriteString(selectedBorder.Render(card.String()))
+		} else {
+			b.WriteString(normalBorder.Render(card.String()))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	b.WriteString(dim.Render("  ↑↓/jk select · enter continue"))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+// osCardCount returns the number of OS selection cards.
+func (m *Model) osCardCount() int { return 2 }
+
+// fcosStreamList returns the ordered FCOS stream names.
+func (m *Model) fcosStreamList() []string {
+	return []string{"stable", "testing", "next"}
+}
+
+// fcosStreamCount returns the number of FCOS stream cards.
+func (m *Model) fcosStreamCount() int {
+	return len(m.fcosStreamList())
+}
+
+// fcosStreamMeta holds display info for each FCOS stream card.
+type fcosStreamMeta struct {
+	name    string
+	version string
+	desc    string
+}
+
+// getFCOSStreamMeta builds display metadata for each FCOS stream.
+func (m *Model) getFCOSStreamMeta() []fcosStreamMeta {
+	streams := m.fcosStreamList()
+	metas := make([]fcosStreamMeta, len(streams))
+
+	descs := map[string]string{
+		"stable":  "Production-ready. Thoroughly tested before release.",
+		"testing": "Next stable candidate. Wider testing before promotion.",
+		"next":    "Bleeding edge. Latest packages, for development only.",
+	}
+
+	for i, s := range streams {
+		metas[i] = fcosStreamMeta{name: s, desc: descs[s]}
+		// Populate version from fetched FCOS stream data when available (#641).
+		for _, info := range m.Wizard.State.FCOSStreams {
+			if info.Channel == s {
+				metas[i].version = info.Version
+				break
+			}
+		}
+	}
+	return metas
+}
+
+// viewFCOSStreamCards renders FCOS stream selection cards (stable/testing/next).
+func (m *Model) viewFCOSStreamCards() string {
+	var b strings.Builder
+
+	selectedBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("51")).
+		Padding(0, 1).
+		Width(60)
+	normalBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(60)
+	nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+	nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	versionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
+
+	b.WriteString("  Select a release stream:\n\n")
+
+	metas := m.getFCOSStreamMeta()
+	for i, meta := range metas {
+		selected := i == m.cursor
+
+		var card strings.Builder
+		cursor := "  "
+		nameStyle := nameNormal
+		if selected {
+			cursor = cursorStyle.Render("▸ ")
+			nameStyle = nameSelected
+		}
+
+		displayName := strings.ToUpper(meta.name[:1]) + meta.name[1:]
+		name := nameStyle.Render(displayName)
+		ver := ""
+		if meta.version != "" {
+			ver = versionStyle.Render("v" + meta.version)
+		}
+		padding := 60 - 4 - len(displayName) - len("v"+meta.version)
+		if padding < 1 {
+			padding = 1
+		}
+		card.WriteString(cursor + name + strings.Repeat(" ", padding) + ver)
+		card.WriteString("\n")
+		card.WriteString("  " + descStyle.Render(meta.desc))
+
+		if selected {
+			b.WriteString(selectedBorder.Render(card.String()))
+		} else {
+			b.WriteString(normalBorder.Render(card.String()))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	b.WriteString(dim.Render("  Ctrl+A advanced options · ↑↓/jk select · enter continue"))
+	b.WriteString("\n")
+	b.WriteString(dim.Render("  Fedora CoreOS community: ") + link.Render("https://discussion.fedoraproject.org"))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
 // channelList returns the ordered list of channel keys for the card selector.
 func (m *Model) channelList() []string {
 	return []string{"stable", "lts", "beta", "alpha"}
@@ -510,7 +691,11 @@ func (m *Model) viewChannelCards() string {
 	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	b.WriteString(dim.Render("  Ctrl+A advanced options · ↑↓/jk select · enter continue"))
 	b.WriteString("\n")
-	b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		b.WriteString(dim.Render("  Fedora CoreOS community: ") + link.Render("https://discussion.fedoraproject.org"))
+	} else {
+		b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
+	}
 	b.WriteString("\n")
 
 	return b.String()
