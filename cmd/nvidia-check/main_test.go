@@ -82,7 +82,9 @@ func fakeGHContent(content string) []byte {
 func TestFetchNvidiaDocs_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write(fakeGHContent("nvidia-drivers-550 nvidia-drivers-latest"))
+		if _, err := w.Write(fakeGHContent("nvidia-drivers-550 nvidia-drivers-latest")); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -118,7 +120,9 @@ func TestFetchNvidiaDocs_HTTPError(t *testing.T) {
 func TestFetchNvidiaDocs_BadEncoding(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := ghContentResponse{Content: "plain text", Encoding: "utf-8"}
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -135,7 +139,9 @@ func TestFetchNvidiaDocs_BadEncoding(t *testing.T) {
 func TestFetchNvidiaDocs_InvalidBase64(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := ghContentResponse{Content: "!!!invalid-base64!!!", Encoding: "base64"}
-		json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -151,7 +157,9 @@ func TestFetchNvidiaDocs_InvalidBase64(t *testing.T) {
 
 func TestFetchNvidiaDocs_InvalidJSON(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("not json"))
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -179,47 +187,47 @@ func TestFetchNvidiaDocs_ConnectionRefused(t *testing.T) {
 // --- compareDriverSeries tests ---
 
 func TestCompareDriverSeries_AllMatch(t *testing.T) {
-docSeries := []string{"nvidia-drivers-550", "nvidia-drivers-latest"}
-modelIDs := []string{"550", "latest"}
+	docSeries := []string{"nvidia-drivers-550", "nvidia-drivers-latest"}
+	modelIDs := []string{"550", "latest"}
 
-missing, extra := compareDriverSeries(docSeries, modelIDs)
-if len(missing) != 0 {
-t.Errorf("expected no missing, got %v", missing)
-}
-if len(extra) != 0 {
-t.Errorf("expected no extra, got %v", extra)
-}
+	missing, extra := compareDriverSeries(docSeries, modelIDs)
+	if len(missing) != 0 {
+		t.Errorf("expected no missing, got %v", missing)
+	}
+	if len(extra) != 0 {
+		t.Errorf("expected no extra, got %v", extra)
+	}
 }
 
 func TestCompareDriverSeries_MissingInModel(t *testing.T) {
-docSeries := []string{"nvidia-drivers-550", "nvidia-drivers-535", "nvidia-drivers-latest"}
-modelIDs := []string{"550", "latest"}
+	docSeries := []string{"nvidia-drivers-550", "nvidia-drivers-535", "nvidia-drivers-latest"}
+	modelIDs := []string{"550", "latest"}
 
-missing, extra := compareDriverSeries(docSeries, modelIDs)
-if len(missing) != 1 || missing[0] != "535" {
-t.Errorf("expected missing=[535], got %v", missing)
-}
-if len(extra) != 0 {
-t.Errorf("expected no extra, got %v", extra)
-}
+	missing, extra := compareDriverSeries(docSeries, modelIDs)
+	if len(missing) != 1 || missing[0] != "535" {
+		t.Errorf("expected missing=[535], got %v", missing)
+	}
+	if len(extra) != 0 {
+		t.Errorf("expected no extra, got %v", extra)
+	}
 }
 
 func TestCompareDriverSeries_ExtraInModel(t *testing.T) {
-docSeries := []string{"nvidia-drivers-latest"}
-modelIDs := []string{"550", "latest"}
+	docSeries := []string{"nvidia-drivers-latest"}
+	modelIDs := []string{"550", "latest"}
 
-missing, extra := compareDriverSeries(docSeries, modelIDs)
-if len(missing) != 0 {
-t.Errorf("expected no missing, got %v", missing)
-}
-if len(extra) != 1 || extra[0] != "550" {
-t.Errorf("expected extra=[550], got %v", extra)
-}
+	missing, extra := compareDriverSeries(docSeries, modelIDs)
+	if len(missing) != 0 {
+		t.Errorf("expected no missing, got %v", missing)
+	}
+	if len(extra) != 1 || extra[0] != "550" {
+		t.Errorf("expected extra=[550], got %v", extra)
+	}
 }
 
 func TestCompareDriverSeries_Empty(t *testing.T) {
-missing, extra := compareDriverSeries(nil, nil)
-if len(missing) != 0 || len(extra) != 0 {
-t.Errorf("expected empty results, got missing=%v extra=%v", missing, extra)
-}
+	missing, extra := compareDriverSeries(nil, nil)
+	if len(missing) != 0 || len(extra) != 0 {
+		t.Errorf("expected empty results, got missing=%v extra=%v", missing, extra)
+	}
 }
