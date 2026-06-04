@@ -246,9 +246,18 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Version
-	if err := validate.FlatcarVersion(c.Version); err != nil {
-		return fmt.Errorf("version: %w", err)
+	// Version: Flatcar supports version pinning; FCOS does not (coreos-installer has no
+	// equivalent flag). For FCOS, skip version validation — Run() will log a warning
+	// if the caller supplied a non-empty version.
+	if c.OS != model.OSFCOS {
+		if err := validate.FlatcarVersion(c.Version); err != nil {
+			return fmt.Errorf("version: %w", err)
+		}
+	}
+
+	// NvidiaDriverVersion is not supported on FCOS
+	if c.OS == model.OSFCOS && c.NvidiaDriverVersion != "" {
+		return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
 	}
 
 	// Hostname
@@ -417,6 +426,13 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 	fmt.Println("→ Validating configuration...")
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
+	}
+	// FCOS does not support version pinning — coreos-installer always installs the
+	// latest build for the stream. Warn if the caller supplied a version string.
+	if cfg.OS == model.OSFCOS && cfg.Version != "" {
+		logger.Warn("version field ignored for FCOS: coreos-installer does not support version pinning",
+			"version", cfg.Version)
+		fmt.Printf("  ⚠ version %q ignored — FCOS does not support version pinning\n", cfg.Version)
 	}
 	if cfg.Disk != "" && !cfg.DryRun {
 		if err := validateBlockDeviceFunc(cfg.Disk); err != nil {

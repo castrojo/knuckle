@@ -1867,3 +1867,92 @@ func TestRun_ConsistencyCheckFails(t *testing.T) {
 		t.Error("installer should not be called after consistency failure")
 	}
 }
+
+// --- FCOS validation tests ---
+
+func TestValidate_FCOS_NvidiaDriverVersion_Rejected(t *testing.T) {
+cfg := &Config{
+OS:                  "fcos",
+Channel:             "stable",
+Hostname:            "fcos-node",
+Network:             NetworkConfig{Mode: "dhcp"},
+Users:               []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:                "/dev/vda",
+NvidiaDriverVersion: "570-open",
+}
+err := cfg.Validate()
+if err == nil {
+t.Fatal("expected error: nvidia_driver_version should be rejected for FCOS")
+}
+if !strings.Contains(err.Error(), "nvidia_driver_version") {
+t.Errorf("error should mention nvidia_driver_version, got: %v", err)
+}
+if !strings.Contains(err.Error(), "FCOS") {
+t.Errorf("error should mention FCOS, got: %v", err)
+}
+}
+
+func TestValidate_FCOS_Version_NoError(t *testing.T) {
+// FCOS ignores the version field — no validation error should be returned.
+cfg := &Config{
+OS:             "fcos",
+Channel:        "stable",
+Hostname:       "fcos-node",
+Network:        NetworkConfig{Mode: "dhcp"},
+Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:           "/dev/vda",
+Version:        "9.9.9",
+UpdateStrategy: "reboot",
+}
+if err := cfg.Validate(); err != nil {
+t.Errorf("unexpected error for FCOS config with version field: %v", err)
+}
+}
+
+func TestValidate_FCOS_Channel_Valid(t *testing.T) {
+for _, ch := range []string{"stable", "testing", "next"} {
+cfg := &Config{
+OS:             "fcos",
+Channel:        ch,
+Hostname:       "fcos-node",
+Network:        NetworkConfig{Mode: "dhcp"},
+Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:           "/dev/vda",
+UpdateStrategy: "reboot",
+}
+if err := cfg.Validate(); err != nil {
+t.Errorf("channel %q: unexpected error: %v", ch, err)
+}
+}
+}
+
+func TestRun_FCOS_VersionWarning(t *testing.T) {
+// Run should succeed and log a warning when FCOS config has a version field set.
+catalog := []model.SysextEntry{}
+defer mockBakery(catalog, nil)()
+
+cfg := &Config{
+OS:             "fcos",
+Channel:        "stable",
+Hostname:       "fcos-node",
+Network:        NetworkConfig{Mode: "dhcp"},
+Users:          []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+Disk:           "/dev/vda",
+Version:        "44.1.0",
+UpdateStrategy: "reboot",
+DryRun:         true,
+}
+
+installer := &mockInstaller{}
+// Capture log output to verify warning is emitted
+var logBuf strings.Builder
+logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+if err := Run(context.Background(), cfg, installer, logger); err != nil {
+t.Fatalf("Run: unexpected error: %v", err)
+}
+logOutput := logBuf.String()
+if !strings.Contains(logOutput, "version") {
+t.Errorf("expected log warning about version field, got: %q", logOutput)
+}
+}

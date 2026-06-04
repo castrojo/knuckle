@@ -69,6 +69,30 @@ This document is the authoritative reference for every field in that file.
 }
 ```
 
+### FCOS minimal install
+
+```json
+{
+  "os": "fcos",
+  "channel": "stable",
+  "hostname": "fcos-node",
+  "disk": "/dev/sda",
+  "network": { "mode": "dhcp" },
+  "users": [
+    {
+      "username": "core",
+      "ssh_keys": ["ssh-ed25519 AAAA... you@host"]
+    }
+  ]
+}
+```
+
+> **FCOS limitations**
+> - `version`: ignored — `coreos-installer` always installs the latest stream build
+> - `nvidia_driver_version`: not supported on FCOS (validation error)
+> - `update_strategy`: has no effect — use zincati configuration in a custom Ignition config
+> - `update_strategy: etcd-lock` is Flatcar-specific and unavailable on FCOS
+
 ---
 
 ## Full field reference
@@ -77,17 +101,18 @@ This document is the authoritative reference for every field in that file.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `channel` | string | no | `"stable"` | Flatcar release channel. One of `stable`, `beta`, `alpha`, `lts`, `edge`. |
-| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Omit to use the latest for the channel. |
+| `os` | string | no | `"flatcar"` | Target OS. One of `flatcar`, `fcos`. Selects the installer and available channels. |
+| `channel` | string | no | `"stable"` | Release channel. For Flatcar: `stable`, `beta`, `alpha`, `lts`, `edge`. For FCOS: `stable`, `testing`, `next`. |
+| `version` | string | no | _(latest)_ | Pin to a specific Flatcar version, e.g. `"3510.2.8"`. Omit to use the latest for the channel. **Ignored for FCOS** — `coreos-installer` always installs the latest stream build; a warning is logged. |
 | `hostname` | string | yes | — | Machine hostname. Must be a valid RFC 1123 hostname label. |
 | `disk` | string | yes* | — | Target disk path. Use a stable `/dev/disk/by-id/...` path in production. `*` Not required when `ignition_url` is set. |
 | `network` | object | yes | — | See [Network](#network). |
 | `users` | array | yes* | — | One or more user accounts. `*` Not required when `ignition_url` is set. |
-| `update_strategy` | string | no | `"reboot"` | Flatcar update strategy. One of `reboot`, `off`, `etcd-lock`. |
-| `arch` | string | no | `"amd64"` | CPU architecture. One of `amd64`, `arm64`. `arm64` is not available on the `lts` channel. |
+| `update_strategy` | string | no | `"reboot"` | Flatcar update strategy. One of `reboot`, `off`, `etcd-lock`. **Not applicable for FCOS** (use zincati config in Ignition). |
+| `arch` | string | no | `"amd64"` | CPU architecture. One of `amd64`, `arm64`. `arm64` is not available on the Flatcar `lts` channel. |
 | `timezone` | string | no | `"UTC"` | System timezone (IANA format, e.g. `"America/New_York"`). |
 | `sysexts` | string[] | no | `[]` | List of system extension names from the bakery catalog (e.g. `["docker", "kubernetes"]`). |
-| `nvidia_driver_version` | string | no | _(none)_ | NVIDIA kernel driver series. One of `570-open` (default/recommended), `550-open`, `535-open`, `460`. Omit to skip NVIDIA setup. |
+| `nvidia_driver_version` | string | no | _(none)_ | NVIDIA kernel driver series. One of `570-open` (default/recommended), `550-open`, `535-open`, `460`. Omit to skip NVIDIA setup. **Not supported for FCOS.** |
 | `tailscale` | object | no | — | See [Tailscale](#tailscale). Omit or leave `auth_key` blank to skip. |
 | `swap` | object | no | _(enabled, 4 GiB)_ | See [Swap](#swap). Omit for the default (4 GiB enabled). |
 | `ignition_url` | string | no | — | URL of an external Ignition config. When set, knuckle downloads this config instead of generating one — only `disk` is then required. Must be HTTPS. |
@@ -229,8 +254,9 @@ The URL must be HTTPS and reachable from the installer environment.
 
 Knuckle validates the config before touching the disk. Key rules:
 
-- `channel` must be one of `stable`, `beta`, `alpha`, `lts`, `edge`
-- `version`, if set, must match `X.Y.Z` (all numeric components)
+- `os` must be `flatcar` or `fcos` (defaults to `flatcar`)
+- `channel` must be one of `stable`, `beta`, `alpha`, `lts`, `edge` (Flatcar) or `stable`, `testing`, `next` (FCOS)
+- `version`, if set, must match `X.Y.Z` (all numeric components); ignored with a warning for FCOS
 - `hostname` must be a valid RFC 1123 hostname label (no dots; max 63 chars)
 - `disk` must start with `/dev/` and not contain `..` path traversal
 - Static network: `interface`, `address` (CIDR), and `gateway` are all required
@@ -238,10 +264,11 @@ Knuckle validates the config before touching the disk. Key rules:
 - Each user needs a valid POSIX username and at least one auth method
 - `password` must be a valid crypt hash (not plaintext)
 - `update_strategy` must be `reboot`, `off`, or `etcd-lock`
-- `nvidia_driver_version` must be one of `570-open`, `550-open`, `535-open`, `460`
+- `nvidia_driver_version` must be one of `570-open`, `550-open`, `535-open`, `460`; **not allowed for FCOS**
 - `swap.size_mb` must be between 0 and 32768 (MiB)
 - `tailscale.auth_key` must begin with `tskey-auth-`
 - `ignition_url` must be an HTTPS URL
+- `arch: arm64` is not available on the Flatcar `lts` channel
 
 ---
 
