@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/fcos"
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/install"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -17,6 +18,9 @@ import (
 
 // fetchAllChannelsFn is a package-level hook so tests can inject a mock.
 var fetchAllChannelsFn = bakery.FetchAllChannels
+
+// fetchFCOSStreamFn is a package-level hook so tests can inject a mock.
+var fetchFCOSStreamFn = fcos.FetchStreamFedoraVersion
 
 // State holds the complete wizard state
 type State struct {
@@ -33,6 +37,11 @@ type State struct {
 	// on the installed system too — used to auto-select the nvidia-runtime sysext.
 	NvidiaGPUDetected bool
 	NvidiaGPUs        []probe.NvidiaGPUInfo // detected GPU details for display in GPU Setup screen
+
+	// FedoraVersion is the Fedora major version for the selected FCOS stream
+	// (e.g. 44 for stable). Fetched at startup via fcos.FetchStreamFedoraVersion.
+	// Zero when OS is Flatcar or when the fetch has not yet run.
+	FedoraVersion int
 
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
@@ -369,10 +378,19 @@ func (w *Wizard) runSystemChecks() {
 }
 
 // FetchSysexts loads the sysext catalog for the configured architecture.
+// For FCOS, it uses FetchCatalogForOS on the DispatchingClient to route to the
+// fedora-sysexts/community catalog filtered by the Fedora version from stream metadata.
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
 // auto-selected and the default driver series is pre-configured.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
-	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	var sysexts []model.SysextEntry
+	var err error
+
+	if dc, ok := w.Bakery.(*bakery.DispatchingClient); ok {
+		sysexts, err = dc.FetchCatalogForOS(ctx, w.State.Config.Arch, w.State.Config.OS)
+	} else {
+		sysexts, err = w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	}
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)
 	}
@@ -390,6 +408,30 @@ func (w *Wizard) FetchSysexts(ctx context.Context) error {
 				break
 			}
 		}
+	}
+	return nil
+}
+
+// FetchFCOSStreamVersion fetches the Fedora major version for the configured
+// FCOS stream, stores it in State.FedoraVersion, and wires up the FCOS bakery
+// client on the DispatchingClient. No-op when OS is not FCOS.
+// Should be called when the user selects FCOS, before FetchSysexts.
+func (w *Wizard) FetchFCOSStreamVersion(ctx context.Context) error {
+	if w.State.Config.OS != model.OSFCOS {
+		return nil
+	}
+	stream := w.State.Config.Channel
+	if stream == "" {
+		stream = "stable"
+	}
+	v, err := fetchFCOSStreamFn(ctx, stream)
+	if err != nil {
+		return fmt.Errorf("fetching FCOS stream version: %w", err)
+	}
+	w.State.FedoraVersion = v
+
+	if dc, ok := w.Bakery.(*bakery.DispatchingClient); ok {
+		dc.FCOS = bakery.NewFCOSClient(v)
 	}
 	return nil
 }

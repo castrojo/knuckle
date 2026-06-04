@@ -113,7 +113,11 @@ func main() {
 	} else {
 		realRunner := runner.NewRealRunner(logger)
 		prober = probe.NewSystemProber(realRunner)
-		bakeryClient = bakery.NewHTTPClient()
+		bakeryClient = &bakery.DispatchingClient{
+			Flatcar: bakery.NewHTTPClient(),
+			// FCOS client is created lazily by wizard.FetchFCOSStreamVersion
+			// when the user selects FCOS, since it needs the Fedora version.
+		}
 		installer = &install.DispatchingInstaller{
 			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
 			// FCOS: install.NewFCOSInstaller(cmdRunner, logger), // wired by #639
@@ -146,6 +150,11 @@ func main() {
 		// Fetch sysext catalog (non-fatal if it fails)
 		if err := w.FetchSysexts(ctx); err != nil {
 			logger.Warn("sysext catalog fetch failed", "error", err)
+		}
+
+		// Fetch FCOS stream version (non-fatal; no-op when OS is flatcar)
+		if err := w.FetchFCOSStreamVersion(ctx); err != nil {
+			logger.Warn("FCOS stream version fetch failed", "error", err)
 		}
 
 		// Fetch channel version info (non-fatal if it fails)

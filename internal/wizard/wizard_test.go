@@ -2270,3 +2270,122 @@ func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
 		})
 	}
 }
+
+func TestFetchFCOSStreamVersion_FlatcarNoop(t *testing.T) {
+	w := New(&mockProber{}, &mockBakery{}, &mockInstaller{})
+	w.State.Config.OS = model.OSFlatcar
+	if err := w.FetchFCOSStreamVersion(context.Background()); err != nil {
+		t.Fatalf("unexpected error for Flatcar: %v", err)
+	}
+	if w.State.FedoraVersion != 0 {
+		t.Errorf("expected FedoraVersion=0 for Flatcar, got %d", w.State.FedoraVersion)
+	}
+}
+
+func TestFetchFCOSStreamVersion_FCOS(t *testing.T) {
+	orig := fetchFCOSStreamFn
+	defer func() { fetchFCOSStreamFn = orig }()
+	fetchFCOSStreamFn = func(_ context.Context, stream string) (int, error) {
+		if stream != "stable" {
+			return 0, fmt.Errorf("unexpected stream %q", stream)
+		}
+		return 44, nil
+	}
+
+	dc := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{},
+	}
+	w := New(&mockProber{}, dc, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "stable"
+
+	if err := w.FetchFCOSStreamVersion(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w.State.FedoraVersion != 44 {
+		t.Errorf("expected FedoraVersion=44, got %d", w.State.FedoraVersion)
+	}
+	if dc.FCOS == nil {
+		t.Fatal("expected FCOS client to be set on DispatchingClient")
+	}
+}
+
+func TestFetchFCOSStreamVersion_Error(t *testing.T) {
+	orig := fetchFCOSStreamFn
+	defer func() { fetchFCOSStreamFn = orig }()
+	fetchFCOSStreamFn = func(_ context.Context, _ string) (int, error) {
+		return 0, fmt.Errorf("stream unavailable")
+	}
+
+	w := New(&mockProber{}, &mockBakery{}, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "testing"
+
+	err := w.FetchFCOSStreamVersion(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "stream unavailable") {
+		t.Errorf("expected 'stream unavailable' in error, got: %v", err)
+	}
+}
+
+func TestFetchFCOSStreamVersion_DefaultStream(t *testing.T) {
+	orig := fetchFCOSStreamFn
+	defer func() { fetchFCOSStreamFn = orig }()
+	var calledStream string
+	fetchFCOSStreamFn = func(_ context.Context, stream string) (int, error) {
+		calledStream = stream
+		return 44, nil
+	}
+
+	w := New(&mockProber{}, &bakery.DispatchingClient{Flatcar: &bakery.MockClient{}}, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "" // empty should default to "stable"
+
+	if err := w.FetchFCOSStreamVersion(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calledStream != "stable" {
+		t.Errorf("expected stream 'stable', got %q", calledStream)
+	}
+}
+
+func TestFetchSysexts_WithDispatchingClient_FCOS(t *testing.T) {
+	fcosSysexts := []model.SysextEntry{
+		{Name: "tailscale", Version: "0-1.98.4-1"},
+		{Name: "docker-ce", Version: "3-29.5.2-1.fc44"},
+	}
+	dc := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{Entries: []model.SysextEntry{{Name: "docker"}}},
+		FCOS:    &bakery.MockClient{Entries: fcosSysexts},
+	}
+	w := New(&mockProber{}, dc, &mockInstaller{})
+	w.State.Config.OS = model.OSFCOS
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(w.State.Sysexts) != 2 {
+		t.Fatalf("expected 2 FCOS sysexts, got %d", len(w.State.Sysexts))
+	}
+	if w.State.Sysexts[0].Name != "tailscale" {
+		t.Errorf("expected first sysext=tailscale, got %q", w.State.Sysexts[0].Name)
+	}
+}
+
+func TestFetchSysexts_WithDispatchingClient_Flatcar(t *testing.T) {
+	dc := &bakery.DispatchingClient{
+		Flatcar: &bakery.MockClient{Entries: []model.SysextEntry{{Name: "docker"}}},
+		FCOS:    &bakery.MockClient{Entries: []model.SysextEntry{{Name: "tailscale"}}},
+	}
+	w := New(&mockProber{}, dc, &mockInstaller{})
+	w.State.Config.OS = model.OSFlatcar
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(w.State.Sysexts) != 1 || w.State.Sysexts[0].Name != "docker" {
+		t.Fatalf("expected flatcar docker entry, got %v", w.State.Sysexts)
+	}
+}
