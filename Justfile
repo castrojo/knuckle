@@ -121,7 +121,7 @@ cover-check:
         [model]=100 [validate]=99 [ignition]=100 [github]=96
         [bakery]=100 [probe]=100   [runner]=100   [install]=100
         [headless]=99 [wizard]=99  [iso]=100      [tui]=99
-        [demo]=100
+        [demo]=100   [fcos]=100
     )
     fail=0
     for pkg in "${!targets[@]}"; do
