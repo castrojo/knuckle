@@ -113,7 +113,10 @@ func main() {
 	} else {
 		realRunner := runner.NewRealRunner(logger)
 		prober = probe.NewSystemProber(realRunner)
-		bakeryClient = bakery.NewHTTPClient()
+		bakeryClient = &bakery.DispatchingClient{
+			Flatcar: bakery.NewHTTPClient(),
+			FCOS:    bakery.NewFCOSHTTPClient(),
+		}
 		installer = &install.DispatchingInstaller{
 			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
 			// FCOS: install.NewFCOSInstaller(cmdRunner, logger), // wired by #639

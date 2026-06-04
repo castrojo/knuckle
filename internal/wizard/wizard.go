@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/projectbluefin/knuckle/internal/bakery"
+	"github.com/projectbluefin/knuckle/internal/fcos"
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/install"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -17,6 +18,9 @@ import (
 
 // fetchAllChannelsFn is a package-level hook so tests can inject a mock.
 var fetchAllChannelsFn = bakery.FetchAllChannels
+
+// fetchFCOSStreamVersionFn is a package-level hook so tests can inject a mock.
+var fetchFCOSStreamVersionFn = fcos.FetchStreamFedoraVersion
 
 // State holds the complete wizard state
 type State struct {
@@ -36,6 +40,11 @@ type State struct {
 
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
+
+	// FCOSFedoraVersion is the Fedora major version for the selected FCOS stream.
+	// Populated by FetchSysexts when cfg.OS == model.OSFCOS.
+	// Zero means the version could not be determined (no version filtering applied).
+	FCOSFedoraVersion int
 
 	// System checks (populated at startup)
 	SystemChecks []SystemCheck
@@ -369,10 +378,27 @@ func (w *Wizard) runSystemChecks() {
 }
 
 // FetchSysexts loads the sysext catalog for the configured architecture.
+// For FCOS installs it first resolves the Fedora major version from the stream
+// JSON and stores it in State.FCOSFedoraVersion, then delegates to
+// FetchCatalogFCOS. For Flatcar installs it uses FetchCatalogArch.
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
 // auto-selected and the default driver series is pre-configured.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
-	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	var sysexts []model.SysextEntry
+	var err error
+
+	if w.State.Config.OS == model.OSFCOS {
+		// Resolve the Fedora major version from the FCOS stream — soft-fail so that
+		// the catalog fetch still proceeds without version filtering if this fails.
+		fedVer, ferr := fetchFCOSStreamVersionFn(ctx, w.State.Config.Channel)
+		if ferr == nil {
+			w.State.FCOSFedoraVersion = fedVer
+		}
+		sysexts, err = w.Bakery.FetchCatalogFCOS(ctx, w.State.Config.Arch, w.State.FCOSFedoraVersion)
+	} else {
+		sysexts, err = w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
+	}
+
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)
 	}

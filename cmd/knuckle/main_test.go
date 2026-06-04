@@ -37,6 +37,9 @@ func (b *errBakery) FetchCatalog(_ context.Context) ([]model.SysextEntry, error)
 func (b *errBakery) FetchCatalogArch(_ context.Context, _ string) ([]model.SysextEntry, error) {
 	return nil, errors.New("injected bakery error")
 }
+func (b *errBakery) FetchCatalogFCOS(_ context.Context, _ string, _ int) ([]model.SysextEntry, error) {
+	return nil, errors.New("injected bakery error")
+}
 
 // Compile-time interface checks.
 var _ probe.Prober = (*errProber)(nil)

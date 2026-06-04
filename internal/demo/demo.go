@@ -95,6 +95,11 @@ func (b *Bakery) FetchCatalogArch(_ context.Context, _ string) ([]model.SysextEn
 	}, nil
 }
 
+// FetchCatalogFCOS returns the same demo sysexts for FCOS (ignores arch/fedoraVersion).
+func (b *Bakery) FetchCatalogFCOS(ctx context.Context, _ string, _ int) ([]model.SysextEntry, error) {
+	return b.FetchCatalogArch(ctx, "amd64")
+}
+
 // Installer simulates an installation with realistic progress messages and timing.
 type Installer struct{}
 

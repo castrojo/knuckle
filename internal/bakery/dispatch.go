@@ -24,8 +24,15 @@ func (d *DispatchingClient) FetchCatalogArch(ctx context.Context, arch string) (
 	return d.Flatcar.FetchCatalogArch(ctx, arch)
 }
 
+// FetchCatalogFCOS delegates to the FCOS client's FetchCatalogFCOS.
+func (d *DispatchingClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	if d.FCOS == nil {
+		return nil, fmt.Errorf("fcos bakery client not configured")
+	}
+	return d.FCOS.FetchCatalogFCOS(ctx, arch, fedoraVersion)
+}
+
 // FetchCatalogForOS fetches the sysext catalog for the given OS and architecture.
-// FCOS may use a different catalog source or filtering in the future.
 func (d *DispatchingClient) FetchCatalogForOS(ctx context.Context, arch, os string) ([]model.SysextEntry, error) {
 	switch os {
 	case model.OSFCOS:

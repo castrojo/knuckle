@@ -133,3 +133,7 @@ func (m *mockBakeryClientForResolve) FetchCatalog(ctx context.Context) ([]model.
 func (m *mockBakeryClientForResolve) FetchCatalogArch(ctx context.Context, arch string) ([]model.SysextEntry, error) {
 	return m.entries, nil
 }
+
+func (m *mockBakeryClientForResolve) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return m.entries, nil
+}

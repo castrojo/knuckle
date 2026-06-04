@@ -39,6 +39,10 @@ func (m *mockBakery) FetchCatalogArch(ctx context.Context, arch string) ([]model
 	return m.sysexts, m.err
 }
 
+func (m *mockBakery) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	return m.sysexts, m.err
+}
+
 type mockInstaller struct {
 	called bool
 	cfg    *model.InstallConfig
