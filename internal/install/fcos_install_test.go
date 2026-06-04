@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -333,6 +334,114 @@ func TestFCOSInstallVersionWarning(t *testing.T) {
 			t.Errorf("version pinning args should not be passed to coreos-installer, found %q", arg)
 		}
 	}
+}
+
+func TestFCOSInstall_GenerateButaneError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-err-test",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "bad", URL: "http://insecure.example.com/bad.raw", Selected: true},
+		},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from FCOS butane generation, got nil")
+	}
+	if !strings.Contains(err.Error(), "generating butane config") {
+		t.Errorf("error should mention generating butane config, got: %v", err)
+	}
+}
+
+func TestFCOSInstall_CompileError(t *testing.T) {
+	prev := compileToIgnitionFunc
+	t.Cleanup(func() { compileToIgnitionFunc = prev })
+	compileToIgnitionFunc = func(string) (string, error) {
+		return "", fmt.Errorf("injected compilation error")
+	}
+
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-compile-err",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from compileToIgnitionFunc, got nil")
+	}
+	if !strings.Contains(err.Error(), "compiling butane") {
+		t.Errorf("error = %q, want 'compiling butane' prefix", err.Error())
+	}
+}
+
+func TestFCOSInstall_WriteIgnitionError(t *testing.T) {
+	prev := newIgnitionTempFile
+	t.Cleanup(func() { newIgnitionTempFile = prev })
+	newIgnitionTempFile = func() (ignitionTempFile, error) {
+		return nil, fmt.Errorf("injected temp file error")
+	}
+
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-write-err",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from writeIgnitionFile, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing ignition file") {
+		t.Errorf("error = %q, want 'writing ignition file' prefix", err.Error())
+	}
+}
+
+func TestRemoveIgnitionTempFile_EmptyPath(t *testing.T) {
+	removeIgnitionTempFile(testLogger(), "")
+}
+
+func TestRemoveIgnitionTempFile_NonExistentPath(t *testing.T) {
+	removeIgnitionTempFile(testLogger(), "/nonexistent-path-xyz")
+}
+
+func TestRemoveIgnitionTempFile_RemoveFailsNonNotExist(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root — permission checks don't apply")
+	}
+	dir := t.TempDir()
+	f, err := os.CreateTemp(dir, "ignition-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := f.Name()
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(dir, 0755) }()
+
+	removeIgnitionTempFile(testLogger(), path)
 }
 
 // Compile-time check that FCOSInstaller implements Installer.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/projectbluefin/knuckle/internal/ignition"
 	"github.com/projectbluefin/knuckle/internal/model"
@@ -13,10 +12,9 @@ import (
 
 // FCOSInstaller runs coreos-installer via the runner.
 type FCOSInstaller struct {
-	Runner       runner.Runner
-	Generator    *ignition.Generator
-	Logger       *slog.Logger
-	ignitionPath string
+	Runner    runner.Runner
+	Generator *ignition.Generator
+	Logger    *slog.Logger
 }
 
 // NewFCOSInstaller creates an FCOSInstaller with the given runner and logger.
@@ -41,6 +39,8 @@ func (i *FCOSInstaller) Install(ctx context.Context, cfg *model.InstallConfig, p
 		i.Logger.Warn("version pinning is not supported for FCOS; coreos-installer uses stream latest", "version", cfg.Version)
 	}
 
+	var ignitionPath string
+
 	if cfg.IgnitionURL != "" {
 		progress("Using external Ignition config...")
 	} else {
@@ -57,15 +57,15 @@ func (i *FCOSInstaller) Install(ctx context.Context, cfg *model.InstallConfig, p
 		}
 
 		progress("Writing Ignition config...")
-		ignPath, err := i.WriteIgnitionFile(ignitionJSON)
+		ignPath, err := writeIgnitionFile(i.Logger, ignitionJSON)
 		if err != nil {
 			return fmt.Errorf("writing ignition file: %w", err)
 		}
-		i.ignitionPath = ignPath
-		defer i.cleanupIgnitionFile()
+		ignitionPath = ignPath
+		defer removeIgnitionTempFile(i.Logger, ignitionPath)
 	}
 
-	args := buildFCOSInstallArgs(cfg, i.ignitionPath)
+	args := buildFCOSInstallArgs(cfg, ignitionPath)
 
 	progress("Running coreos-installer...")
 	i.Logger.Info("executing coreos-installer", "args", args)
@@ -94,37 +94,4 @@ func buildFCOSInstallArgs(cfg *model.InstallConfig, ignitionPath string) []strin
 	}
 
 	return args
-}
-
-// WriteIgnitionFile writes the Ignition JSON to a secure temp file.
-func (i *FCOSInstaller) WriteIgnitionFile(ignitionJSON string) (string, error) {
-	f, err := newIgnitionTempFile()
-	if err != nil {
-		return "", fmt.Errorf("creating temp ignition file: %w", err)
-	}
-	path := f.Name()
-
-	if _, err := f.WriteString(ignitionJSON); err != nil {
-		_ = f.Close()
-		_ = removeIgnitionFile(path)
-		return "", fmt.Errorf("writing ignition content: %w", err)
-	}
-
-	if err := f.Close(); err != nil {
-		_ = removeIgnitionFile(path)
-		return "", fmt.Errorf("closing ignition file: %w", err)
-	}
-
-	i.Logger.Info("ignition file written", "path", path)
-	return path, nil
-}
-
-func (i *FCOSInstaller) cleanupIgnitionFile() {
-	if i.ignitionPath == "" {
-		return
-	}
-	if err := removeIgnitionFile(i.ignitionPath); err != nil && !os.IsNotExist(err) {
-		i.Logger.Warn("failed to clean up ignition file", "path", i.ignitionPath, "error", err)
-	}
-	i.ignitionPath = ""
 }

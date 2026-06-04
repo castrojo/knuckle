@@ -91,7 +91,7 @@ func (i *FlatcarInstaller) Install(ctx context.Context, cfg *model.InstallConfig
 
 		// Write ignition JSON to secure temp file for flatcar-install
 		progress("Writing Ignition config...")
-		ignPath, err := i.WriteIgnitionFile(ignitionJSON)
+		ignPath, err := writeIgnitionFile(i.Logger, ignitionJSON)
 		if err != nil {
 			return fmt.Errorf("writing ignition file: %w", err)
 		}
@@ -193,6 +193,11 @@ func installDiskPath(cfg *model.InstallConfig) string {
 // the file is never readable by other users, even between creation and content write.
 // Returns the path to the created temp file.
 func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error) {
+	return writeIgnitionFile(i.Logger, ignitionJSON)
+}
+
+// writeIgnitionFile is the shared implementation for writing ignition JSON to a secure temp file.
+func writeIgnitionFile(logger *slog.Logger, ignitionJSON string) (string, error) {
 	f, err := newIgnitionTempFile()
 	if err != nil {
 		return "", fmt.Errorf("creating temp ignition file: %w", err)
@@ -210,7 +215,7 @@ func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error
 		return "", fmt.Errorf("closing ignition file: %w", err)
 	}
 
-	i.Logger.Info("ignition file written", "path", path)
+	logger.Info("ignition file written", "path", path)
 	return path, nil
 }
 
@@ -219,8 +224,16 @@ func (i *FlatcarInstaller) cleanupIgnitionFile() {
 	if i.ignitionPath == "" {
 		return
 	}
-	if err := removeIgnitionFile(i.ignitionPath); err != nil && !os.IsNotExist(err) {
-		i.Logger.Warn("failed to clean up ignition file", "path", i.ignitionPath, "error", err)
-	}
+	removeIgnitionTempFile(i.Logger, i.ignitionPath)
 	i.ignitionPath = ""
+}
+
+// removeIgnitionTempFile removes a temp ignition file at the given path.
+func removeIgnitionTempFile(logger *slog.Logger, path string) {
+	if path == "" {
+		return
+	}
+	if err := removeIgnitionFile(path); err != nil && !os.IsNotExist(err) {
+		logger.Warn("failed to clean up ignition file", "path", path, "error", err)
+	}
 }
