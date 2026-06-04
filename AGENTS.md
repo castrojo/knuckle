@@ -60,6 +60,8 @@ just e2e                 # build ISO → boot in QEMU GTK window → interactive
 
 `just ci` is the pre-push gate. Never `--no-verify`.
 
+**Pre-commit guard:** `no-floating-action-tags` blocks third-party `@main`/`@v*` floating action tags at commit time. `projectbluefin/` refs (`@v1`, `@main`) are intentional managed tags and are exempted.
+
 ---
 
 ## Safety Invariants ⛔
