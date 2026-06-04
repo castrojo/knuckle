@@ -1,5 +1,6 @@
 // Package iso generates Ignition configs and helpers for building
-// self-contained Flatcar installer disk images with knuckle embedded.
+// self-contained installer disk images with knuckle embedded.
+// Supports both Flatcar Container Linux and Fedora CoreOS (FCOS).
 package iso
 
 import "encoding/json"
@@ -34,8 +35,10 @@ type user struct {
 	SSHAuthorizedKeys []string `json:"sshAuthorizedKeys,omitempty"`
 }
 
-// knuckleServiceUnit is the systemd unit that launches knuckle on tty1.
-const knuckleServiceUnit = `[Unit]
+// knuckleServiceUnitFlatcar is the systemd unit that launches knuckle on
+// Flatcar live images. Flatcar live does not autologin on tty1, so no
+// conflict directives are needed.
+const knuckleServiceUnitFlatcar = `[Unit]
 Description=Knuckle Flatcar Installer
 After=multi-user.target
 ConditionPathExists=/opt/knuckle
@@ -54,13 +57,48 @@ RestartSec=2
 [Install]
 WantedBy=multi-user.target`
 
+// knuckleServiceUnitFCOS is the systemd unit that launches knuckle on FCOS
+// live images. FCOS runs getty@tty1.service with autologin for the "core"
+// user by default, so we declare a conflict to prevent both services from
+// fighting over tty1.
+const knuckleServiceUnitFCOS = `[Unit]
+Description=Knuckle FCOS Installer
+After=multi-user.target
+Conflicts=getty@tty1.service
+Before=getty@tty1.service
+ConditionPathExists=/opt/knuckle
+
+[Service]
+Type=idle
+ExecStart=/opt/knuckle
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target`
+
 // GenerateInstallerIgnition creates Ignition JSON for the installer image.
-// The knuckle binary must be placed at /opt/knuckle on the filesystem
-// (via virt-customize or equivalent) before booting with this config.
+// The knuckle binary must be placed at /opt/knuckle on the filesystem before
+// booting with this config (via squashfs overlay for Flatcar, or an Ignition
+// storage.files entry for FCOS).
+//
+// os selects the OS-specific service unit body: "fcos" picks the FCOS unit
+// (which includes Conflicts/Before for getty@tty1.service); any other value
+// (including "flatcar" or "") picks the Flatcar unit.
 //
 // If sshPubKey is non-empty, it is added to the "core" user for debug access.
-func GenerateInstallerIgnition(sshPubKey string) ([]byte, error) {
+func GenerateInstallerIgnition(os, sshPubKey string) ([]byte, error) {
 	enabled := true
+
+	serviceUnit := knuckleServiceUnitFlatcar
+	if os == "fcos" {
+		serviceUnit = knuckleServiceUnitFCOS
+	}
 
 	cfg := ignitionConfig{
 		Ignition: ignitionMeta{Version: "3.3.0"},
@@ -70,7 +108,7 @@ func GenerateInstallerIgnition(sshPubKey string) ([]byte, error) {
 				{
 					Name:     "knuckle-installer.service",
 					Enabled:  &enabled,
-					Contents: knuckleServiceUnit,
+					Contents: serviceUnit,
 				},
 			},
 		},
