@@ -18,6 +18,24 @@ import (
 // fetchAllChannelsFn is a package-level hook so tests can inject a mock.
 var fetchAllChannelsFn = bakery.FetchAllChannels
 
+// fetchFCOSStreamVersionFn fetches the Fedora version label for an FCOS stream.
+// Tests can replace this to avoid network calls.
+var fetchFCOSStreamVersionFn = fetchFCOSStreamVersion
+
+// fetchFCOSStreamVersion fetches the current release version for an FCOS stream.
+// Returns the stream name itself as fallback; empty string on any hard error.
+func fetchFCOSStreamVersion(ctx context.Context, stream string) (string, error) {
+	return stream, nil // version data requires #641; stream name is shown until then
+}
+
+// FCOSStreamInfo holds minimal display data for an FCOS stream.
+type FCOSStreamInfo struct {
+	Stream  string // "stable", "testing", "next"
+	Version string // version label, e.g. stream name or future Fedora release version
+}
+
+
+
 // State holds the complete wizard state
 type State struct {
 	CurrentStep model.WizardStep
@@ -36,6 +54,9 @@ type State struct {
 
 	// Channel version info (fetched at startup)
 	Channels []bakery.ChannelInfo
+
+	// FCOS stream info (fetched at startup when OS == FCOS)
+	FCOSStreams []FCOSStreamInfo
 
 	// System checks (populated at startup)
 	SystemChecks []SystemCheck
@@ -369,9 +390,17 @@ func (w *Wizard) runSystemChecks() {
 }
 
 // FetchSysexts loads the sysext catalog for the configured architecture.
+// For FCOS, sysexts are not yet supported (no FCOS-specific catalog) — the
+// step is skipped via skipStepFor(). Full FCOS catalog support requires #641.
 // If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
 // auto-selected and the default driver series is pre-configured.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
+	if w.State.Config.OS == model.OSFCOS {
+		// FCOS sysext catalog support requires #641 (FetchCatalogFCOS).
+		// For now, leave Sysexts empty so the step is a no-op for FCOS.
+		w.State.Sysexts = nil
+		return nil
+	}
 	sysexts, err := w.Bakery.FetchCatalogArch(ctx, w.State.Config.Arch)
 	if err != nil {
 		return fmt.Errorf("fetching sysext catalog: %w", err)
@@ -404,6 +433,24 @@ func (w *Wizard) FetchChannels(ctx context.Context) error {
 		return nil
 	}
 	return err
+}
+
+// FetchFCOSStreams loads version info for the three FCOS streams (stable, testing, next).
+// Version info is best-effort — failures are non-fatal; the picker will show streams
+// without version numbers rather than blocking the TUI.
+func (w *Wizard) FetchFCOSStreams(ctx context.Context) error {
+	streams := []string{"stable", "testing", "next"}
+	infos := make([]FCOSStreamInfo, 0, len(streams))
+	for _, s := range streams {
+		version, err := fetchFCOSStreamVersionFn(ctx, s)
+		info := FCOSStreamInfo{Stream: s}
+		if err == nil {
+			info.Version = version
+		}
+		infos = append(infos, info)
+	}
+	w.State.FCOSStreams = infos
+	return nil
 }
 
 // Execute runs the installation

@@ -347,6 +347,7 @@ func TestViewChannelCards_WithComponentVersions(t *testing.T) {
 		},
 	}
 	m := New(w)
+	m.osSubView = false // skip OS picker, test channel cards directly
 	out := m.viewChannelCards()
 	// The component-version rendering path (kernel/systemd/docker) should have run.
 	if !strings.Contains(out, "linux") || !strings.Contains(out, "6.1.90") {

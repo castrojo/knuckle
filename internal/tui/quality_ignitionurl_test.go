@@ -15,6 +15,12 @@ func TestHandleEnter_Welcome_IgnitionURL_SkipsToStorage(t *testing.T) {
 	w.State.Config.Channel = "stable"
 
 	m := New(w)
+	// Phase 1: OS picker — select Flatcar (cursor 0)
+	m.cursor = 0
+	_, _ = m.handleEnter()
+
+	// Phase 2: channel picker — IgnitionURL set → should skip to Storage
+	m.cursor = 0
 	_, _ = m.handleEnter()
 
 	if m.Wizard.State.CurrentStep != model.StepStorage {

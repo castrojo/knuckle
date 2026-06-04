@@ -152,6 +152,11 @@ func main() {
 		if err := w.FetchChannels(ctx); err != nil {
 			logger.Warn("channel info fetch failed", "error", err)
 		}
+
+		// Fetch FCOS stream version info (non-fatal if it fails)
+		if err := w.FetchFCOSStreams(ctx); err != nil {
+			logger.Warn("FCOS stream info fetch failed", "error", err)
+		}
 	}
 
 	// Run the TUI — wire reboot through the runner so dry-run/spy work correctly
