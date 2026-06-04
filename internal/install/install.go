@@ -193,6 +193,17 @@ func installDiskPath(cfg *model.InstallConfig) string {
 // the file is never readable by other users, even between creation and content write.
 // Returns the path to the created temp file.
 func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error) {
+	return writeIgnitionFile(ignitionJSON, i.Logger)
+}
+
+// cleanupIgnitionFile removes the temp ignition file (contains SSH keys).
+func (i *FlatcarInstaller) cleanupIgnitionFile() {
+	cleanupIgnitionFile(&i.ignitionPath, i.Logger)
+}
+
+// writeIgnitionFile is the shared implementation for writing ignition JSON to a
+// secure temp file. Used by both FlatcarInstaller and FCOSInstaller.
+func writeIgnitionFile(ignitionJSON string, logger *slog.Logger) (string, error) {
 	f, err := newIgnitionTempFile()
 	if err != nil {
 		return "", fmt.Errorf("creating temp ignition file: %w", err)
@@ -210,17 +221,18 @@ func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error
 		return "", fmt.Errorf("closing ignition file: %w", err)
 	}
 
-	i.Logger.Info("ignition file written", "path", path)
+	logger.Info("ignition file written", "path", path)
 	return path, nil
 }
 
 // cleanupIgnitionFile removes the temp ignition file (contains SSH keys).
-func (i *FlatcarInstaller) cleanupIgnitionFile() {
-	if i.ignitionPath == "" {
+// The path pointer is cleared after removal regardless of outcome.
+func cleanupIgnitionFile(ignitionPath *string, logger *slog.Logger) {
+	if *ignitionPath == "" {
 		return
 	}
-	if err := removeIgnitionFile(i.ignitionPath); err != nil && !os.IsNotExist(err) {
-		i.Logger.Warn("failed to clean up ignition file", "path", i.ignitionPath, "error", err)
+	if err := removeIgnitionFile(*ignitionPath); err != nil && !os.IsNotExist(err) {
+		logger.Warn("failed to clean up ignition file", "path", *ignitionPath, "error", err)
 	}
-	i.ignitionPath = ""
+	*ignitionPath = ""
 }
