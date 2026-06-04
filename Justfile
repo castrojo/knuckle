@@ -810,6 +810,75 @@ e2e:
 iso *CHANNEL='stable':
     ./scripts/build-iso.sh --channel {{CHANNEL}} --arch {{KNUCKLE_ARCH}}
 
+# Verify coreos-installer is available (required for FCOS ISO builds)
+check-fcos-tools:
+    @which coreos-installer >/dev/null 2>&1 || (echo "coreos-installer not found — run: just tools-fcos" && exit 1)
+
+# Install coreos-installer binary (for FCOS ISO builds)
+tools-fcos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v coreos-installer &>/dev/null; then
+        echo "coreos-installer already installed: $(coreos-installer --version)"
+        exit 0
+    fi
+    echo "Downloading coreos-installer..."
+    curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
+        -o /usr/local/bin/coreos-installer
+    chmod +x /usr/local/bin/coreos-installer
+    echo "coreos-installer installed: $(coreos-installer --version)"
+
+# Build FCOS live installer ISO (requires coreos-installer)
+build-fcos-iso arch="amd64" stream="stable":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just check-fcos-tools
+    just build
+
+    ARCH="{{arch}}"
+    STREAM="{{stream}}"
+    WORK_DIR="$(mktemp -d)"
+    trap 'rm -rf "$WORK_DIR"' EXIT
+
+    mkdir -p output
+
+    OUT="output/knuckle-fcos-installer-${STREAM}-${ARCH}.iso"
+
+    echo "=== FCOS ISO build (stream=${STREAM}, arch=${ARCH}) ==="
+    echo ""
+
+    # 1. Download FCOS live ISO
+    echo "[1/4] Downloading FCOS ${STREAM} live ISO for ${ARCH}..."
+    FCOS_ARCH="${ARCH}"
+    if [[ "$FCOS_ARCH" == "amd64" ]]; then
+        FCOS_ARCH="x86_64"
+    elif [[ "$FCOS_ARCH" == "arm64" ]]; then
+        FCOS_ARCH="aarch64"
+    fi
+    coreos-installer download -s "${STREAM}" -p metal -f iso \
+        --architecture "${FCOS_ARCH}" \
+        -C "${WORK_DIR}/"
+    FCOS_ISO=$(find "${WORK_DIR}" -name '*.iso' -print -quit)
+    [ -n "$FCOS_ISO" ] || { echo "error: FCOS ISO download failed"; exit 1; }
+    echo "  ✓ downloaded: $(basename "$FCOS_ISO")"
+
+    # 2. Generate installer Ignition (FCOS-specific unit with getty conflict fix)
+    echo "[2/4] Generating FCOS installer Ignition config..."
+    go run ./cmd/fcos-ignition > "${WORK_DIR}/installer.ign"
+    echo "  ✓ installer.ign generated"
+
+    # 3. Customize ISO: embed Ignition config
+    echo "[3/4] Customizing FCOS ISO with coreos-installer..."
+    coreos-installer iso customize \
+        --dest-ignition "${WORK_DIR}/installer.ign" \
+        --output "${OUT}" \
+        "${FCOS_ISO}"
+    echo "  ✓ customized ISO written"
+
+    # 4. Done
+    echo "[4/4] ISO ready: ${OUT}"
+    ls -lh "${OUT}"
+
 # Boot ISO in QEMU with UEFI (Ctrl-a x to quit)
 # KNUCKLE_ARCH=arm64 just boot-iso  — boots arm64 ISO (requires qemu-system-aarch64)
 boot-iso:
