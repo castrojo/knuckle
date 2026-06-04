@@ -14,9 +14,12 @@ import (
 )
 
 const (
-	docsURL = "https://api.github.com/repos/flatcar/flatcar-website/contents/content/docs/latest/setup/customization/using-nvidia.md"
-	modelGo = "internal/model/model.go"
+	defaultDocsURL = "https://api.github.com/repos/flatcar/flatcar-website/contents/content/docs/latest/setup/customization/using-nvidia.md"
+	modelGo        = "internal/model/model.go"
 )
+
+// docsURL is the GitHub API URL to fetch; overridable in tests.
+var docsURL = defaultDocsURL
 
 // ghContentResponse is the minimal GitHub API response for file contents.
 type ghContentResponse struct {
@@ -73,26 +76,18 @@ func main() {
 	fmt.Println()
 	fmt.Println("──────────────────────────────────────────────────────────────────────────")
 
-	docSet := make(map[string]bool)
-	needsAdd := false
-	for _, series := range docSeries {
-		docSet[series] = true
-		id := strings.TrimPrefix(series, "nvidia-drivers-")
-		if !modelIDSet[id] {
-			fmt.Printf("⚠ MISSING IN MODEL: %s — mentioned in Flatcar docs but not in model.go\n", id)
-			needsAdd = true
-		}
-	}
+	missing, extra := compareDriverSeries(docSeries, modelIDKeys)
 
-	for _, id := range modelIDKeys {
-		if !docSet["nvidia-drivers-"+id] {
-			fmt.Printf("  NOTE: %s is in model.go but not mentioned in current Flatcar docs\n", id)
-			fmt.Println("        (This is normal — docs typically only show the recommended series)")
-		}
+	for _, id := range missing {
+		fmt.Printf("⚠ MISSING IN MODEL: %s — mentioned in Flatcar docs but not in model.go\n", id)
+	}
+	for _, id := range extra {
+		fmt.Printf("  NOTE: %s is in model.go but not mentioned in current Flatcar docs\n", id)
+		fmt.Println("        (This is normal — docs typically only show the recommended series)")
 	}
 
 	fmt.Println()
-	if needsAdd {
+	if len(missing) > 0 {
 		fmt.Println("ACTION REQUIRED: Update internal/model/model.go NvidiaDriverOptions")
 		fmt.Println()
 		fmt.Println("  1. Add the missing series to NvidiaDriverOptions in internal/model/model.go")
@@ -110,6 +105,31 @@ func main() {
 		fmt.Println("  https://www.flatcar.org/docs/latest/setup/customization/using-nvidia/")
 		fmt.Println("  https://github.com/flatcar/flatcar-website")
 	}
+}
+
+// compareDriverSeries returns IDs missing from model and IDs extra in model.
+// docSeries are full "nvidia-drivers-X" strings; modelIDs are short "X" keys.
+func compareDriverSeries(docSeries, modelIDs []string) (missing, extra []string) {
+	modelIDSet := make(map[string]bool, len(modelIDs))
+	for _, id := range modelIDs {
+		modelIDSet[id] = true
+	}
+
+	docSet := make(map[string]bool, len(docSeries))
+	for _, series := range docSeries {
+		docSet[series] = true
+		id := strings.TrimPrefix(series, "nvidia-drivers-")
+		if !modelIDSet[id] {
+			missing = append(missing, id)
+		}
+	}
+
+	for _, id := range modelIDs {
+		if !docSet["nvidia-drivers-"+id] {
+			extra = append(extra, id)
+		}
+	}
+	return missing, extra
 }
 
 func fetchNvidiaDocs() (string, error) {
