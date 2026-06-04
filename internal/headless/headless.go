@@ -256,8 +256,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Version (Flatcar-only; FCOS version pinning is not supported by coreos-installer)
-	if c.OS != model.OSFCOS {
+	// Version — FCOS uses a different version scheme and coreos-installer does
+	// not support stream-based version pinning in v1; ignore with a warning.
+	if c.OS == model.OSFCOS {
+		if c.Version != "" {
+			fmt.Fprintf(os.Stderr, "warning: version field is ignored for FCOS (not supported in v1)\n")
+		}
+	} else {
 		if err := validate.FlatcarVersion(c.Version); err != nil {
 			return fmt.Errorf("version: %w", err)
 		}
@@ -396,13 +401,11 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// NVIDIA driver version is Flatcar-only (FCOS uses out-of-tree modules or layering)
-	if c.OS == model.OSFCOS && c.NvidiaDriverVersion != "" {
-		return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
-	}
-
-	// NVIDIA driver version must be a known series
+	// NVIDIA driver version must be a known series; not supported on FCOS
 	if c.NvidiaDriverVersion != "" {
+		if c.OS == model.OSFCOS {
+			return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
+		}
 		valid := false
 		for _, opt := range model.NvidiaDriverOptions {
 			if opt.ID == c.NvidiaDriverVersion {
