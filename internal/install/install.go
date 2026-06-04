@@ -193,6 +193,12 @@ func installDiskPath(cfg *model.InstallConfig) string {
 // the file is never readable by other users, even between creation and content write.
 // Returns the path to the created temp file.
 func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error) {
+	return writeIgnitionFileToTemp(i.Logger, ignitionJSON)
+}
+
+// writeIgnitionFileToTemp writes the Ignition JSON to a secure temp file and returns the path.
+// Shared by FlatcarInstaller and FCOSInstaller.
+func writeIgnitionFileToTemp(logger *slog.Logger, ignitionJSON string) (string, error) {
 	f, err := newIgnitionTempFile()
 	if err != nil {
 		return "", fmt.Errorf("creating temp ignition file: %w", err)
@@ -210,7 +216,7 @@ func (i *FlatcarInstaller) WriteIgnitionFile(ignitionJSON string) (string, error
 		return "", fmt.Errorf("closing ignition file: %w", err)
 	}
 
-	i.Logger.Info("ignition file written", "path", path)
+	logger.Info("ignition file written", "path", path)
 	return path, nil
 }
 
