@@ -59,6 +59,20 @@ var fcosCatalog = map[string]ExtensionMeta{
 		Long:        "1Password is a password manager and secure credential vault. Ships the 1password GUI application for FCOS desktop or graphical deployments.",
 		Caveats:     nil,
 	},
+	"1password-cli": {
+		Category:    "Security",
+		SupportTier: TierFCOSCommunity,
+		Short:       "1Password CLI — terminal-based 1Password credential access",
+		Long:        "The 1Password CLI (op) provides terminal access to your 1Password vaults and supports secret injection into shell environments. Useful for scripted FCOS workflows that need credential retrieval.",
+		Caveats:     nil,
+	},
+	"kubernetes": {
+		Category:    "Container Runtime",
+		SupportTier: TierFCOSCommunity,
+		Short:       "Kubernetes — container orchestration tools (kubectl, kubeadm, kubelet)",
+		Long:        "Ships the core Kubernetes binaries — kubectl, kubeadm, and kubelet — for FCOS nodes. Enables FCOS hosts to join or bootstrap Kubernetes clusters. Pair with Ignition provisioning for unattended node setup.",
+		Caveats:     []string{"Requires additional CNI configuration before cluster bring-up. Pin the version to match your cluster control-plane."},
+	},
 	"bitwarden": {
 		Category:    "Security",
 		SupportTier: TierFCOSCommunity,

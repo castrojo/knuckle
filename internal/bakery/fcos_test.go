@@ -130,7 +130,6 @@ func TestFetchCatalogFCOS_BasicFiltering(t *testing.T) {
 			Body:    "Tailscale VPN",
 			Assets: []fcosAsset{
 				{Name: "tailscale-0-1.98.4-1-44-x86-64.raw", BrowserDownloadURL: "https://github.com/org/repo/releases/download/tailscale-0-1.98.4-1-44-x86-64/tailscale-0-1.98.4-1-44-x86-64.raw"},
-				{Name: "SHA256SUMS", BrowserDownloadURL: "https://github.com/org/repo/releases/download/tailscale-0-1.98.4-1-44-x86-64/SHA256SUMS"},
 			},
 		},
 		{

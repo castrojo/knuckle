@@ -146,15 +146,15 @@ func main() {
 			logger.Warn("hardware probe failed", "error", err)
 		}
 
+		// Fetch FCOS stream info when OS is FCOS (non-fatal if it fails).
+		// Must run before FetchSysexts so FCOSFedoraVersion is populated for catalog dispatch.
+		if err := w.FetchFCOSStream(ctx); err != nil {
+			logger.Warn("FCOS stream info fetch failed", "error", err)
+		}
+
 		// Fetch sysext catalog (non-fatal if it fails)
 		if err := w.FetchSysexts(ctx); err != nil {
 			logger.Warn("sysext catalog fetch failed", "error", err)
-		}
-
-		// Fetch FCOS stream info when OS is FCOS (non-fatal if it fails).
-		// FetchSysexts also resolves this lazily, so this is a best-effort pre-fetch.
-		if err := w.FetchFCOSStream(ctx); err != nil {
-			logger.Warn("FCOS stream info fetch failed", "error", err)
 		}
 
 		// Fetch channel version info (non-fatal if it fails)

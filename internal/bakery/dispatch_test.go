@@ -106,3 +106,13 @@ func TestDispatchingClient_FetchCatalogArchDelegatesToFlatcar(t *testing.T) {
 }
 
 var _ bakery.Client = (*bakery.DispatchingClient)(nil)
+
+func TestDispatchingClient_FCOS_ZeroFedoraVersion(t *testing.T) {
+	fcos := &bakery.MockClient{Entries: []model.SysextEntry{{Name: "podman"}}}
+	d := &bakery.DispatchingClient{FCOS: fcos}
+
+	_, err := d.FetchCatalogForOS(context.Background(), "amd64", model.OSFCOS, 0)
+	if err == nil {
+		t.Fatal("expected error when fedoraVersion is 0")
+	}
+}

@@ -355,8 +355,9 @@ func truncateDescription(s string, maxLen int) string {
 
 // MockClient is a test double that returns preconfigured results
 type MockClient struct {
-	Entries []model.SysextEntry
-	Err     error
+	Entries           []model.SysextEntry
+	Err               error
+	LastFedoraVersion int // records the fedoraVersion arg passed to FetchCatalogFCOS
 }
 
 func (m *MockClient) FetchCatalog(ctx context.Context) ([]model.SysextEntry, error) {
@@ -389,5 +390,6 @@ func (m *MockClient) FetchCatalogArch(ctx context.Context, arch string) ([]model
 
 // FetchCatalogFCOS implements FCOSCatalogClient; delegates to FetchCatalogArch and ignores fedoraVersion.
 func (m *MockClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVersion int) ([]model.SysextEntry, error) {
+	m.LastFedoraVersion = fedoraVersion
 	return m.FetchCatalogArch(ctx, arch)
 }

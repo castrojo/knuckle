@@ -235,13 +235,17 @@ func (c *HTTPClient) FetchCatalogFCOS(ctx context.Context, arch string, fedoraVe
 
 		seen[name] = true
 
-		// Fetch SHA256 hash (best-effort — soft fail on error).
+		// Fetch SHA256 hash — hard-fail if present but unresolvable (avoid catalog entry with empty hash).
 		sha256Hash := ""
 		if sha256sumsURL != "" {
 			rawFilename := downloadURL[strings.LastIndex(downloadURL, "/")+1:]
-			if h, hashErr := c.fetchSHA256ForAsset(ctx, sha256sumsURL, rawFilename); hashErr == nil {
-				sha256Hash = h
+			h, hashErr := c.fetchSHA256ForAsset(ctx, sha256sumsURL, rawFilename)
+			if hashErr != nil {
+				// SHA256SUMS asset is present but could not be fetched/parsed; skip this entry
+				// rather than producing one with an empty hash that would pass integrity checks.
+				continue
 			}
+			sha256Hash = h
 		}
 
 		description := truncateDescription(rel.Body, 80)

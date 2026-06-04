@@ -42,6 +42,9 @@ func (d *DispatchingClient) FetchCatalogForOS(ctx context.Context, arch, os stri
 		if d.FCOS == nil {
 			return nil, fmt.Errorf("fcos bakery client not configured")
 		}
+		if fedoraVersion <= 0 {
+			return nil, fmt.Errorf("invalid FCOS Fedora version %d: stream version must be resolved before fetching the FCOS catalog", fedoraVersion)
+		}
 		return d.FCOS.FetchCatalogFCOS(ctx, arch, fedoraVersion)
 	case model.OSFlatcar, "":
 		return d.Flatcar.FetchCatalogArch(ctx, arch)

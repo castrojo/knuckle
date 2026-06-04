@@ -44,6 +44,9 @@ type State struct {
 	// FCOSFedoraVersion is the Fedora major version for the current FCOS stream.
 	// Populated by FetchFCOSStream; used by FetchSysexts to filter the FCOS catalog.
 	FCOSFedoraVersion int
+	// FCOSFedoraStream is the Config.Channel value used for the last FCOSFedoraVersion fetch.
+	// Used to detect channel changes and re-resolve FCOSFedoraVersion when the stream switches.
+	FCOSFedoraStream string
 
 	// System checks (populated at startup)
 	SystemChecks []SystemCheck
@@ -387,11 +390,15 @@ func (w *Wizard) FetchSysexts(ctx context.Context) error {
 	var err error
 
 	if dc, ok := w.Bakery.(*bakery.DispatchingClient); ok {
-		if w.State.Config.OS == model.OSFCOS && w.State.FCOSFedoraVersion == 0 {
-			// Resolve the Fedora version for the current stream on first use.
-			if ver, ferr := fetchFCOSStreamVersionFn(ctx, w.State.Config.Channel); ferr == nil {
-				w.State.FCOSFedoraVersion = ver
+		if w.State.Config.OS == model.OSFCOS &&
+			(w.State.FCOSFedoraVersion == 0 || w.State.FCOSFedoraStream != w.State.Config.Channel) {
+			// Re-resolve Fedora version when unset or when the channel has changed.
+			ver, ferr := fetchFCOSStreamVersionFn(ctx, w.State.Config.Channel)
+			if ferr != nil {
+				return fmt.Errorf("resolving FCOS Fedora version for stream %q: %w", w.State.Config.Channel, ferr)
 			}
+			w.State.FCOSFedoraVersion = ver
+			w.State.FCOSFedoraStream = w.State.Config.Channel
 		}
 		sysexts, err = dc.FetchCatalogForOS(ctx, w.State.Config.Arch, w.State.Config.OS, w.State.FCOSFedoraVersion)
 	} else {
@@ -431,6 +438,7 @@ func (w *Wizard) FetchFCOSStream(ctx context.Context) error {
 		return fmt.Errorf("fetching FCOS stream info: %w", err)
 	}
 	w.State.FCOSFedoraVersion = ver
+	w.State.FCOSFedoraStream = w.State.Config.Channel
 	return nil
 }
 
