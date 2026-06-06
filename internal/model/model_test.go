@@ -123,17 +123,18 @@ func TestInstallConfigInit(t *testing.T) {
 	}
 }
 
-func TestDefaultNvidiaDriverSeries_ExistsInOptions(t *testing.T) {
-	found := false
+func TestDefaultNvidiaDriverSeriesInOptions(t *testing.T) {
+	if DefaultNvidiaDriverSeries == "" {
+		t.Fatal("DefaultNvidiaDriverSeries must be non-empty")
+	}
+
 	for _, opt := range NvidiaDriverOptions {
 		if opt.ID == DefaultNvidiaDriverSeries {
-			found = true
-			break
+			return
 		}
 	}
-	if !found {
-		t.Errorf("DefaultNvidiaDriverSeries %q not found in NvidiaDriverOptions", DefaultNvidiaDriverSeries)
-	}
+
+	t.Fatalf("DefaultNvidiaDriverSeries %q not found in NvidiaDriverOptions", DefaultNvidiaDriverSeries)
 }
 
 func TestNvidiaDriverOptions_ExactlyOneRecommended(t *testing.T) {
