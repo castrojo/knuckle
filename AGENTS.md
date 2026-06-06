@@ -156,6 +156,10 @@ These docs live in `docs/` and improve continuously. Load the relevant one for y
 | Troubleshooting runbook, first-boot diagnostics | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) |
 | Butane-as-library rationale | [`docs/BUTANE-DEPENDENCY.md`](docs/BUTANE-DEPENDENCY.md) |
 
+## Release Checklist
+
+Before tagging any release, use [`docs/RELEASE.md`](docs/RELEASE.md) as the canonical pre-release gate for required checks, VM verification, and blocker history.
+
 ---
 
 ## Routine Maintenance
