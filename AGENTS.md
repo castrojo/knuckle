@@ -5,6 +5,8 @@
 > **Bar:** CNCF-incubating rigor. Every change keeps `just ci` green, respects package
 > boundaries, and preserves the safety invariants below.
 
+**Read [`docs/SKILL.md`](docs/SKILL.md) before starting any task.** It routes you to the right skill file for PR review, releases, testlab, and CI work.
+
 ---
 
 ## What This Repo Is
@@ -142,14 +144,24 @@ tui      ← cmd/knuckle
 
 ## Docs — Load on Demand
 
-These docs live in `docs/` and improve continuously. Load the relevant one for your task — don't load all of them.
+See [`docs/SKILL.md`](docs/SKILL.md) for the full task-to-skill routing table.
 
-| Task | Document |
-| ---- | -------- |
-| Coverage gates, test pyramid, CI pipeline, ISO build internals | [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md) |
-| PR test matrix, tier classification, domain assertions, ghost QA evidence | [`docs/PR-TEST-MATRIX.md`](docs/PR-TEST-MATRIX.md) |
-| Ghost lab setup, port inventory, KubeVirt, QA workflow, conflict resolution | [`docs/GHOST-LAB.md`](docs/GHOST-LAB.md) |
-| Release tag checklist, VM verification, blocker history | [`docs/RELEASE.md`](docs/RELEASE.md) |
+**Skills** (operational, task-oriented):
+
+| Task | Skill |
+| ---- | ----- |
+| Review a PR or run vm-e2e tests | [`docs/skills/qa.md`](docs/skills/qa.md) |
+| Cut a release | [`docs/skills/release.md`](docs/skills/release.md) |
+| Run the VM locally or test an ISO | [`docs/skills/testlab.md`](docs/skills/testlab.md) |
+| Debug CI or understand coverage | [`docs/skills/ci.md`](docs/skills/ci.md) |
+
+**Reference** (deep-dive, load on demand):
+
+| Topic | Document |
+| ----- | -------- |
+| Coverage gates, test pyramid, CI pipeline internals | [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md) |
+| PR test matrix, tier evidence, domain assertions | [`docs/PR-TEST-MATRIX.md`](docs/PR-TEST-MATRIX.md) |
+| Release checklist, VM verification, blockers history | [`docs/RELEASE.md`](docs/RELEASE.md) |
 | Headless config schema, field reference, validation rules | [`docs/HEADLESS-CONFIG.md`](docs/HEADLESS-CONFIG.md) |
 | Security posture, threat model, disclosure path | [`docs/SECURITY.md`](docs/SECURITY.md) |
 | Sysext catalog, Bakery support tiers, extension behavior | [`docs/SYSEXTS.md`](docs/SYSEXTS.md) |
