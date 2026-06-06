@@ -113,6 +113,17 @@ func TestMain_InvalidChannel(t *testing.T) {
 	}
 }
 
+// TestMain_LTSChannelAccepted verifies the CLI accepts lts and reaches the
+// normal TUI path when using the shared channel validator.
+func TestMain_LTSChannelAccepted(t *testing.T) {
+	cmd := helperCmd(t, "--demo", "--channel=lts", "--log-file=/dev/null")
+	cmd.Env = append(cmd.Env, "KNUCKLE_TEST_TUI_NOOP=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected --channel=lts to succeed, got %v\noutput: %s", err, out)
+	}
+}
+
 // TestMain_HeadlessRequiresConfig verifies that --headless without --config
 // exits 1 and prints the usage hint.
 func TestMain_HeadlessRequiresConfig(t *testing.T) {
