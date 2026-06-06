@@ -30,14 +30,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ── Validate channel before interpolating it into BASE_URL ──────────────────
+case "$CHANNEL" in
+    stable|beta|alpha|lts|edge) ;;
+    *) echo "error: invalid --channel '$CHANNEL'. Must be one of: stable beta alpha lts edge" >&2; exit 1 ;;
+esac
+
 # ── Validate arch + channel combination ─────────────────────────────────────
 if [[ "$ARCH" != "amd64" && "$ARCH" != "arm64" ]]; then
     echo "error: --arch must be amd64 or arm64 (got '$ARCH')" >&2; exit 1
 fi
-case "$CHANNEL" in
-    stable|beta|alpha|lts|edge) ;;
-    *) echo "error: --channel must be stable, beta, alpha, lts, or edge (got '$CHANNEL')" >&2; exit 1 ;;
-esac
 if [[ "$ARCH" == "arm64" && "$CHANNEL" == "lts" ]]; then
     echo "error: LTS channel is not available for arm64" >&2; exit 1
 fi
