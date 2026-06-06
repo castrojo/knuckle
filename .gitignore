@@ -1,5 +1,6 @@
 # Binaries
 /bin/
+/catalog_check
 /knuckle
 *.exe
 
