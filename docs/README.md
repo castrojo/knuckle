@@ -29,3 +29,17 @@ These files are mainly useful for maintainers, reviewers, and agent-assisted dev
 | [internal/REVIEW-2026-05-19.md](internal/REVIEW-2026-05-19.md) | Agent-authored principal-engineer review notes from 2026-05-19. |
 | [internal/REVIEW-2026-05-19b.md](internal/REVIEW-2026-05-19b.md) | Agent-authored follow-up review notes from 2026-05-19. |
 | [internal/REVIEW-2026-05-20.md](internal/REVIEW-2026-05-20.md) | Agent-authored principal-engineer review notes from 2026-05-20. |
+
+## Demo assets
+
+The top-level `demo/` directory contains the recorded installer demo used in the project docs:
+
+- `demo/knuckle-demo.tape` — [VHS](https://github.com/charmbracelet/vhs) script/source
+- `demo/knuckle-install.cast` — generated [asciinema](https://asciinema.org/) cast
+- `demo/knuckle-install.gif` — rendered GIF artifact
+
+Regenerate the cast and GIF with:
+
+```bash
+vhs demo/knuckle-demo.tape
+```
