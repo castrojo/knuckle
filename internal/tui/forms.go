@@ -11,6 +11,45 @@ import (
 	"github.com/projectbluefin/knuckle/internal/validate"
 )
 
+func validateOptionalCIDR(s string) error {
+	if s == "" {
+		return nil
+	}
+	return validate.CIDR(s)
+}
+
+func validateOptionalIPAddress(s string) error {
+	if s == "" {
+		return nil
+	}
+	return validate.IPAddress(s)
+}
+
+func validateOptionalHostname(s string) error {
+	if s == "" {
+		return nil
+	}
+	return validate.Hostname(s)
+}
+
+func validateTimezoneInput(s string) error {
+	return validate.Timezone(s)
+}
+
+func validateOptionalUsername(s string) error {
+	if s == "" {
+		return nil
+	}
+	return validate.Username(s)
+}
+
+func validateOptionalTailscaleAuthKey(s string) error {
+	if s == "" {
+		return nil
+	}
+	return validate.TailscaleAuthKey(s)
+}
+
 // buildNetworkForm creates the huh form for the Network step.
 func (m *Model) buildNetworkForm() *huh.Form {
 	// Build interface options from detected interfaces
@@ -51,22 +90,12 @@ func (m *Model) buildNetworkForm() *huh.Form {
 			Description("With subnet mask, e.g. 192.168.1.100/24").
 			Placeholder("192.168.1.100/24").
 			Value(&m.Wizard.State.Config.Network.Address).
-			Validate(func(s string) error {
-				if s == "" {
-					return nil
-				}
-				return validate.CIDR(s)
-			}),
+			Validate(validateOptionalCIDR),
 		huh.NewInput().
 			Title("Gateway").
 			Placeholder("192.168.1.1").
 			Value(&m.Wizard.State.Config.Network.Gateway).
-			Validate(func(s string) error {
-				if s == "" {
-					return nil
-				}
-				return validate.IPAddress(s)
-			}),
+			Validate(validateOptionalIPAddress),
 		huh.NewInput().
 			Title("DNS Servers").
 			Description("Comma-separated, e.g. 1.1.1.1,8.8.8.8").
@@ -93,30 +122,18 @@ func (m *Model) buildUserForm() *huh.Form {
 				Title("Hostname").
 				Placeholder("flatcar-node01").
 				Value(&m.Wizard.State.Config.Hostname).
-				Validate(func(s string) error {
-					if s == "" {
-						return nil
-					}
-					return validate.Hostname(s)
-				}),
+				Validate(validateOptionalHostname),
 			huh.NewInput().
 				Title("Timezone").
 				Placeholder("UTC").
 				Description("e.g. America/New_York, Europe/Berlin").
 				Value(&m.Wizard.State.Config.Timezone).
-				Validate(func(s string) error {
-					return validate.Timezone(s)
-				}),
+				Validate(validateTimezoneInput),
 			huh.NewInput().
 				Title("Username").
 				Description("Primary user account").
 				Value(&m.usernameInput).
-				Validate(func(s string) error {
-					if s == "" {
-						return nil
-					}
-					return validate.Username(s)
-				}),
+				Validate(validateOptionalUsername),
 			huh.NewInput().
 				Title("Password").
 				Description("Optional — leave blank for key-only auth").
@@ -172,12 +189,7 @@ func (m *Model) buildTailscaleForm() *huh.Form {
 				Placeholder("tskey-auth-...").
 				EchoMode(huh.EchoModePassword).
 				Value(&m.tailscaleAuthKeyIn).
-				Validate(func(s string) error {
-					if s == "" {
-						return nil
-					}
-					return validate.TailscaleAuthKey(s)
-				}),
+				Validate(validateOptionalTailscaleAuthKey),
 			huh.NewSelect[string]().
 				Title("Mode").
 				Options(modeOptions...).
