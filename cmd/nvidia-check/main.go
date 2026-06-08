@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -27,38 +28,42 @@ type ghContentResponse struct {
 	Encoding string `json:"encoding"`
 }
 
-func main() {
-	fmt.Println("nvidia_check — verifying model.go NvidiaDriverOptions against Flatcar docs")
-	fmt.Println("──────────────────────────────────────────────────────────────────────────")
-	fmt.Println()
+func main() { os.Exit(run(os.Stdout, os.Stderr)) }
+
+// run contains the main logic, extracted for testability.
+// Returns 0 on success, 1 when model is missing entries, 2 on fetch failure.
+func run(stdout, stderr io.Writer) int {
+	fmt.Fprintln(stdout, "nvidia_check — verifying model.go NvidiaDriverOptions against Flatcar docs")
+	fmt.Fprintln(stdout, "──────────────────────────────────────────────────────────────────────────")
+	fmt.Fprintln(stdout)
 
 	// ── Fetch Flatcar docs ────────────────────────────────────────────────
-	fmt.Println("Fetching Flatcar NVIDIA docs...")
+	fmt.Fprintln(stdout, "Fetching Flatcar NVIDIA docs...")
 	docContent, err := fetchNvidiaDocs()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: Could not fetch Flatcar NVIDIA docs from GitHub.\n")
-		fmt.Fprintf(os.Stderr, "  Check network or try: curl -sf '%s'\n", docsURL)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "ERROR: Could not fetch Flatcar NVIDIA docs from GitHub.\n")
+		fmt.Fprintf(stderr, "  Check network or try: curl -sf '%s'\n", docsURL)
+		return 2
 	}
 
 	// Extract all nvidia-drivers-* patterns from the docs.
 	docSeries := extractDriverSeries(docContent)
 	sort.Strings(docSeries)
 
-	fmt.Println()
-	fmt.Println("Driver series mentioned in Flatcar NVIDIA docs:")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "Driver series mentioned in Flatcar NVIDIA docs:")
 	if len(docSeries) == 0 {
-		fmt.Println("  (none found — docs may have changed structure)")
+		fmt.Fprintln(stdout, "  (none found — docs may have changed structure)")
 	} else {
 		for _, series := range docSeries {
 			id := strings.TrimPrefix(series, "nvidia-drivers-")
-			fmt.Printf("  %s  (%s)\n", id, series)
+			fmt.Fprintf(stdout, "  %s  (%s)\n", id, series)
 		}
 	}
 
 	// ── Extract model.go entries ──────────────────────────────────────────
-	fmt.Println()
-	fmt.Println("Driver series in model.go NvidiaDriverOptions:")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "Driver series in model.go NvidiaDriverOptions:")
 	modelIDs := model.DriverSeriesMap()
 	var modelIDKeys []string
 	for k := range modelIDs {
@@ -69,42 +74,43 @@ func main() {
 	modelIDSet := make(map[string]bool)
 	for _, id := range modelIDKeys {
 		modelIDSet[id] = true
-		fmt.Printf("  %s  (nvidia-drivers-%s)\n", id, id)
+		fmt.Fprintf(stdout, "  %s  (nvidia-drivers-%s)\n", id, id)
 	}
 
 	// ── Compare ───────────────────────────────────────────────────────────
-	fmt.Println()
-	fmt.Println("──────────────────────────────────────────────────────────────────────────")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "──────────────────────────────────────────────────────────────────────────")
 
 	missing, extra := compareDriverSeries(docSeries, modelIDKeys)
 
 	for _, id := range missing {
-		fmt.Printf("⚠ MISSING IN MODEL: %s — mentioned in Flatcar docs but not in model.go\n", id)
+		fmt.Fprintf(stdout, "⚠ MISSING IN MODEL: %s — mentioned in Flatcar docs but not in model.go\n", id)
 	}
 	for _, id := range extra {
-		fmt.Printf("  NOTE: %s is in model.go but not mentioned in current Flatcar docs\n", id)
-		fmt.Println("        (This is normal — docs typically only show the recommended series)")
+		fmt.Fprintf(stdout, "  NOTE: %s is in model.go but not mentioned in current Flatcar docs\n", id)
+		fmt.Fprintln(stdout, "        (This is normal — docs typically only show the recommended series)")
 	}
 
-	fmt.Println()
+	fmt.Fprintln(stdout)
 	if len(missing) > 0 {
-		fmt.Println("ACTION REQUIRED: Update internal/model/model.go NvidiaDriverOptions")
-		fmt.Println()
-		fmt.Println("  1. Add the missing series to NvidiaDriverOptions in internal/model/model.go")
-		fmt.Println("  2. Set Recommended: true on the newest open-source series")
-		fmt.Println("  3. Update DefaultNvidiaDriverSeries to the newest recommended series")
-		fmt.Println("  4. Update Description field with GPU compatibility information")
-		fmt.Println("  5. Update the NVIDIA section in docs/SYSEXTS.md")
-		fmt.Println("  6. Run: just ci")
-		os.Exit(1)
-	} else {
-		fmt.Println("✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs.")
-		fmt.Println()
-		fmt.Println("Note: The Flatcar docs may only show a single example series.")
-		fmt.Println("For authoritative driver series availability, check:")
-		fmt.Println("  https://www.flatcar.org/docs/latest/setup/customization/using-nvidia/")
-		fmt.Println("  https://github.com/flatcar/flatcar-website")
+		fmt.Fprintln(stdout, "ACTION REQUIRED: Update internal/model/model.go NvidiaDriverOptions")
+		fmt.Fprintln(stdout)
+		fmt.Fprintln(stdout, "  1. Add the missing series to NvidiaDriverOptions in internal/model/model.go")
+		fmt.Fprintln(stdout, "  2. Set Recommended: true on the newest open-source series")
+		fmt.Fprintln(stdout, "  3. Update DefaultNvidiaDriverSeries to the newest recommended series")
+		fmt.Fprintln(stdout, "  4. Update Description field with GPU compatibility information")
+		fmt.Fprintln(stdout, "  5. Update the NVIDIA section in docs/SYSEXTS.md")
+		fmt.Fprintln(stdout, "  6. Run: just ci")
+		return 1
 	}
+
+	fmt.Fprintln(stdout, "✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs.")
+	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "Note: The Flatcar docs may only show a single example series.")
+	fmt.Fprintln(stdout, "For authoritative driver series availability, check:")
+	fmt.Fprintln(stdout, "  https://www.flatcar.org/docs/latest/setup/customization/using-nvidia/")
+	fmt.Fprintln(stdout, "  https://github.com/flatcar/flatcar-website")
+	return 0
 }
 
 // compareDriverSeries returns IDs missing from model and IDs extra in model.
