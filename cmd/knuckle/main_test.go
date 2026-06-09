@@ -642,6 +642,53 @@ func TestMain_DemoBakeryWarn(t *testing.T) {
 	}
 }
 
+// TestMain_ProductionPath exercises the non-demo, non-dry-run initialization
+// path that wires real SystemProber, HTTPClient, and DispatchingInstaller.
+// Uses KNUCKLE_TEST_TUI_NOOP to bypass the terminal requirement so this test
+// runs in headless CI environments (no /dev/tty needed).
+// Covers: real runner creation (else branch), real prober/bakery/installer
+// wiring, hardware probe + sysext/channel fetch (warn-and-continue on error),
+// and rebootFn setup for non-dry-run mode.
+func TestMain_ProductionPath(t *testing.T) {
+	logFile := t.TempDir() + "/knuckle-prod.log"
+	cmd := helperCmd(t, "--channel=stable", "--log-file="+logFile)
+	cmd.Env = append(cmd.Env, "KNUCKLE_TEST_TUI_NOOP=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("production path exited non-zero: %v\noutput: %s", err, out)
+	}
+	logData, readErr := os.ReadFile(logFile)
+	if readErr != nil {
+		t.Fatalf("reading log file: %v", readErr)
+	}
+	// In CI there are no real disks or network, so probes log warnings — that's fine.
+	// The key assertion is that main() reached tuiRunFn without crashing.
+	if !strings.Contains(string(logData), "knuckle starting") {
+		t.Errorf("expected log to contain 'knuckle starting'; log: %s", logData)
+	}
+	if !strings.Contains(string(logData), "knuckle finished") {
+		t.Errorf("expected log to contain 'knuckle finished'; log: %s", logData)
+	}
+}
+
+// TestMain_ProductionPathTUIError verifies that the production path (non-demo,
+// non-dry-run) correctly propagates a TUI error to stderr and exits 1.
+// Covers the tuiRunFn error handling in production mode.
+func TestMain_ProductionPathTUIError(t *testing.T) {
+	cmd := helperCmd(t, "--channel=stable", "--log-file=/dev/null")
+	cmd.Env = append(cmd.Env, "KNUCKLE_TEST_TUI_FAIL=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected non-zero exit for TUI error in production path, got exit 0")
+	}
+	if cmd.ProcessState.ExitCode() != 1 {
+		t.Errorf("expected exit code 1, got %d", cmd.ProcessState.ExitCode())
+	}
+	if !strings.Contains(string(out), "Error:") {
+		t.Errorf("expected 'Error:' in output; got: %s", out)
+	}
+}
+
 // TestMain_TUIRunError verifies that when tui.Run returns an error, main logs it,
 // prints to stderr, and exits 1.
 // Covers: lines ~156-159 (TUI error path).
