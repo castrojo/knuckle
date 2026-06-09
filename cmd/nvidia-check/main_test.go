@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/projectbluefin/knuckle/internal/model"
 )
 
 func TestExtractDriverSeries_Empty(t *testing.T) {
@@ -229,5 +232,113 @@ func TestCompareDriverSeries_Empty(t *testing.T) {
 	missing, extra := compareDriverSeries(nil, nil)
 	if len(missing) != 0 || len(extra) != 0 {
 		t.Errorf("expected empty results, got missing=%v extra=%v", missing, extra)
+	}
+}
+
+// --- run() integration tests ---
+
+// buildFakeDocsContent constructs a markdown string containing nvidia-drivers-X
+// entries matching the given IDs.
+func buildFakeDocsContent(ids []string) string {
+	var b strings.Builder
+	b.WriteString("# NVIDIA Drivers\n\n")
+	for _, id := range ids {
+		b.WriteString("SYSEXTNAME=nvidia-drivers-" + id + "\n")
+	}
+	return b.String()
+}
+
+// serveFakeDocs starts a test server that returns the given content as a
+// GitHub file API response. Caller must defer srv.Close().
+func serveFakeDocs(t *testing.T, content string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(fakeGHContent(content)); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
+	}))
+}
+
+func TestRun_Consistent(t *testing.T) {
+	// Serve doc content that exactly matches model.go driver IDs.
+	modelIDs := model.DriverSeriesMap()
+	ids := make([]string, 0, len(modelIDs))
+	for k := range modelIDs {
+		ids = append(ids, k)
+	}
+	srv := serveFakeDocs(t, buildFakeDocsContent(ids))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	code := run()
+	if code != 0 {
+		t.Errorf("run() = %d, want 0 (consistent)", code)
+	}
+}
+
+func TestRun_MissingInModel(t *testing.T) {
+	// Serve doc content that includes an ID NOT in model.go.
+	modelIDs := model.DriverSeriesMap()
+	ids := make([]string, 0, len(modelIDs)+1)
+	for k := range modelIDs {
+		ids = append(ids, k)
+	}
+	ids = append(ids, "999-fake") // not in model
+	srv := serveFakeDocs(t, buildFakeDocsContent(ids))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	code := run()
+	if code != 1 {
+		t.Errorf("run() = %d, want 1 (missing in model)", code)
+	}
+}
+
+func TestRun_FetchError(t *testing.T) {
+	orig := docsURL
+	docsURL = "http://127.0.0.1:1" // unreachable
+	defer func() { docsURL = orig }()
+
+	code := run()
+	if code != 2 {
+		t.Errorf("run() = %d, want 2 (fetch error)", code)
+	}
+}
+
+func TestRun_EmptyDocSeries(t *testing.T) {
+	// Doc has no nvidia-drivers-* mentions — model has extras, but nothing missing.
+	srv := serveFakeDocs(t, "No drivers mentioned here at all.")
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	code := run()
+	if code != 0 {
+		t.Errorf("run() = %d, want 0 (no missing = consistent)", code)
+	}
+}
+
+func TestRun_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	code := run()
+	if code != 2 {
+		t.Errorf("run() = %d, want 2 (HTTP error → fetch error)", code)
 	}
 }

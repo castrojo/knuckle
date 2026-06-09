@@ -27,7 +27,11 @@ type ghContentResponse struct {
 	Encoding string `json:"encoding"`
 }
 
-func main() {
+func main() { os.Exit(run()) }
+
+// run contains the main logic and returns an exit code (0 = consistent,
+// 1 = missing drivers, 2 = fetch error). Extracted for testability.
+func run() int {
 	fmt.Println("nvidia_check — verifying model.go NvidiaDriverOptions against Flatcar docs")
 	fmt.Println("──────────────────────────────────────────────────────────────────────────")
 	fmt.Println()
@@ -38,7 +42,7 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: Could not fetch Flatcar NVIDIA docs from GitHub.\n")
 		fmt.Fprintf(os.Stderr, "  Check network or try: curl -sf '%s'\n", docsURL)
-		os.Exit(2)
+		return 2
 	}
 
 	// Extract all nvidia-drivers-* patterns from the docs.
@@ -96,15 +100,16 @@ func main() {
 		fmt.Println("  4. Update Description field with GPU compatibility information")
 		fmt.Println("  5. Update the NVIDIA section in docs/SYSEXTS.md")
 		fmt.Println("  6. Run: just ci")
-		os.Exit(1)
-	} else {
-		fmt.Println("✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs.")
-		fmt.Println()
-		fmt.Println("Note: The Flatcar docs may only show a single example series.")
-		fmt.Println("For authoritative driver series availability, check:")
-		fmt.Println("  https://www.flatcar.org/docs/latest/setup/customization/using-nvidia/")
-		fmt.Println("  https://github.com/flatcar/flatcar-website")
+		return 1
 	}
+
+	fmt.Println("✓ model.go NvidiaDriverOptions appears consistent with Flatcar docs.")
+	fmt.Println()
+	fmt.Println("Note: The Flatcar docs may only show a single example series.")
+	fmt.Println("For authoritative driver series availability, check:")
+	fmt.Println("  https://www.flatcar.org/docs/latest/setup/customization/using-nvidia/")
+	fmt.Println("  https://github.com/flatcar/flatcar-website")
+	return 0
 }
 
 // compareDriverSeries returns IDs missing from model and IDs extra in model.
