@@ -1109,11 +1109,24 @@ nvidia-check:
         -o bin/nvidia-check ./cmd/nvidia-check
     ./bin/nvidia-check
 
-# Full pre-release preflight: catalog coverage + nvidia versions + CI gate.
+# Full pre-release preflight: catalog coverage + nvidia versions + CI gate + CHANGELOG reminder.
 # Run this before tagging any release.
 release-preflight: ci
     #!/usr/bin/env bash
     set -euo pipefail
+    echo ""
+    echo "[2/3] Checking sysext catalog coverage against live bakery..."
+    go run ./scripts/catalog_check/ --strict
+    echo ""
+    echo "[3/3] Checking NVIDIA driver series against Flatcar docs..."
+    ./scripts/nvidia_check.sh
+    echo ""
+    echo "✓ release-preflight complete"
+    echo ""
+    echo "Pre-tag checklist (manual steps):"
+    echo "  - [ ] Promote CHANGELOG.md [Unreleased] to ## [vX.Y.Z] - $(date +%Y-%m-%d)"
+    echo "  - [ ] Update compare links in CHANGELOG.md footer"
+    echo "  - [ ] Run 'just vm-e2e' for final VM verification before publishing"
 
 # QA: full PR test — build + unit tests + Flatcar VM install + boot + domain assertions.
 # Artifacts saved to .qa/runs/pr-N-TIMESTAMP/. Failed runs generate an issue body.
