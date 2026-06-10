@@ -177,6 +177,22 @@ cover-check:
     else
         echo "ok    ${cbf_pkg}  ${cbf_pct}%  (target ${cbf_target}%)"
     fi
+    # cmd/nvidia-check: 80% gate; main() + fetchNvidiaDocs() are excluded
+    # (entrypoint + live HTTP — tested via run() with a mock fetcher)
+    nvc_pkg=cmd/nvidia-check
+    nvc_target=80
+    nvc_pct=$(go test -count=1 -cover ./${nvc_pkg}/... 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    nvc_pct=${nvc_pct%.*}
+    if [[ -z "$nvc_pct" ]]; then
+        echo "FAIL  ${nvc_pkg}   no coverage reported"
+        fail=1
+    elif (( nvc_pct < nvc_target )); then
+        echo "FAIL  ${nvc_pkg}  ${nvc_pct}%  (target ${nvc_target}%)"
+        fail=1
+    else
+        echo "ok    ${nvc_pkg}  ${nvc_pct}%  (target ${nvc_target}%)"
+    fi
     exit $fail
 
 # Quick headless dry-run test (no VM needed)
