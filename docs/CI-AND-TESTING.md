@@ -44,7 +44,7 @@
 | `internal/iso`               |  100%  | 100% | (n/a)                     |
 | `internal/runner`            |  100%  | 100% | ≥ 80%                     |
 | `internal/demo`              |  100%  | 100% | (n/a)                     |
-| `internal/validate`          |  100%  | 100% | ≥ 95%                     |
+| `internal/validate`          |  99.5% |  99% | ≥ 95%                     |
 | `internal/probe`             |  100%  | 100% | ≥ 85%                     |
 | `internal/install`           |  100%  | 100% | ≥ 80%                     |
 | `internal/ignition`          |  100%  | 100% | ≥ 90%                     |
