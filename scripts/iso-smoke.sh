@@ -26,13 +26,18 @@ if [[ -z "$ISO_PATH" || -z "$OVMF_PATH" ]]; then
   exit 1
 fi
 
+# Create the .vm directory and serial log stub early so that the CI
+# upload-artifact step always finds a file regardless of where we exit.
+mkdir -p .vm
+touch "$SERIAL_LOG"
+
 if [[ ! -f "$ISO_PATH" ]]; then
-  echo "ISO not found: $ISO_PATH" >&2
+  echo "ISO not found: $ISO_PATH" | tee -a "$SERIAL_LOG" >&2
   exit 1
 fi
 
 if [[ ! -f "$OVMF_PATH" ]]; then
-  echo "OVMF not found: $OVMF_PATH" >&2
+  echo "OVMF not found: $OVMF_PATH" | tee -a "$SERIAL_LOG" >&2
   exit 1
 fi
 
@@ -54,8 +59,8 @@ log_has() {
   grep -aEq -- "$pattern" "$SERIAL_LOG"
 }
 
-mkdir -p .vm
-rm -f "$TARGET_DISK" "$SERIAL_LOG"
+# .vm/ and $SERIAL_LOG already created above; only remove the disk image.
+rm -f "$TARGET_DISK"
 qemu-img create -f qcow2 "$TARGET_DISK" 20G >/dev/null
 
 printf '=== iso-smoke: headless ISO boot ===\n'
