@@ -182,6 +182,22 @@ cover-check:
     else
         echo "ok    ${cbf_pkg}  ${cbf_pct}%  (target ${cbf_target}%)"
     fi
+    # cmd/nvidia-check — gated at 95% (run() is covered; main() wrapper is not).
+    # Depends on the run() refactor landing in #760. Gate prevents regression.
+    nvidia_pkg=cmd/nvidia-check
+    nvidia_target=95
+    nvidia_pct=$(go test -count=1 -cover ./${nvidia_pkg}/... 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    nvidia_pct=${nvidia_pct%.*}
+    if [[ -z "$nvidia_pct" ]]; then
+        echo "FAIL  ${nvidia_pkg}   no coverage reported"
+        fail=1
+    elif (( nvidia_pct < nvidia_target )); then
+        echo "FAIL  ${nvidia_pkg}  ${nvidia_pct}%  (target ${nvidia_target}%)"
+        fail=1
+    else
+        echo "ok    ${nvidia_pkg}  ${nvidia_pct}%  (target ${nvidia_target}%)"
+    fi
     exit $fail
 
 # Quick headless dry-run test (no VM needed)

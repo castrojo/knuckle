@@ -54,6 +54,9 @@
 | `internal/headless`          |  99%   |  99% | (n/a)                     |
 | `internal/tui`               |  98.7% |  98% | ≥ 85%                     |
 | `internal/github`            |  97%   |  96% | (n/a)                     |
+| `cmd/knuckle`                |  ~85%  |  85% | (n/a)                     |
+| `cmd/compile-butane-fresh`   |  100%  | 100% | (n/a)                     |
+| `cmd/nvidia-check`           |  98.9% |  95% | (n/a) — depends on #760   |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
