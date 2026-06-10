@@ -296,3 +296,239 @@ BASH
   run grep -F "virtctl -n knuckle-test start vm4" "$WORK_DIR/boot.log"
   [ "$status" -eq 0 ]
 }
+
+# ── kv_prepare_disk ───────────────────────────────────────────────────────────
+
+@test "kv_prepare_disk creates raw and target disks on ghost" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+export FLATCAR_BASE="/var/tmp/flatcar_base.img"
+source "$SCRIPT_PATH"
+
+CALLS=""
+ssh() {
+  CALLS="$CALLS ssh:$*"
+  # Simulate no cache files existing so all three branches run
+  return 0
+}
+
+kv_prepare_disk "pr-42"
+echo "calls:$CALLS"
+BASH
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"pr-42-raw.img"* ]]
+  [[ "$output" == *"pr-42-target.img"* ]]
+}
+
+@test "kv_prepare_disk passes GOPTS to ssh" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+export FLATCAR_BASE="/var/tmp/flatcar_base.img"
+source "$SCRIPT_PATH"
+
+SSH_ARGS=""
+ssh() { SSH_ARGS="$*"; return 0; }
+
+kv_prepare_disk "test-vm"
+echo "args:$SSH_ARGS"
+BASH
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-o IdentitiesOnly=yes"* ]]
+  [[ "$output" == *"ghost.local"* ]]
+}
+
+# ── kv_write_ignition ─────────────────────────────────────────────────────────
+
+@test "kv_write_ignition uses provided key without fetching from ghost" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+LOG=$(mktemp)
+# ssh in a pipeline runs in a subshell — write to a file so the parent can read it
+ssh() {
+  echo "$*" >> "$LOG"
+  if [[ "$*" == *"cat >"* ]]; then cat > /dev/null; fi
+  return 0
+}
+export -f ssh
+export LOG
+
+kv_write_ignition "vm1" "ssh-ed25519 AAAA test@host"
+echo "log:$(cat "$LOG")"
+rm -f "$LOG"
+BASH
+
+  [ "$status" -eq 0 ]
+  # key-fetch path must NOT have been taken
+  [[ "$output" != *"cat ~/.ssh/id_ed25519.pub"* ]]
+  # write-ignition path must have been taken (installer ign path in ssh args)
+  [[ "$output" == *"vm1-installer.ign"* ]]
+}
+
+@test "kv_write_ignition fetches key from ghost when none provided" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+ssh() {
+  if [[ "$*" == *"cat ~/.ssh/id_ed25519.pub"* ]]; then
+    echo "ssh-ed25519 AAAA ghost@host"
+    return 0
+  fi
+  cat > /dev/null
+  return 0
+}
+
+kv_write_ignition "vm2"
+BASH
+
+  [ "$status" -eq 0 ]
+}
+
+# ── kv_ip ─────────────────────────────────────────────────────────────────────
+
+@test "kv_ip queries pod by kubevirt.io/vm label" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+SSH_ARGS=""
+ssh() { SSH_ARGS="$*"; echo "10.244.1.5"; }
+
+kv_ip "myvm"
+echo "args:$SSH_ARGS"
+BASH
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"10.244.1.5"* ]]
+  [[ "$output" == *"kubevirt.io/vm=myvm"* ]]
+  [[ "$output" == *"podIP"* ]]
+}
+
+# ── kv_ssh ────────────────────────────────────────────────────────────────────
+
+@test "kv_ssh routes command through ghost to core@<pod-ip>" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+SSH_CALLS=""
+ssh() {
+  SSH_CALLS="$SSH_CALLS|$*"
+  # First call is kv_ip → return the pod IP
+  if [[ "$*" == *"jsonpath"* ]]; then echo "10.244.2.7"; return 0; fi
+  return 0
+}
+
+kv_ssh "myvm" "uname -a"
+echo "calls:$SSH_CALLS"
+BASH
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"core@10.244.2.7"* ]]
+  [[ "$output" == *"uname -a"* ]]
+}
+
+# ── kv_scp_to_vm ──────────────────────────────────────────────────────────────
+
+@test "kv_scp_to_vm uploads via ghost then SCP to VM" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+CALLS=""
+ssh() {
+  CALLS="$CALLS|ssh:$*"
+  if [[ "$*" == *"jsonpath"* ]]; then echo "10.244.3.1"; return 0; fi
+  return 0
+}
+scp() { CALLS="$CALLS|scp:$*"; return 0; }
+
+kv_scp_to_vm "myvm" "/local/file" "/remote/path"
+echo "calls:$CALLS"
+BASH
+
+  [ "$status" -eq 0 ]
+  # Should scp local→ghost first
+  [[ "$output" == *"scp:"*"ghost.local"* ]]
+  # Then ssh on ghost to scp ghost→VM
+  [[ "$output" == *"core@10.244.3.1"* ]]
+}
+
+# ── kv_delete ─────────────────────────────────────────────────────────────────
+
+@test "kv_delete issues kubectl delete and removes disk files" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+SSH_CMD=""
+ssh() { SSH_CMD="$SSH_CMD|$*"; return 0; }
+
+kv_delete "pr-99"
+echo "cmd:$SSH_CMD"
+BASH
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"delete vm pr-99"* ]]
+  [[ "$output" == *"pr-99-raw.img"* ]]
+  [[ "$output" == *"pr-99-target.img"* ]]
+  [[ "$output" == *"pr-99-installer.ign"* ]]
+}
+
+@test "kv_delete succeeds when VM is already gone" {
+  run bash <<'BASH'
+set -euo pipefail
+exec 2>&1
+export GHOST="ghost.local"
+export GOPTS="-o IdentitiesOnly=yes"
+export KUBEVIRT_NS="knuckle-test"
+source "$SCRIPT_PATH"
+
+# Simulate VM not found — kubectl delete returns non-zero for get, 0 for delete
+ssh() {
+  [[ "$*" == *"delete vm"* ]] && return 0
+  [[ "$*" == *"rm -f"* ]] && return 0
+  return 0
+}
+
+kv_delete "gone-vm"
+BASH
+
+  [ "$status" -eq 0 ]
+}
