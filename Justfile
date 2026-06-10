@@ -189,11 +189,21 @@ headless-test:
     #!/usr/bin/env bash
     set -euo pipefail
     just build
+
+    echo "── Flatcar headless dry-run ──"
     cat > /tmp/knuckle-test-config.json <<'EOF'
     {"channel":"stable","hostname":"test-node","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"]}],"disk":"/dev/vdb","update_strategy":"reboot","reboot":false}
     EOF
     bin/knuckle --config /tmp/knuckle-test-config.json --headless --dry-run
-    echo "✅ PASS"
+    echo "✅ Flatcar PASS"
+
+    echo ""
+    echo "── FCOS headless dry-run ──"
+    cat > /tmp/knuckle-fcos-test-config.json <<'EOF'
+    {"os":"fcos","channel":"stable","hostname":"fcos-test","timezone":"UTC","network":{"mode":"dhcp"},"users":[{"username":"core","ssh_keys":["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"]}],"disk":"/dev/vdb","update_strategy":"reboot","reboot":false}
+    EOF
+    bin/knuckle --config /tmp/knuckle-fcos-test-config.json --headless --dry-run
+    echo "✅ FCOS PASS"
 
 # Real install in a VM — auto-boots the installed system when knuckle exits
 vm:
