@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
+
+	"github.com/projectbluefin/knuckle/internal/model"
 )
 
 func TestExtractDriverSeries_Empty(t *testing.T) {
@@ -230,4 +234,151 @@ func TestCompareDriverSeries_Empty(t *testing.T) {
 	if len(missing) != 0 || len(extra) != 0 {
 		t.Errorf("expected empty results, got missing=%v extra=%v", missing, extra)
 	}
+}
+
+// --- run() integration tests ---
+
+// tempFile creates a temp file and returns it (caller must close/remove).
+func tempFile(t *testing.T) *os.File {
+	t.Helper()
+	f, err := os.CreateTemp(t.TempDir(), "nvidia-check-*")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	return f
+}
+
+func TestRun_Success_AllMatch(t *testing.T) {
+	// Serve docs that mention exactly the series in model.go.
+	// Build a doc string from model.DriverSeriesMap keys.
+	var docParts []string
+	for k := range modelDriverSeriesKeys() {
+		docParts = append(docParts, "nvidia-drivers-"+k)
+	}
+	docText := strings.Join(docParts, " ")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent(docText))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	stdout := tempFile(t)
+	defer stdout.Close()
+	stderr := tempFile(t)
+	defer stderr.Close()
+
+	code := run(stdout, stderr)
+	if code != 0 {
+		// Read stderr for diagnostics
+		_, _ = stderr.Seek(0, 0)
+		b, _ := os.ReadFile(stderr.Name())
+		t.Fatalf("expected exit code 0, got %d; stderr: %s", code, string(b))
+	}
+
+	// Verify stdout contains success marker
+	_, _ = stdout.Seek(0, 0)
+	out, _ := os.ReadFile(stdout.Name())
+	if !strings.Contains(string(out), "✓ model.go NvidiaDriverOptions appears consistent") {
+		t.Errorf("expected success message in stdout, got:\n%s", string(out))
+	}
+}
+
+func TestRun_FetchError(t *testing.T) {
+	orig := docsURL
+	docsURL = "http://127.0.0.1:1" // unreachable
+	defer func() { docsURL = orig }()
+
+	stdout := tempFile(t)
+	defer stdout.Close()
+	stderr := tempFile(t)
+	defer stderr.Close()
+
+	code := run(stdout, stderr)
+	if code != 2 {
+		t.Fatalf("expected exit code 2 for fetch error, got %d", code)
+	}
+
+	_, _ = stderr.Seek(0, 0)
+	errOut, _ := os.ReadFile(stderr.Name())
+	if !strings.Contains(string(errOut), "ERROR: Could not fetch") {
+		t.Errorf("expected error message in stderr, got:\n%s", string(errOut))
+	}
+}
+
+func TestRun_MissingSeries(t *testing.T) {
+	// Serve docs that mention a series NOT in model.go.
+	docText := "nvidia-drivers-999 nvidia-drivers-imaginary"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent(docText))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	stdout := tempFile(t)
+	defer stdout.Close()
+	stderr := tempFile(t)
+	defer stderr.Close()
+
+	code := run(stdout, stderr)
+	if code != 1 {
+		t.Fatalf("expected exit code 1 for missing series, got %d", code)
+	}
+
+	_, _ = stdout.Seek(0, 0)
+	out, _ := os.ReadFile(stdout.Name())
+	if !strings.Contains(string(out), "ACTION REQUIRED") {
+		t.Errorf("expected ACTION REQUIRED in stdout, got:\n%s", string(out))
+	}
+	if !strings.Contains(string(out), "MISSING IN MODEL") {
+		t.Errorf("expected MISSING IN MODEL in stdout, got:\n%s", string(out))
+	}
+}
+
+func TestRun_EmptyDocs(t *testing.T) {
+	// Serve docs with no driver series mentions — should succeed
+	// (no series in docs means nothing is "missing" from model).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent("No driver mentions here at all."))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	stdout := tempFile(t)
+	defer stdout.Close()
+	stderr := tempFile(t)
+	defer stderr.Close()
+
+	code := run(stdout, stderr)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 for empty docs, got %d", code)
+	}
+
+	_, _ = stdout.Seek(0, 0)
+	out, _ := os.ReadFile(stdout.Name())
+	if !strings.Contains(string(out), "none found") {
+		t.Errorf("expected 'none found' message in stdout, got:\n%s", string(out))
+	}
+}
+
+// modelDriverSeriesKeys returns the keys from model.DriverSeriesMap for test use.
+func modelDriverSeriesKeys() map[string]bool {
+	m := make(map[string]bool)
+	for k := range model.DriverSeriesMap() {
+		m[k] = true
+	}
+	return m
 }
