@@ -11,9 +11,9 @@
 
 ## What This Repo Is
 
-A TUI installer for [Flatcar Container Linux](https://www.flatcar.org/), targeting bare-metal.
+A TUI installer for [Flatcar Container Linux](https://www.flatcar.org/) and [FCOS](https://fedoraproject.org/coreos/), targeting bare-metal.
 Built in Go on charm.sh (Bubble Tea v2, Lip Gloss v2, Huh v2). Assembles an Ignition config
-and hands off to `flatcar-install` — knuckle never writes partitions itself.
+and dispatches to `flatcar-install` (Flatcar) or `coreos-installer` (FCOS) via `DispatchingInstaller` — knuckle never writes partitions itself.
 
 - **Module:** `github.com/projectbluefin/knuckle` (Go 1.26+)
 - **License:** Apache-2.0
@@ -87,10 +87,10 @@ Coverage gates are authoritative in [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTI
 | `internal/runner`   | `Runner` interface: `RealRunner`, `DryRunner`, `SpyRunner`        |
 | `internal/probe`    | `lsblk` + `ip addr` JSON parsing, `/dev/disk/by-id` resolution   |
 | `internal/validate` | Hostname, CIDR, gateway, SSH key, timezone, disk path validators  |
-| `internal/bakery`   | sysext catalog + Flatcar release/SBOM fetchers, SHA512 + GPG check|
+| `internal/bakery`   | `DispatchingClient` routing to Flatcar or FCOS bakery clients; sysext catalog + release/SBOM fetchers, SHA512 + GPG check|
 | `internal/github`   | SSH key fetch + GitHub Releases API client                        |
 | `internal/ignition` | Butane assembly + in-process Butane→Ignition compilation          |
-| `internal/install`  | `flatcar-install` orchestration via runner                        |
+| `internal/install`  | `DispatchingInstaller` routing to `FlatcarInstaller` or `FCOSInstaller` via runner |
 | `internal/iso`      | Installer ISO builder helpers                                     |
 | `internal/headless` | `--headless --config` JSON-driven install path                    |
 | `internal/wizard`   | Step state machine, navigation, validation gates                  |
