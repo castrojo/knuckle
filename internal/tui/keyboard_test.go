@@ -3,8 +3,8 @@
 //
 // Organisation:
 //
-//	shift+tab   – global back-nav intercept (before forms)
-//	esc         – back-nav, no-op on first step, filter-clear on sysext
+//	shift+tab   – back-nav on non-form steps; field-nav within huh forms
+//	esc         – back-nav (including form steps), no-op on first step, filter-clear on sysext
 //	tab / j / down – advance cursor / field
 //	up / k      – retreat cursor / field
 //	enter       – confirm / advance
@@ -75,13 +75,13 @@ func userModel(formActive bool) *Model {
 }
 
 // ---------------------------------------------------------------------------
-// shift+tab — global back-navigation intercept
+// shift+tab — back-nav on non-form steps; field-nav within huh forms
 // ---------------------------------------------------------------------------
 
-// TestKeyboard_ShiftTab_FormStep_GlobalIntercept verifies that shift+tab is
-// handled BEFORE the huh form delegates any message.  Even with activeForm set
-// (Network step), the model must retreat to the previous step.
-func TestKeyboard_ShiftTab_FormStep_GlobalIntercept(t *testing.T) {
+// TestKeyboard_ShiftTab_FormStep_DelegatesToHuh verifies that shift+tab on a
+// form step (activeForm != nil) is NOT intercepted by our Update — it falls
+// through to huh so the user can navigate backwards through form fields.
+func TestKeyboard_ShiftTab_FormStep_DelegatesToHuh(t *testing.T) {
 	m := networkModel(true /* form active */)
 	if m.activeForm == nil {
 		t.Skip("form not initialised — precondition not met")
@@ -90,13 +90,14 @@ func TestKeyboard_ShiftTab_FormStep_GlobalIntercept(t *testing.T) {
 	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
-	if got != model.StepWelcome {
-		t.Errorf("shift+tab with activeForm set: expected StepWelcome, got %v", got)
+	// Step must NOT change — huh handles the key for intra-form navigation.
+	if got != model.StepNetwork {
+		t.Errorf("shift+tab with activeForm set: expected StepNetwork (no wizard step change), got %v", got)
 	}
 }
 
-// TestKeyboard_ShiftTab_NetworkToWelcome tests the same transition without an
-// active form (handleKey path also reaches the intercept in Update).
+// TestKeyboard_ShiftTab_NetworkToWelcome verifies the non-form path: without
+// an active form, shift+tab goes back one wizard step.
 func TestKeyboard_ShiftTab_NetworkToWelcome(t *testing.T) {
 	m := networkModel(false)
 
@@ -120,9 +121,9 @@ func TestKeyboard_ShiftTab_UserToStorage(t *testing.T) {
 	}
 }
 
-// TestKeyboard_ShiftTab_UserWithForm_GlobalIntercept: form active on User, still
-// goes back to Storage.
-func TestKeyboard_ShiftTab_UserWithForm_GlobalIntercept(t *testing.T) {
+// TestKeyboard_ShiftTab_UserWithForm_DelegatesToHuh: form active on User,
+// shift+tab must NOT change the wizard step — delegated to huh field nav.
+func TestKeyboard_ShiftTab_UserWithForm_DelegatesToHuh(t *testing.T) {
 	m := userModel(true)
 	if m.activeForm == nil {
 		t.Skip("form not initialised")
@@ -131,8 +132,9 @@ func TestKeyboard_ShiftTab_UserWithForm_GlobalIntercept(t *testing.T) {
 	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	got := newModel.(*Model).Wizard.State.CurrentStep
 
-	if got != model.StepStorage {
-		t.Errorf("shift+tab on User (form active): expected StepStorage, got %v", got)
+	// Step must stay on User — huh handles field navigation.
+	if got != model.StepUser {
+		t.Errorf("shift+tab on User (form active): expected StepUser (no wizard step change), got %v", got)
 	}
 }
 
@@ -273,6 +275,55 @@ func TestKeyboard_Esc_SysextFiltering_ClearsFilterNotBack(t *testing.T) {
 	if tuiModel.Wizard.State.CurrentStep != prevStep {
 		t.Errorf("esc during filter: expected to stay on %v, got %v",
 			prevStep, tuiModel.Wizard.State.CurrentStep)
+	}
+}
+
+// TestKeyboard_Esc_FormStep_GoesBack: esc with an active huh form must go
+// back to the previous wizard step (new behaviour — previously esc on form
+// steps did nothing because only handleKey handled esc, not form steps).
+func TestKeyboard_Esc_FormStep_GoesBack(t *testing.T) {
+	m := networkModel(true /* form active */)
+	if m.activeForm == nil {
+		t.Skip("form not initialised — precondition not met")
+	}
+
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	got := newModel.(*Model).Wizard.State.CurrentStep
+
+	if got != model.StepWelcome {
+		t.Errorf("esc on Network (form active): expected StepWelcome, got %v", got)
+	}
+}
+
+// TestKeyboard_Esc_FormStep_WelcomeIsNoOp: esc on Welcome (first step) with
+// a form active must not panic or move below step 0.
+func TestKeyboard_Esc_FormStep_WelcomeIsNoOp(t *testing.T) {
+	w := newTestWizard()
+	m := New(w) // Welcome step, may have a form
+
+	newModel, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	tuiModel := newModel.(*Model)
+
+	if tuiModel.Wizard.State.CurrentStep != model.StepWelcome {
+		t.Errorf("esc on Welcome (form): expected StepWelcome, got %v", tuiModel.Wizard.State.CurrentStep)
+	}
+	_ = cmd // no assertion on cmd for Welcome esc
+}
+
+// TestKeyboard_Esc_FormStep_ClearsError: pending error must be cleared when
+// esc goes back from a form step.
+func TestKeyboard_Esc_FormStep_ClearsError(t *testing.T) {
+	m := networkModel(true /* form active */)
+	if m.activeForm == nil {
+		t.Skip("form not initialised — precondition not met")
+	}
+	m.err = errTest
+
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	tuiModel := newModel.(*Model)
+
+	if tuiModel.err != nil {
+		t.Errorf("esc on form step should clear err, got: %v", tuiModel.err)
 	}
 }
 
