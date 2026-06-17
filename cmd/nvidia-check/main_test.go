@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/projectbluefin/knuckle/internal/model"
 )
 
 func TestExtractDriverSeries_Empty(t *testing.T) {
@@ -229,5 +232,135 @@ func TestCompareDriverSeries_Empty(t *testing.T) {
 	missing, extra := compareDriverSeries(nil, nil)
 	if len(missing) != 0 || len(extra) != 0 {
 		t.Errorf("expected empty results, got missing=%v extra=%v", missing, extra)
+	}
+}
+
+// --- run() integration tests ---
+
+func TestRun_Success_AllMatch(t *testing.T) {
+	// Serve docs that exactly match model.go entries
+	modelIDs := model.DriverSeriesMap()
+	var docContent string
+	for id := range modelIDs {
+		docContent += "nvidia-drivers-" + id + "\n"
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent(docContent))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	var stdout, stderr strings.Builder
+	code := run(&stdout, &stderr)
+	if code != 0 {
+		t.Errorf("expected exit 0, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "✓ model.go NvidiaDriverOptions appears consistent") {
+		t.Errorf("expected success message in stdout, got: %s", stdout.String())
+	}
+}
+
+func TestRun_MissingInModel(t *testing.T) {
+	// Serve docs with an extra driver series not in model.go
+	modelIDs := model.DriverSeriesMap()
+	var docContent string
+	for id := range modelIDs {
+		docContent += "nvidia-drivers-" + id + "\n"
+	}
+	docContent += "nvidia-drivers-999-fake\n"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent(docContent))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	var stdout, stderr strings.Builder
+	code := run(&stdout, &stderr)
+	if code != 1 {
+		t.Errorf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "MISSING IN MODEL") {
+		t.Errorf("expected MISSING IN MODEL in output, got: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "ACTION REQUIRED") {
+		t.Errorf("expected ACTION REQUIRED in output, got: %s", stdout.String())
+	}
+}
+
+func TestRun_FetchFailure(t *testing.T) {
+	orig := docsURL
+	docsURL = "http://127.0.0.1:1" // unreachable
+	defer func() { docsURL = orig }()
+
+	var stdout, stderr strings.Builder
+	code := run(&stdout, &stderr)
+	if code != 2 {
+		t.Errorf("expected exit 2, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "ERROR") {
+		t.Errorf("expected ERROR in stderr, got: %s", stderr.String())
+	}
+}
+
+func TestRun_EmptyDocSeries(t *testing.T) {
+	// Serve docs with no nvidia-drivers-* patterns
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent("No driver series mentioned here at all."))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	var stdout, stderr strings.Builder
+	code := run(&stdout, &stderr)
+	// model.go has entries not in docs → they show as "extra" but exit is still 0
+	if code != 0 {
+		t.Errorf("expected exit 0 (extra in model is not an error), got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "(none found") {
+		t.Errorf("expected '(none found' message, got: %s", stdout.String())
+	}
+}
+
+func TestRun_ExtraInModel(t *testing.T) {
+	// Serve docs with only one model entry, so the rest show as extras
+	modelIDs := model.DriverSeriesMap()
+	var oneID string
+	for id := range modelIDs {
+		oneID = id
+		break
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(fakeGHContent("nvidia-drivers-" + oneID))
+	}))
+	defer srv.Close()
+
+	orig := docsURL
+	docsURL = srv.URL
+	defer func() { docsURL = orig }()
+
+	var stdout, stderr strings.Builder
+	code := run(&stdout, &stderr)
+	// All doc entries are in model, extras are informational → exit 0
+	if code != 0 {
+		t.Errorf("expected exit 0, got %d\nstdout: %s\nstderr: %s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "NOTE:") {
+		t.Errorf("expected NOTE about extra entries, got: %s", stdout.String())
 	}
 }

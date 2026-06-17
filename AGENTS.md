@@ -5,13 +5,15 @@
 > **Bar:** CNCF-incubating rigor. Every change keeps `just ci` green, respects package
 > boundaries, and preserves the safety invariants below.
 
+**Read [`docs/SKILL.md`](docs/SKILL.md) before starting any task.** It routes you to the right skill file for PR review, releases, testlab, and CI work.
+
 ---
 
 ## What This Repo Is
 
-A TUI installer for [Flatcar Container Linux](https://www.flatcar.org/), targeting bare-metal.
+A TUI installer for [Flatcar Container Linux](https://www.flatcar.org/) and [FCOS](https://fedoraproject.org/coreos/), targeting bare-metal.
 Built in Go on charm.sh (Bubble Tea v2, Lip Gloss v2, Huh v2). Assembles an Ignition config
-and hands off to `flatcar-install` — knuckle never writes partitions itself.
+and dispatches to `flatcar-install` (Flatcar) or `coreos-installer` (FCOS) via `DispatchingInstaller` — knuckle never writes partitions itself.
 
 - **Module:** `github.com/projectbluefin/knuckle` (Go 1.26+)
 - **License:** Apache-2.0
@@ -85,10 +87,10 @@ Coverage gates are authoritative in [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTI
 | `internal/runner`   | `Runner` interface: `RealRunner`, `DryRunner`, `SpyRunner`        |
 | `internal/probe`    | `lsblk` + `ip addr` JSON parsing, `/dev/disk/by-id` resolution   |
 | `internal/validate` | Hostname, CIDR, gateway, SSH key, timezone, disk path validators  |
-| `internal/bakery`   | sysext catalog + Flatcar release/SBOM fetchers, SHA512 + GPG check|
+| `internal/bakery`   | `DispatchingClient` routing to Flatcar or FCOS bakery clients; sysext catalog + release/SBOM fetchers, SHA512 + GPG check|
 | `internal/github`   | SSH key fetch + GitHub Releases API client                        |
 | `internal/ignition` | Butane assembly + in-process Butane→Ignition compilation          |
-| `internal/install`  | `flatcar-install` orchestration via runner                        |
+| `internal/install`  | `DispatchingInstaller` routing to `FlatcarInstaller` or `FCOSInstaller` via runner |
 | `internal/iso`      | Installer ISO builder helpers                                     |
 | `internal/headless` | `--headless --config` JSON-driven install path                    |
 | `internal/wizard`   | Step state machine, navigation, validation gates                  |
@@ -142,14 +144,24 @@ tui      ← cmd/knuckle
 
 ## Docs — Load on Demand
 
-These docs live in `docs/` and improve continuously. Load the relevant one for your task — don't load all of them.
+See [`docs/SKILL.md`](docs/SKILL.md) for the full task-to-skill routing table.
 
-| Task | Document |
-| ---- | -------- |
-| Coverage gates, test pyramid, CI pipeline, ISO build internals | [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md) |
-| PR test matrix, tier classification, domain assertions, ghost QA evidence | [`docs/PR-TEST-MATRIX.md`](docs/PR-TEST-MATRIX.md) |
-| Ghost lab setup, port inventory, KubeVirt, QA workflow, conflict resolution | [`docs/GHOST-LAB.md`](docs/GHOST-LAB.md) |
-| Release tag checklist, VM verification, blocker history | [`docs/RELEASE.md`](docs/RELEASE.md) |
+**Skills** (operational, task-oriented):
+
+| Task | Skill |
+| ---- | ----- |
+| Review a PR or run vm-e2e tests | [`docs/skills/qa.md`](docs/skills/qa.md) |
+| Cut a release | [`docs/skills/release.md`](docs/skills/release.md) |
+| Run the VM locally or test an ISO | [`docs/skills/testlab.md`](docs/skills/testlab.md) |
+| Debug CI or understand coverage | [`docs/skills/ci.md`](docs/skills/ci.md) |
+
+**Reference** (deep-dive, load on demand):
+
+| Topic | Document |
+| ----- | -------- |
+| Coverage gates, test pyramid, CI pipeline internals | [`docs/CI-AND-TESTING.md`](docs/CI-AND-TESTING.md) |
+| PR test matrix, tier evidence, domain assertions | [`docs/PR-TEST-MATRIX.md`](docs/PR-TEST-MATRIX.md) |
+| Release checklist, VM verification, blockers history | [`docs/RELEASE.md`](docs/RELEASE.md) |
 | Headless config schema, field reference, validation rules | [`docs/HEADLESS-CONFIG.md`](docs/HEADLESS-CONFIG.md) |
 | Security posture, threat model, disclosure path | [`docs/SECURITY.md`](docs/SECURITY.md) |
 | Sysext catalog, Bakery support tiers, extension behavior | [`docs/SYSEXTS.md`](docs/SYSEXTS.md) |

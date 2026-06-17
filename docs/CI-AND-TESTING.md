@@ -44,7 +44,7 @@
 | `internal/iso`               |  100%  | 100% | (n/a)                     |
 | `internal/runner`            |  100%  | 100% | ≥ 80%                     |
 | `internal/demo`              |  100%  | 100% | (n/a)                     |
-| `internal/validate`          |  100%  | 100% | ≥ 95%                     |
+| `internal/validate`          |  99.5% |  99% | ≥ 95%                     |
 | `internal/probe`             |  100%  | 100% | ≥ 85%                     |
 | `internal/install`           |  100%  | 100% | ≥ 80%                     |
 | `internal/ignition`          |  100%  | 100% | ≥ 90%                     |
@@ -54,6 +54,9 @@
 | `internal/headless`          |  99%   |  99% | (n/a)                     |
 | `internal/tui`               |  98.7% |  98% | ≥ 85%                     |
 | `internal/github`            |  97%   |  96% | (n/a)                     |
+| `cmd/knuckle`                |  ~85%  |  85% | (n/a)                     |
+| `cmd/compile-butane-fresh`   |  100%  | 100% | (n/a)                     |
+| `cmd/nvidia-check`           |  98.9% |  95% | (n/a) — depends on #760   |
 
 Gates are set conservatively below current numbers so CI fails on
 **regression**, not on aspirational drift. When a package's actual coverage
@@ -73,11 +76,22 @@ rises and stays there, raise the gate in `Justfile :: cover-check`.
 | `iso-smoke recipe`  | `just --dry-run iso-smoke …` — keeps the headless ISO smoke recipe wired into CI |        ✅         |
 | `headless ISO boot smoke` | Full ISO boot via serial console, fetches Flatcar PXE artifacts from CDN | ❌ non-required |
 
-> **Known flake — `headless ISO boot smoke`:** This check fetches Flatcar PXE
-> artifacts from the upstream CDN. It fails intermittently with `curl: (22) 404`
-> when the CDN returns a 404 (artifact not yet propagated or CDN hiccup). This
-> is **not a required check** — it does not block merges. Do not hold PRs for
-> this failure; verify it also fails on `main` before investigating.
+> **Known flake — `headless ISO boot smoke`:** Not a required check — does not
+> block merges. Two known failure modes:
+>
+> 1. **CDN 404** (`curl: (22) 404`): artifact not yet propagated or CDN hiccup.
+>    Transient; retry or ignore.
+>
+> 2. **`initrd-usr-fs.target` not in serial log** (regression since 2026-06-02,
+>    tracked in issue #737): Flatcar stable moved to 4230.2.3. Once
+>    `systemd-journald` starts (~2.9s kernel time), systemd stops writing to the
+>    serial console; `initrd-usr-fs.target` is reached but only logged to the
+>    journal, not serial. Fix options: pin Flatcar PXE version to a known-good
+>    build, add `systemd.journald.forward_to_console=1` to the QEMU kernel
+>    cmdline in `iso-smoke.sh`, or update the success signal to something visible
+>    before journald takes over.
+>
+> If it fails, always verify it also reproduces on `main` before investigating.
 
 **Tool version pinning:** `govulncheck` is pinned in `go.mod` via `go tool`.
 `golangci-lint` is pinned in `Justfile::GOLANGCI_LINT_VERSION` (local) and

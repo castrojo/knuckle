@@ -8,7 +8,10 @@ usage: iso-smoke.sh <iso-path> <ovmf-path> [timeout-seconds]
 Boot a Knuckle installer ISO headlessly with QEMU and verify that:
 - the systemd-boot menu appears on serial
 - initrd-root-device.target is reached
-- initrd-usr-fs.target is reached
+- initrd-root-device.target is reached
+- systemd-journald starts (proxy for initrd-usr-fs.target; journald lives in /usr so
+  its successful start proves /usr was mounted — direct target logging stops once
+  journald takes over the console on Flatcar 4230+)
 - no xd2root/x2dauto errors appear in the serial log
 EOF
 }
@@ -91,8 +94,8 @@ while (( SECONDS < deadline )); do
       root_seen=1
     fi
 
-    if (( usr_seen == 0 )) && log_has 'Reached target (initrd-usr-fs\.target|Initrd /usr File System\.)'; then
-      echo '  ✓ initrd-usr-fs.target reached'
+    if (( usr_seen == 0 )) && log_has 'Started systemd-journald\.service'; then
+      echo '  ✓ systemd-journald started (usr-fs proxy: /usr mounted)'
       usr_seen=1
     fi
 
@@ -121,7 +124,7 @@ done
 missing_checks=()
 (( menu_seen == 1 )) || missing_checks+=("systemd-boot menu")
 (( root_seen == 1 )) || missing_checks+=("initrd-root-device.target")
-(( usr_seen == 1 )) || missing_checks+=("initrd-usr-fs.target")
+(( usr_seen == 1 )) || missing_checks+=("systemd-journald start (usr-fs proxy)")
 
 if (( ${#missing_checks[@]} == 0 )); then
   echo

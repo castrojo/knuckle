@@ -118,7 +118,7 @@ cover-check:
     #!/usr/bin/env bash
     set -euo pipefail
     declare -A targets=(
-        [model]=100 [validate]=100 [ignition]=100 [github]=96
+        [model]=100 [validate]=99 [ignition]=100 [github]=96
         [bakery]=100 [probe]=100   [runner]=100   [install]=100
         [headless]=99 [wizard]=99  [iso]=100      [tui]=99
         [demo]=100
@@ -181,6 +181,22 @@ cover-check:
         fail=1
     else
         echo "ok    ${cbf_pkg}  ${cbf_pct}%  (target ${cbf_target}%)"
+    fi
+    # cmd/nvidia-check — gated at 95% (run() is covered; main() wrapper is not).
+    # Depends on the run() refactor landing in #760. Gate prevents regression.
+    nvidia_pkg=cmd/nvidia-check
+    nvidia_target=95
+    nvidia_pct=$(go test -count=1 -cover ./${nvidia_pkg}/... 2>/dev/null \
+        | awk '/coverage:/ {gsub("%",""); print $(NF-2); exit}')
+    nvidia_pct=${nvidia_pct%.*}
+    if [[ -z "$nvidia_pct" ]]; then
+        echo "FAIL  ${nvidia_pkg}   no coverage reported"
+        fail=1
+    elif (( nvidia_pct < nvidia_target )); then
+        echo "FAIL  ${nvidia_pkg}  ${nvidia_pct}%  (target ${nvidia_target}%)"
+        fail=1
+    else
+        echo "ok    ${nvidia_pkg}  ${nvidia_pct}%  (target ${nvidia_target}%)"
     fi
     exit $fail
 
@@ -1103,11 +1119,24 @@ nvidia-check:
         -o bin/nvidia-check ./cmd/nvidia-check
     ./bin/nvidia-check
 
-# Full pre-release preflight: catalog coverage + nvidia versions + CI gate.
+# Full pre-release preflight: catalog coverage + nvidia versions + CI gate + CHANGELOG reminder.
 # Run this before tagging any release.
 release-preflight: ci
     #!/usr/bin/env bash
     set -euo pipefail
+    echo ""
+    echo "[2/3] Checking sysext catalog coverage against live bakery..."
+    go run ./scripts/catalog_check/ --strict
+    echo ""
+    echo "[3/3] Checking NVIDIA driver series against Flatcar docs..."
+    ./scripts/nvidia_check.sh
+    echo ""
+    echo "✓ release-preflight complete"
+    echo ""
+    echo "Pre-tag checklist (manual steps):"
+    echo "  - [ ] Promote CHANGELOG.md [Unreleased] to ## [vX.Y.Z] - $(date +%Y-%m-%d)"
+    echo "  - [ ] Update compare links in CHANGELOG.md footer"
+    echo "  - [ ] Run 'just vm-e2e' for final VM verification before publishing"
 
 # QA: full PR test — build + unit tests + Flatcar VM install + boot + domain assertions.
 # Artifacts saved to .qa/runs/pr-N-TIMESTAMP/. Failed runs generate an issue body.

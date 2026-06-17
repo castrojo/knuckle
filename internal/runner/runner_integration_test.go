@@ -103,9 +103,16 @@ func TestRealRunnerRunWithInputCancelMidWrite(t *testing.T) {
 		t.Fatalf("expected command to be cancelled quickly, ran for %s", result.Duration)
 	}
 
+	// When the context is cancelled, there is a race between:
+	// 1. The stdin write detecting a broken pipe (io error)
+	// 2. The process group being killed (ExitError with signal: killed)
+	// Both outcomes indicate successful cancellation — accept either.
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		t.Fatalf("expected stdin-pipe failure path, got exit error: %v", err)
+		if ctx.Err() == nil {
+			t.Fatalf("unexpected exit error without context cancellation: %v", err)
+		}
+		return
 	}
 	if !hasAnySubstring(err.Error(), "broken pipe", "file already closed", "closed pipe", context.Canceled.Error()) {
 		t.Fatalf("expected stdin-pipe or cancellation error, got %v", err)

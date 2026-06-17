@@ -2270,3 +2270,53 @@ func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
 		})
 	}
 }
+
+// TestNext_FCOS_SkipsNvidiaEvenWhenSelected verifies that when OS is FCOS,
+// the nvidia step is unconditionally skipped — even if the nvidia-runtime
+// sysext happens to be in the selection list. Covers wizard.go:130-132.
+func TestNext_FCOS_SkipsNvidiaEvenWhenSelected(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Config.Channel = "stable"
+	w.State.Config.Network.Mode = model.NetworkDHCP
+	w.State.Config.Disk.DevPath = "/dev/sda"
+	w.State.Config.Users = []model.UserConfig{
+		{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdllynsgXbmcFXhVJAIAkDbYjqZ2OgHgZJVFmFKtvF7 test"}},
+	}
+	// nvidia-runtime IS selected, but OS is FCOS → skip anyway
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.CurrentStep = model.StepSysext
+
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next from Sysext: %v", err)
+	}
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("FCOS should never visit StepNvidia, even when nvidia-runtime is selected")
+	}
+	if w.State.CurrentStep != model.StepUpdate {
+		t.Errorf("expected StepUpdate after skipping nvidia on FCOS, got %v", w.State.CurrentStep)
+	}
+}
+
+// TestPrevious_FCOS_SkipsNvidiaEvenWhenSelected verifies that backward
+// navigation on FCOS also skips nvidia unconditionally. Covers the
+// Previous() branch of isNvidiaSelected for FCOS (wizard.go:120+130).
+func TestPrevious_FCOS_SkipsNvidiaEvenWhenSelected(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	// nvidia-runtime IS selected, but OS is FCOS
+	w.State.Sysexts = []model.SysextEntry{
+		{Name: "nvidia-runtime", Selected: true},
+	}
+	w.State.CurrentStep = model.StepUpdate
+
+	w.Previous()
+	if w.State.CurrentStep == model.StepNvidia {
+		t.Error("FCOS should never visit StepNvidia on backward nav, even with nvidia-runtime selected")
+	}
+	if w.State.CurrentStep != model.StepSysext {
+		t.Errorf("expected StepSysext after backward skip on FCOS, got %v", w.State.CurrentStep)
+	}
+}

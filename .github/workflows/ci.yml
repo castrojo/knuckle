@@ -155,7 +155,7 @@ jobs:
           retention-days: 14
 
       - name: upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           files: ./cover.out
           fail_ci_if_error: false
@@ -216,14 +216,6 @@ jobs:
 
       - name: install ISO build dependencies
         run: sudo apt-get update && sudo apt-get install -y xorriso mtools cpio systemd-boot-efi
-
-      - name: install coreos-installer
-        run: |
-          curl -fsSL --retry 3 \
-            https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
-            -o /usr/local/bin/coreos-installer
-          chmod +x /usr/local/bin/coreos-installer
-          coreos-installer --version
 
       - name: build installer ISO (amd64, stable)
         run: |
