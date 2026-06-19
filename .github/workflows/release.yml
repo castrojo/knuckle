@@ -23,7 +23,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Create or verify draft release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           draft: true
           make_latest: "false"
@@ -173,7 +173,7 @@ jobs:
 
       - name: Upload amd64 artifacts to draft release
         if: steps.release-check.outputs.skip_upload != 'true'
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           draft: true
           make_latest: "false"
@@ -332,7 +332,7 @@ jobs:
 
       - name: Upload arm64 artifacts to draft release
         if: steps.release-check.outputs.skip_upload != 'true'
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           draft: true
           make_latest: "false"
@@ -437,7 +437,7 @@ jobs:
 
       - name: Publish draft release
         if: steps.publish-check.outputs.skip_publish != 'true'
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           draft: false
           generate_release_notes: false
