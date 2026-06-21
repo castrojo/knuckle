@@ -197,3 +197,21 @@ go test ./internal/bakery/... -run TestFetch
 ## Reference
 
 [Flatcar](https://www.flatcar.org/) · [Bakery](https://www.flatcar.org/docs/latest/provisioning/sysext/) · [Butane](https://coreos.github.io/butane/config-flatcar-v1_1/) · [charm.sh](https://charm.sh) · [flatcar-install](https://www.flatcar.org/docs/latest/installing/bare-metal/installing-to-disk/) · [OSSF Scorecard](https://github.com/ossf/scorecard) · [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)
+
+---
+
+## Self-Improvement
+
+Every session: ship the work AND update the relevant skill file in `docs/skills/`. Same PR. Not a follow-up.
+
+Banned:
+- No changelog files created by agents (`IMPROVEMENTS.md`, `SESSION.md`, etc.). The `CHANGELOG.md` is a semver release record maintained by humans — do not append agent session notes to it.
+- No session notes committed to the repo.
+- No "append here" docs. Route to a specific `docs/skills/<file>.md`.
+
+Before marking work done:
+- [ ] Discovered a workaround, pattern, or convention?
+- [ ] Skill file updated or created?
+- [ ] Committed in this same PR?
+
+Full mandate: [`docs/skills/skill-improvement.md`](docs/skills/skill-improvement.md)
