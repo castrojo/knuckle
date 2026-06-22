@@ -132,11 +132,13 @@ tui      ← cmd/knuckle
 2. **Declare SCOPE / GOAL / OUT OF SCOPE** before editing.
 3. **One PR per issue.** Branch `feat/<slug>` or `fix/<slug>`. Conventional commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `ci:`, `chore:`).
 4. **`just ci` is the gate.** If it fails, fix it; don't push.
-5. **Push to `origin` (projectbluefin/knuckle) only.** No upstream pushes from automation.
-6. **Governance PRs from hive agents** may contain stray Go source changes from a diverged upstream base. When merging, inspect `git diff origin/main --name-only` and strip any Go source files — keep only the intended config file (workflow yml, CODEOWNERS, issue template, etc.). Use `--admin` merge if needed.
-7. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
-7. **New external command?** Wire through `runner.Runner`. Period.
-8. **New disk-touching code?** Test in QEMU via `just vm` or `just vm-e2e`. Unit tests use `SpyRunner`.
+5. **After pushing, verify CI is green before claiming done:** `gh run list --repo projectbluefin/knuckle --limit 5` — read the output; running or failing = not done. "Done" means CI green, not "I pushed."
+6. **Never claim a task complete without verifying.** "I've updated the file" is not done. Run the checks. Read the output.
+7. **Push to `upstream` (projectbluefin/knuckle) only.** No pushes via `origin` (fork) for PRs.
+8. **Governance PRs from hive agents** may contain stray Go source changes from a diverged upstream base. When merging, inspect `git diff origin/main --name-only` and strip any Go source files — keep only the intended config file (workflow yml, CODEOWNERS, issue template, etc.). Use `--admin` merge if needed.
+9. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
+9. **New external command?** Wire through `runner.Runner`. Period.
+10. **New disk-touching code?** Test in QEMU via `just vm` or `just vm-e2e`. Unit tests use `SpyRunner`.
 
 ---
 
