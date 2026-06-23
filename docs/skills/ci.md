@@ -1,3 +1,14 @@
+---
+name: ci
+description: "CI gates, build toolchain, and code quality checks for projectbluefin/knuckle. Use when running or debugging just ci, adding new checks, or working with Go tooling."
+metadata:
+  type: procedure
+  context7-sources:
+    - /golangci/golangci-lint
+    - /golang/go
+    - /google/go-licenses
+---
+
 # CI — knuckle
 
 > Authoritative reference: [`CI-AND-TESTING.md`](../CI-AND-TESTING.md)
