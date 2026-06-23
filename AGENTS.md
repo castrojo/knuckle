@@ -7,6 +7,11 @@
 
 **Read [`docs/SKILL.md`](docs/SKILL.md) before starting any task.** It routes you to the right skill file for PR review, releases, testlab, and CI work.
 
+> **Before using any tool or library: look up its docs via Context7 first. Always.**
+> Go stdlib, charm.sh (Bubble Tea, Lip Gloss, Huh), Flatcar Butane, cosign, govulncheck — every tool has live docs.
+> Pattern: `resolve-library-id` → `get-library-docs` → implement → cite the section.
+> Guessing, flag-hunting, and trial-and-error are banned. The docs exist. Read them.
+
 ---
 
 ## What This Repo Is
