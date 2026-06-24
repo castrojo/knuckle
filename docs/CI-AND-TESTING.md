@@ -52,10 +52,11 @@
 | `scripts/catalog_check`      |  100%  | 100% | (n/a)                     |
 | `internal/wizard`            |  99.5% |  99% | ≥ 85%                     |
 | `internal/headless`          |  99%   |  99% | (n/a)                     |
-| `internal/tui`               |  98.7% |  98% | ≥ 85%                     |
+| `internal/tui`               |  98.7% |  99% | ≥ 85%                     |
 | `internal/github`            |  97%   |  96% | (n/a)                     |
 | `cmd/knuckle`                |  ~85%  |  85% | (n/a)                     |
 | `cmd/compile-butane-fresh`   |  100%  | 100% | (n/a)                     |
+| `cmd/nvidia-check`           |  98.9% |  95% | (n/a)                     |
 | `cmd/nvidia-check`           |  98.9% |  95% | (n/a) — depends on #760   |
 
 Gates are set conservatively below current numbers so CI fails on
@@ -69,7 +70,7 @@ rises and stays there, raise the gate in `Justfile :: cover-check`.
 | Job                 | What it does                                                                  | Required to merge |
 | ------------------- | ----------------------------------------------------------------------------- | :---------------: |
 | `build-test`        | `go mod tidy` (clean), `gofmt`, `go vet`, `go build`, `go test -race`        |        ✅         |
-| `lint`              | `golangci-lint run` (v2.11.4 via GHA action)                                 |        ✅         |
+| `lint`              | `golangci-lint run` (v2.12.2 via GHA action)                                 |        ✅         |
 | `vuln`              | `go tool govulncheck ./...` (version pinned in `go.mod`)                     |        ✅         |
 | `coverage`          | `just cover-check` + uploads `cover.out` artifact (14-day retention)         |        ✅         |
 | `headless-e2e`      | `just headless-test` — build + canned JSON config, validates config generation |        ✅         |

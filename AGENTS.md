@@ -7,6 +7,11 @@
 
 **Read [`docs/SKILL.md`](docs/SKILL.md) before starting any task.** It routes you to the right skill file for PR review, releases, testlab, and CI work.
 
+> **Before using any tool or library: look up its docs via Context7 first. Always.**
+> Go stdlib, charm.sh (Bubble Tea, Lip Gloss, Huh), Flatcar Butane, cosign, govulncheck — every tool has live docs.
+> Pattern: `resolve-library-id` → `get-library-docs` → implement → cite the section.
+> Guessing, flag-hunting, and trial-and-error are banned. The docs exist. Read them.
+
 ---
 
 ## What This Repo Is
@@ -122,7 +127,7 @@ tui      ← cmd/knuckle
 4. **Disk identity via `/dev/disk/by-id`.** Falls back to raw device path only when `/dev/disk/by-id/` absent (CI containers). See `internal/probe/probe.go:resolveByIDPath`.
 5. **TUI ↔ logic separation.** `internal/tui` renders; `internal/wizard` transitions. No business logic in view models.
 6. **Shared data model.** `internal/model` owns every cross-package type.
-7. **huh.Form for form steps.** Welcome, Network, User, Review use `charmbracelet/huh` + Dracula theme. Storage, Sysext, Update, Install, Done are raw Bubble Tea.
+7. **huh.Form for form steps.** Welcome, Network, User, Review use `charm.land/huh/v2` + Dracula theme. Storage, Sysext, Update, Install, Done are raw Bubble Tea.
 8. **Supply-chain.** SBOM JSON (SPDX) is the primary version source. SHA512 + GPG against `.DIGESTS.asc` (PGP clearsigned — verify with `gpg --decrypt`, not `gpg --verify`).
 9. **Headless mirrors the TUI.** `--headless --config <file.json>` drives the same `internal/install` path. New TUI fields must round-trip through the headless config schema.
 
@@ -134,11 +139,12 @@ tui      ← cmd/knuckle
 2. **Declare SCOPE / GOAL / OUT OF SCOPE** before editing.
 3. **One PR per issue.** Branch `feat/<slug>` or `fix/<slug>`. Conventional commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `ci:`, `chore:`).
 4. **`just ci` is the gate.** If it fails, fix it; don't push.
-5. **Push to `origin` (projectbluefin/knuckle) only.** No upstream pushes from automation.
-6. **Governance PRs from hive agents** may contain stray Go source changes from a diverged upstream base. When merging, inspect `git diff origin/main --name-only` and strip any Go source files — keep only the intended config file (workflow yml, CODEOWNERS, issue template, etc.). Use `--admin` merge if needed.
-7. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
-7. **New external command?** Wire through `runner.Runner`. Period.
-8. **New disk-touching code?** Test in QEMU via `just vm` or `just vm-e2e`. Unit tests use `SpyRunner`.
+5. **After pushing, verify CI is green before claiming done:** `gh run list --repo projectbluefin/knuckle --limit 5` — read the output; running or failing = not done.
+6. **Push to `origin` (projectbluefin/knuckle) only.** No upstream pushes from automation.
+7. **Governance PRs from hive agents** may contain stray Go source changes from a diverged upstream base. When merging, inspect `git diff origin/main --name-only` and strip any Go source files — keep only the intended config file (workflow yml, CODEOWNERS, issue template, etc.). Use `--admin` merge if needed.
+8. **Workflow files (`.github/workflows/*.yml`):** security-sensitive, cannot be auto-merged. Coordinate via PR description.
+9. **New external command?** Wire through `runner.Runner`. Period.
+10. **New disk-touching code?** Test in QEMU via `just vm` or `just vm-e2e`. Unit tests use `SpyRunner`.
 
 ---
 
