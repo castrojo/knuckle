@@ -155,7 +155,31 @@ ssh jorge@ghost "ssh -o StrictHostKeyChecking=no -p 2307 core@127.0.0.1 'uname -
 
 - Known limitation: non-interactive ghost sessions can fail TUI tests with `open /dev/tty: no such device or address` (see issue [#512](https://github.com/projectbluefin/knuckle/issues/512)).
 
-## 8) Still stuck?
+## 8) Recovering a host node accidentally provisioned with a knuckle Ignition config
+
+If a bare-metal k3s node was previously provisioned with a knuckle Ignition config that included the swap feature, it may have `knuckle-create-swapfile.service` and `var-swapfile.swap` written into `/etc/systemd/system/` on the host. These units belong only inside ephemeral KubeVirt test VMs.
+
+Symptoms: `var-swapfile.swap` fails at boot (because `knuckle-create-swapfile.service` is absent or already ran), and `/var/swapfile` occupies disk space.
+
+Recovery (run from a privileged shell or via `kubectl debug node/<node>`):
+
+```bash
+systemctl stop var-swapfile.swap || true
+systemctl disable var-swapfile.swap || true
+rm -f /etc/systemd/system/var-swapfile.swap
+rm -f /etc/systemd/system/multi-user.target.wants/var-swapfile.swap
+rm -f /etc/systemd/system/knuckle-create-swapfile.service
+rm -f /var/swapfile
+systemctl daemon-reload
+```
+
+Verify with:
+```bash
+find /etc/systemd/system/ -name '*knuckle*' -o -name '*swap*'  # expect empty
+swapon --show                                                    # expect empty
+```
+
+## 9) Still stuck?
 
 Open an issue with:
 
