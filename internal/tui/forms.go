@@ -389,240 +389,239 @@ func (m *Model) renderZenChrome() string {
 // channelList returns the ordered list of channel/stream keys for the card selector.
 // For FCOS, returns the three release streams; for Flatcar, the four channels.
 func (m *Model) channelList() []string {
-if m.Wizard.State.Config.OS == model.OSFCOS {
-return []string{"stable", "testing", "next"}
-}
-return []string{"stable", "lts", "beta", "alpha"}
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		return []string{"stable", "testing", "next"}
+	}
+	return []string{"stable", "lts", "beta", "alpha"}
 }
 
 // channelCardCount returns how many channel/stream cards to display.
 func (m *Model) channelCardCount() int {
-return len(m.channelList())
+	return len(m.channelList())
 }
 
 // channelMeta holds display info for each channel card.
 type channelMeta struct {
-name    string
-version string
-kernel  string
-systemd string
-docker  string
-desc    string
+	name    string
+	version string
+	kernel  string
+	systemd string
+	docker  string
+	desc    string
 }
 
 // getChannelMeta builds display metadata for each channel/stream.
 func (m *Model) getChannelMeta() []channelMeta {
-channels := m.channelList()
-metas := make([]channelMeta, len(channels))
+	channels := m.channelList()
+	metas := make([]channelMeta, len(channels))
 
-if m.Wizard.State.Config.OS == model.OSFCOS {
-descs := map[string]string{
-"stable":  "Production-ready FCOS stream. Recommended for most deployments.",
-"testing": "Next stable candidate. Used to validate upcoming stable releases.",
-"next":    "Bleeding edge. New kernel and package versions.",
-}
-for i, ch := range channels {
-metas[i] = channelMeta{
-name: ch,
-desc: descs[ch],
-}
-for _, info := range m.Wizard.State.FCOSStreams {
-if info.Stream == ch {
-metas[i].version = info.Version
-break
-}
-}
-}
-return metas
-}
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		descs := map[string]string{
+			"stable":  "Production-ready FCOS stream. Recommended for most deployments.",
+			"testing": "Next stable candidate. Used to validate upcoming stable releases.",
+			"next":    "Bleeding edge. New kernel and package versions.",
+		}
+		for i, ch := range channels {
+			metas[i] = channelMeta{
+				name: ch,
+				desc: descs[ch],
+			}
+			for _, info := range m.Wizard.State.FCOSStreams {
+				if info.Stream == ch {
+					metas[i].version = info.Version
+					break
+				}
+			}
+		}
+		return metas
+	}
 
-// Default descriptions for Flatcar channels
-descs := map[string]string{
-"stable": "Tested for production. Default for most deployments.",
-"lts":    "Long-term support. Extended maintenance window.",
-"beta":   "Next stable candidate. Test before production.",
-"alpha":  "Bleeding edge. New kernel, systemd, core packages.",
-}
+	// Default descriptions for Flatcar channels
+	descs := map[string]string{
+		"stable": "Tested for production. Default for most deployments.",
+		"lts":    "Long-term support. Extended maintenance window.",
+		"beta":   "Next stable candidate. Test before production.",
+		"alpha":  "Bleeding edge. New kernel, systemd, core packages.",
+	}
 
-for i, ch := range channels {
-metas[i] = channelMeta{
-name: ch,
-desc: descs[ch],
-}
-for _, info := range m.Wizard.State.Channels {
-if info.Channel == ch {
-metas[i].version = info.Version
-metas[i].kernel = info.Kernel
-metas[i].systemd = info.Systemd
-metas[i].docker = info.Docker
-break
-}
-}
-}
-return metas
+	for i, ch := range channels {
+		metas[i] = channelMeta{
+			name: ch,
+			desc: descs[ch],
+		}
+		for _, info := range m.Wizard.State.Channels {
+			if info.Channel == ch {
+				metas[i].version = info.Version
+				metas[i].kernel = info.Kernel
+				metas[i].systemd = info.Systemd
+				metas[i].docker = info.Docker
+				break
+			}
+		}
+	}
+	return metas
 }
 
 // viewChannelCards renders the OS picker (when osSubView) or channel/stream selector cards.
 func (m *Model) viewChannelCards() string {
-if m.osSubView {
-return m.viewOSPicker()
-}
+	if m.osSubView {
+		return m.viewOSPicker()
+	}
 
-var b strings.Builder
-cfg := &m.Wizard.State.Config
+	var b strings.Builder
+	cfg := &m.Wizard.State.Config
 
-selectedBorder := lipgloss.NewStyle().
-Border(lipgloss.RoundedBorder()).
-BorderForeground(lipgloss.Color("51")).
-Padding(0, 1).
-Width(60)
-normalBorder := lipgloss.NewStyle().
-Border(lipgloss.RoundedBorder()).
-BorderForeground(lipgloss.Color("240")).
-Padding(0, 1).
-Width(60)
-nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
-nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
-versionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
-detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
+	selectedBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("51")).
+		Padding(0, 1).
+		Width(60)
+	normalBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(60)
+	nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+	nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	versionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
 
-if cfg.OS == model.OSFCOS {
-b.WriteString("  Select a Fedora CoreOS stream:\n\n")
-} else {
-b.WriteString("  Select a release channel:\n\n")
-}
+	if cfg.OS == model.OSFCOS {
+		b.WriteString("  Select a Fedora CoreOS stream:\n\n")
+	} else {
+		b.WriteString("  Select a release channel:\n\n")
+	}
 
-metas := m.getChannelMeta()
-for i, meta := range metas {
-selected := i == m.cursor
+	metas := m.getChannelMeta()
+	for i, meta := range metas {
+		selected := i == m.cursor
 
-var card strings.Builder
+		var card strings.Builder
 
-cursor := "  "
-nameStyle := nameNormal
-if selected {
-cursor = cursorStyle.Render("▸ ")
-nameStyle = nameSelected
-}
+		cursor := "  "
+		nameStyle := nameNormal
+		if selected {
+			cursor = cursorStyle.Render("▸ ")
+			nameStyle = nameSelected
+		}
 
-var displayName string
-if meta.name == "lts" {
-displayName = "LTS"
-} else {
-displayName = strings.ToUpper(meta.name[:1]) + meta.name[1:]
-}
-name := nameStyle.Render(displayName)
-ver := ""
-if meta.version != "" {
-ver = versionStyle.Render("v" + meta.version)
-}
-padding := 60 - 4 - len(displayName) - len("v"+meta.version)
-if padding < 1 {
-padding = 1
-}
-card.WriteString(cursor + name + strings.Repeat(" ", padding) + ver)
-card.WriteString("\n")
+		var displayName string
+		if meta.name == "lts" {
+			displayName = "LTS"
+		} else {
+			displayName = strings.ToUpper(meta.name[:1]) + meta.name[1:]
+		}
+		name := nameStyle.Render(displayName)
+		ver := ""
+		if meta.version != "" {
+			ver = versionStyle.Render("v" + meta.version)
+		}
+		padding := 60 - 4 - len(displayName) - len("v"+meta.version)
+		if padding < 1 {
+			padding = 1
+		}
+		card.WriteString(cursor + name + strings.Repeat(" ", padding) + ver)
+		card.WriteString("\n")
 
-card.WriteString("  " + descStyle.Render(meta.desc))
+		card.WriteString("  " + descStyle.Render(meta.desc))
 
-if meta.kernel != "" || meta.systemd != "" || meta.docker != "" {
-card.WriteString("\n")
-parts := []string{}
-if meta.kernel != "" {
-parts = append(parts, "linux "+meta.kernel)
-}
-if meta.systemd != "" {
-parts = append(parts, "systemd "+meta.systemd)
-}
-if meta.docker != "" {
-parts = append(parts, "docker "+meta.docker)
-}
-card.WriteString("  " + detailStyle.Render(strings.Join(parts, " · ")))
-}
+		if meta.kernel != "" || meta.systemd != "" || meta.docker != "" {
+			card.WriteString("\n")
+			parts := []string{}
+			if meta.kernel != "" {
+				parts = append(parts, "linux "+meta.kernel)
+			}
+			if meta.systemd != "" {
+				parts = append(parts, "systemd "+meta.systemd)
+			}
+			if meta.docker != "" {
+				parts = append(parts, "docker "+meta.docker)
+			}
+			card.WriteString("  " + detailStyle.Render(strings.Join(parts, " · ")))
+		}
 
-if selected {
-b.WriteString(selectedBorder.Render(card.String()))
-} else {
-b.WriteString(normalBorder.Render(card.String()))
-}
-b.WriteString("\n")
-}
+		if selected {
+			b.WriteString(selectedBorder.Render(card.String()))
+		} else {
+			b.WriteString(normalBorder.Render(card.String()))
+		}
+		b.WriteString("\n")
+	}
 
-b.WriteString("\n")
-dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
-b.WriteString(dim.Render("  Ctrl+A advanced options · ↑↓/jk select · enter continue"))
-b.WriteString("\n\n")
-if cfg.OS == model.OSFCOS {
-b.WriteString(dim.Render("  Fedora CoreOS community: ") + link.Render("https://discussion.fedoraproject.org/tag/coreos"))
-} else {
-b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
-}
-b.WriteString("\n")
+	b.WriteString("\n")
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
+	b.WriteString(dim.Render("  Ctrl+A advanced options · ↑↓/jk select · enter continue"))
+	b.WriteString("\n\n")
+	if cfg.OS == model.OSFCOS {
+		b.WriteString(dim.Render("  Fedora CoreOS community: ") + link.Render("https://discussion.fedoraproject.org/tag/coreos"))
+	} else {
+		b.WriteString(dim.Render("  Join the Flatcar community: ") + link.Render("https://flatcar.org/discord"))
+	}
+	b.WriteString("\n")
 
-return b.String()
+	return b.String()
 }
 
 // viewOSPicker renders two OS selection cards: Flatcar Container Linux and Fedora CoreOS.
 func (m *Model) viewOSPicker() string {
-var b strings.Builder
+	var b strings.Builder
 
-selectedBorder := lipgloss.NewStyle().
-Border(lipgloss.RoundedBorder()).
-BorderForeground(lipgloss.Color("51")).
-Padding(0, 1).
-Width(60)
-normalBorder := lipgloss.NewStyle().
-Border(lipgloss.RoundedBorder()).
-BorderForeground(lipgloss.Color("240")).
-Padding(0, 1).
-Width(60)
-nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
-nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
-descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
+	selectedBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("51")).
+		Padding(0, 1).
+		Width(60)
+	normalBorder := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(60)
+	nameSelected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("51"))
+	nameNormal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	cursorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
 
-b.WriteString("  Select an operating system:\n\n")
+	b.WriteString("  Select an operating system:\n\n")
 
-type osOption struct {
-id   string
-name string
-desc string
+	type osOption struct {
+		id   string
+		name string
+		desc string
+	}
+	options := []osOption{
+		{model.OSFlatcar, "Flatcar Container Linux", "Immutable, container-optimised Linux. Ideal for Kubernetes nodes and edge workloads."},
+		{model.OSFCOS, "Fedora CoreOS", "Fedora's immutable, auto-updating container host. Based on rpm-ostree with Ignition provisioning."},
+	}
+
+	for i, opt := range options {
+		selected := i == m.cursor
+
+		cursor := "  "
+		nameStyle := nameNormal
+		if selected {
+			cursor = cursorStyle.Render("▸ ")
+			nameStyle = nameSelected
+		}
+
+		var card strings.Builder
+		card.WriteString(cursor + nameStyle.Render(opt.name) + "\n")
+		card.WriteString("  " + descStyle.Render(opt.desc))
+
+		if selected {
+			b.WriteString(selectedBorder.Render(card.String()))
+		} else {
+			b.WriteString(normalBorder.Render(card.String()))
+		}
+		b.WriteString("\n")
+	}
+
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	b.WriteString("\n")
+	b.WriteString(dim.Render("  ↑↓/jk select · enter continue"))
+	b.WriteString("\n")
+
+	return b.String()
 }
-options := []osOption{
-{model.OSFlatcar, "Flatcar Container Linux", "Immutable, container-optimised Linux. Ideal for Kubernetes nodes and edge workloads."},
-{model.OSFCOS, "Fedora CoreOS", "Fedora's immutable, auto-updating container host. Based on rpm-ostree with Ignition provisioning."},
-}
-
-for i, opt := range options {
-selected := i == m.cursor
-
-cursor := "  "
-nameStyle := nameNormal
-if selected {
-cursor = cursorStyle.Render("▸ ")
-nameStyle = nameSelected
-}
-
-var card strings.Builder
-card.WriteString(cursor + nameStyle.Render(opt.name) + "\n")
-card.WriteString("  " + descStyle.Render(opt.desc))
-
-if selected {
-b.WriteString(selectedBorder.Render(card.String()))
-} else {
-b.WriteString(normalBorder.Render(card.String()))
-}
-b.WriteString("\n")
-}
-
-dim := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-b.WriteString("\n")
-b.WriteString(dim.Render("  ↑↓/jk select · enter continue"))
-b.WriteString("\n")
-
-return b.String()
-}
-

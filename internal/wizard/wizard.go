@@ -34,8 +34,6 @@ type FCOSStreamInfo struct {
 	Version string // version label, e.g. stream name or future Fedora release version
 }
 
-
-
 // State holds the complete wizard state
 type State struct {
 	CurrentStep model.WizardStep
