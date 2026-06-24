@@ -6,7 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.7
 	charm.land/huh/v2 v2.0.3
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	github.com/NVIDIA/go-nvlib v0.10.0
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/coreos/butane v0.28.0
