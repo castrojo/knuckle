@@ -1,6 +1,6 @@
 ---
 name: tui
-description: "TUI development for knuckle using charmbracelet/bubbletea, huh, and lipgloss. Use when building or modifying the installer wizard, form flows, or terminal UI components."
+description: "TUI development for knuckle using charm.sh libraries (bubbletea, huh, lipgloss, bubbles). Use when building or modifying the installer wizard, form flows, or terminal UI components."
 metadata:
   type: reference
   context7-sources:
@@ -23,11 +23,25 @@ metadata:
 Before touching any bubbletea/huh/lipgloss API, run Context7:
 
 ```
-resolve-library-id "/charmbracelet/bubbletea"  → get-library-docs
-resolve-library-id "/charmbracelet/huh"         → get-library-docs
+resolve-library-id "/charmbracelet/bubbletea"  → get-library-docs (v2.0.0)
+resolve-library-id "/charmbracelet/huh"         → get-library-docs (v2.0.0)
+resolve-library-id "/charmbracelet/bubbles"     → get-library-docs (v2.0.0)
+resolve-library-id "/charmbracelet/lipgloss"    → get-library-docs (v2.0.0)
 ```
 
 Do not guess API signatures. The charm.sh libraries evolve quickly.
+
+> **Import paths changed.** Go modules now live at `charm.land`, not `github.com/charmbracelet`.
+> Always use the `charm.land` import paths in Go source:
+> ```go
+> import (
+>     tea  "charm.land/bubbletea/v2"
+>     "charm.land/huh/v2"
+>     "charm.land/lipgloss/v2"
+>     "charm.land/bubbles/v2/list"
+> )
+> ```
+> The Context7 library IDs still use `/charmbracelet/` — that is the repo name and is correct for lookups.
 
 ## Architecture
 
@@ -44,6 +58,7 @@ Multi-step wizard = `huh.Form` with `huh.Group` per step.
 - Do not hand-roll form navigation — huh handles group transitions
 - Do not call `lipgloss.Style` methods without checking current API in Context7
 - Do not assume bubbletea message types — read the source via Context7
+- Do not use `github.com/charmbracelet/` import paths — they are the old module location
 
 ## Research notes
 

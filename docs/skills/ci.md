@@ -39,7 +39,7 @@ just build         # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 → bin/knuckle
 
 ## Coverage Gates
 
-`just cover-check` enforces per-package thresholds. Last updated 2026-06-01 (PR #675):
+`just cover-check` enforces per-package thresholds. Current gates (authoritative: `Justfile cover-check`):
 
 | Package | Gate |
 |---|---|
@@ -47,19 +47,19 @@ just build         # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 → bin/knuckle
 | `internal/iso` | 100% |
 | `internal/runner` | 100% |
 | `internal/demo` | 100% |
-| `internal/validate` | 100% |
+| `internal/validate` | 99% |
 | `internal/probe` | 100% |
 | `internal/install` | 100% |
 | `internal/ignition` | 100% |
 | `internal/bakery` | 100% |
-| `internal/github` | 97% |
+| `internal/github` | 96% |
 | `internal/headless` | 99% |
 | `internal/wizard` | 99% |
 | `internal/tui` | 99% |
+| `scripts/catalog_check` | 100% |
 | `cmd/knuckle` | 85% |
 | `cmd/compile-butane-fresh` | 100% |
-
-⚠️ `cmd/nvidia-check` is NOT yet in cover-check (tracked: issue #677).
+| `cmd/nvidia-check` | 95% |
 
 To add a package to cover-check, add a line to the `cover-check` recipe in `Justfile`.
 
