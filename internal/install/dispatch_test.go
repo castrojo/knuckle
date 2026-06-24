@@ -87,6 +87,15 @@ func TestDispatchingInstaller_NilFCOS(t *testing.T) {
 	}
 }
 
+func TestDispatchingInstaller_NilFCOSDryRun(t *testing.T) {
+	// Dry-run only validates config; nil FCOS installer must not block it.
+	d := &install.DispatchingInstaller{Flatcar: &stubInstaller{}}
+	cfg := &model.InstallConfig{OS: model.OSFCOS, DryRun: true}
+	if err := d.Install(context.Background(), cfg, func(string) {}); err != nil {
+		t.Fatalf("unexpected error in dry-run with nil FCOS installer: %v", err)
+	}
+}
+
 func TestDispatchingInstaller_NilFlatcar(t *testing.T) {
 	d := &install.DispatchingInstaller{FCOS: &stubInstaller{}}
 	cfg := &model.InstallConfig{OS: model.OSFlatcar}
