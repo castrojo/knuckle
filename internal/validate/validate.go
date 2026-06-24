@@ -296,11 +296,8 @@ func CheckConsistency(cfg *model.InstallConfig) error {
 		return fmt.Errorf("no channel selected")
 	}
 
-	// NVIDIA driver version must be a known series if set; not supported on FCOS
+	// NVIDIA driver version must be a known series if set.
 	if cfg.NvidiaDriverVersion != "" {
-		if cfg.OS == model.OSFCOS {
-			return fmt.Errorf("nvidia_driver_version: not supported on FCOS")
-		}
 		valid := false
 		for _, opt := range model.NvidiaDriverOptions {
 			if opt.ID == cfg.NvidiaDriverVersion {

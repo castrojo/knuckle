@@ -258,11 +258,7 @@ func (c *Config) Validate() error {
 
 	// Version — FCOS uses a different version scheme and coreos-installer does
 	// not support stream-based version pinning in v1; ignore with a warning.
-	if c.OS == model.OSFCOS {
-		if c.Version != "" {
-			fmt.Fprintf(os.Stderr, "warning: version field is ignored for FCOS (not supported in v1)\n")
-		}
-	} else {
+	if c.OS != model.OSFCOS {
 		if err := validate.FlatcarVersion(c.Version); err != nil {
 			return fmt.Errorf("version: %w", err)
 		}
@@ -441,6 +437,9 @@ func Run(ctx context.Context, cfg *Config, installer install.Installer, logger *
 	fmt.Println("→ Validating configuration...")
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
+	}
+	if cfg.OS == model.OSFCOS && cfg.Version != "" {
+		logger.Warn("version field is ignored for FCOS (not supported in v1)")
 	}
 	if cfg.Disk != "" && !cfg.DryRun {
 		if err := validateBlockDeviceFunc(cfg.Disk); err != nil {
