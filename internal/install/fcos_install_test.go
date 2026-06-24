@@ -215,6 +215,31 @@ func TestFCOSInstall_ByIDPath(t *testing.T) {
 	t.Fatal("coreos-installer not called")
 }
 
+func TestFCOSInstall_ByIDPathFallbackToDevPath(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	// Disk has no by-id path (e.g. QEMU VM) — must fall back to DevPath.
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/vda"}, // Path intentionally unset
+		Network: model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	_ = installer.Install(context.Background(), cfg, func(string) {})
+
+	for _, call := range spy.Calls {
+		if call.Name == "coreos-installer" {
+			last := call.Args[len(call.Args)-1]
+			if last != "/dev/vda" {
+				t.Errorf("disk arg = %q, want /dev/vda (DevPath fallback)", last)
+			}
+			return
+		}
+	}
+	t.Fatal("coreos-installer not called")
+}
+
 func TestFCOSInstall_NilConfig(t *testing.T) {
 	spy := runner.NewSpyRunner()
 	installer := NewFCOSInstaller(spy, testLogger())
@@ -338,6 +363,18 @@ func TestFCOSCleanup_EmptyPath(t *testing.T) {
 	installer := NewFCOSInstaller(runner.NewSpyRunner(), testLogger())
 	installer.ignitionPath = ""
 	installer.cleanupFCOSIgnitionFile() // should not panic
+}
+
+func TestFCOSCleanup_AlreadyRemoved(t *testing.T) {
+	// When the file is already gone (os.IsNotExist), cleanup should clear the
+	// path and not panic — no mock needed, just point at a non-existent file.
+	installer := NewFCOSInstaller(runner.NewSpyRunner(), testLogger())
+	installer.ignitionPath = "/tmp/knuckle-no-such-file-abc123.json"
+
+	installer.cleanupFCOSIgnitionFile()
+	if installer.ignitionPath != "" {
+		t.Error("ignitionPath should be cleared after cleanup even when file is missing")
+	}
 }
 
 func TestFCOSCleanup_RemoveError(t *testing.T) {
