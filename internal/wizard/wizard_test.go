@@ -2392,4 +2392,3 @@ func TestIsNvidiaSelected_FCOSAlwaysFalse(t *testing.T) {
 		t.Error("isNvidiaSelected should return false for FCOS regardless of sysext selection")
 	}
 }
-
