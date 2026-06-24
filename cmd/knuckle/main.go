@@ -27,6 +27,23 @@ var (
 	tuiRunFn          = tui.Run
 	demoProberFactory = func() probe.Prober { return &demo.Prober{} }
 	demoBakeryFactory = func() bakery.Client { return &demo.Bakery{} }
+
+	// startupFetchFn wraps the non-demo hardware probe and network fetch calls.
+	// Tests can replace it to cover the non-demo startup path without real hardware.
+	startupFetchFn = func(ctx context.Context, w *wizard.Wizard, logger *slog.Logger) {
+		if err := w.ProbeHardware(ctx); err != nil {
+			logger.Warn("hardware probe failed", "error", err)
+		}
+		if err := w.FetchSysexts(ctx); err != nil {
+			logger.Warn("sysext catalog fetch failed", "error", err)
+		}
+		if err := w.FetchChannels(ctx); err != nil {
+			logger.Warn("channel info fetch failed", "error", err)
+		}
+		if err := w.FetchFCOSStreams(ctx); err != nil {
+			logger.Warn("FCOS stream info fetch failed", "error", err)
+		}
+	}
 )
 
 func main() {
@@ -138,25 +155,7 @@ func main() {
 		}
 		w.State.Channels = demo.Channels()
 	} else {
-		// Probe hardware before starting TUI
-		if err := w.ProbeHardware(ctx); err != nil {
-			logger.Warn("hardware probe failed", "error", err)
-		}
-
-		// Fetch sysext catalog (non-fatal if it fails)
-		if err := w.FetchSysexts(ctx); err != nil {
-			logger.Warn("sysext catalog fetch failed", "error", err)
-		}
-
-		// Fetch channel version info (non-fatal if it fails)
-		if err := w.FetchChannels(ctx); err != nil {
-			logger.Warn("channel info fetch failed", "error", err)
-		}
-
-		// Fetch FCOS stream version info (non-fatal if it fails)
-		if err := w.FetchFCOSStreams(ctx); err != nil {
-			logger.Warn("FCOS stream info fetch failed", "error", err)
-		}
+		startupFetchFn(ctx, w, logger)
 	}
 
 	// Run the TUI — wire reboot through the runner so dry-run/spy work correctly

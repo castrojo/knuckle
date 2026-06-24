@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -59,6 +60,9 @@ func init() {
 		tuiRunFn = func(_ *wizard.Wizard, _ func(context.Context) error) error {
 			return errors.New("injected TUI failure")
 		}
+	}
+	if os.Getenv("KNUCKLE_TEST_STARTUP_NOOP") == "1" {
+		startupFetchFn = func(_ context.Context, _ *wizard.Wizard, _ *slog.Logger) {}
 	}
 }
 
@@ -658,5 +662,20 @@ func TestMain_TUIRunError(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "Error:") {
 		t.Errorf("expected 'Error:' in output; got: %s", out)
+	}
+}
+
+// TestMain_NonDemoStartupFetch verifies that the non-demo path calls startupFetchFn
+// (which probes hardware and fetches FCOS/channel info) before launching the TUI.
+// Uses KNUCKLE_TEST_STARTUP_NOOP=1 to skip real network/hardware calls.
+func TestMain_NonDemoStartupFetch(t *testing.T) {
+	cmd := helperCmd(t, "--dry-run", "--log-file=/dev/null")
+	cmd.Env = append(cmd.Env,
+		"KNUCKLE_TEST_TUI_NOOP=1",
+		"KNUCKLE_TEST_STARTUP_NOOP=1",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected success with noop startup + noop TUI, got %v\noutput: %s", err, out)
 	}
 }
