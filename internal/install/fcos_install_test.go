@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -248,5 +249,192 @@ func TestBuildFCOSInstallArgs_ExternalURL(t *testing.T) {
 	want := []string{"install", "--stream", "beta", "--ignition-url", "https://example.com/fcos.ign", "/dev/vda"}
 	if strings.Join(args, " ") != strings.Join(want, " ") {
 		t.Errorf("args = %v, want %v", args, want)
+	}
+}
+
+func TestFCOSInstall_ButaneError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+	}
+	origCompile := compileToIgnitionFunc
+	t.Cleanup(func() { compileToIgnitionFunc = origCompile })
+	compileToIgnitionFunc = func(_ string) (string, error) {
+		return "", fmt.Errorf("compile error")
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from butane/compile, got nil")
+	}
+}
+
+func TestFCOSInstall_TempFileError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	origTempFile := newIgnitionTempFile
+	t.Cleanup(func() { newIgnitionTempFile = origTempFile })
+	newIgnitionTempFile = func() (ignitionTempFile, error) {
+		return nil, fmt.Errorf("disk full")
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from temp file creation, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing ignition file") {
+		t.Errorf("error = %q, want to contain 'writing ignition file'", err.Error())
+	}
+}
+
+func TestFCOSInstall_RunnerError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	spy.AllError = fmt.Errorf("coreos-installer not found")
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:     "stable",
+		Disk:        model.DiskInfo{DevPath: "/dev/sda"},
+		IgnitionURL: "https://example.com/fcos.ign",
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from runner, got nil")
+	}
+}
+
+type fcosFailRunner struct{}
+
+func (fcosFailRunner) Run(_ context.Context, name string, args ...string) (*runner.Result, error) {
+	return &runner.Result{Command: name, Args: args, ExitCode: 1, Stderr: "installation failed"}, nil
+}
+func (fcosFailRunner) RunWithInput(_ context.Context, _ string, name string, args ...string) (*runner.Result, error) {
+	return nil, fmt.Errorf("unexpected RunWithInput")
+}
+
+func TestFCOSInstall_RunnerNonZeroExit(t *testing.T) {
+	installer := NewFCOSInstaller(fcosFailRunner{}, testLogger())
+	cfg := &model.InstallConfig{
+		Channel:     "stable",
+		Disk:        model.DiskInfo{DevPath: "/dev/sda"},
+		IgnitionURL: "https://example.com/fcos.ign",
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from non-zero exit, got nil")
+	}
+}
+
+func TestFCOSCleanup_EmptyPath(t *testing.T) {
+	installer := NewFCOSInstaller(runner.NewSpyRunner(), testLogger())
+	installer.ignitionPath = ""
+	installer.cleanupFCOSIgnitionFile() // should not panic
+}
+
+func TestFCOSCleanup_RemoveError(t *testing.T) {
+	installer := NewFCOSInstaller(runner.NewSpyRunner(), testLogger())
+	installer.ignitionPath = "/nonexistent/path/abc.json"
+
+	origRemove := removeIgnitionFile
+	t.Cleanup(func() { removeIgnitionFile = origRemove })
+	removeIgnitionFile = func(_ string) error {
+		return fmt.Errorf("permission denied")
+	}
+
+	installer.cleanupFCOSIgnitionFile() // should log warning, not panic
+	if installer.ignitionPath != "" {
+		t.Error("ignitionPath should be cleared even on remove error")
+	}
+}
+
+func TestFCOSInstall_GenerateButaneError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	// A sysext with a non-HTTPS URL triggers GenerateFCOSButane to return an error.
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+		Sysexts: []model.SysextEntry{{Name: "bad", URL: "http://example.com/bad.raw", Selected: true}},
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected butane error for non-HTTPS sysext URL, got nil")
+	}
+	if !strings.Contains(err.Error(), "generating fcos butane config") {
+		t.Errorf("error = %q, want 'generating fcos butane config'", err.Error())
+	}
+}
+
+type writeErrFile struct{ name string }
+
+func (w *writeErrFile) Name() string                      { return w.name }
+func (w *writeErrFile) WriteString(_ string) (int, error) { return 0, fmt.Errorf("write error") }
+func (w *writeErrFile) Close() error                      { return nil }
+
+func TestFCOSInstall_WriteIgnitionWriteError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	origTempFile := newIgnitionTempFile
+	t.Cleanup(func() { newIgnitionTempFile = origTempFile })
+	newIgnitionTempFile = func() (ignitionTempFile, error) {
+		return &writeErrFile{name: "/tmp/knuckle-test-write-err.json"}, nil
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from write failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing ignition file") {
+		t.Errorf("error = %q, want 'writing ignition file'", err.Error())
+	}
+}
+
+type closeErrFile struct {
+	name    string
+	content strings.Builder
+}
+
+func (c *closeErrFile) Name() string                      { return c.name }
+func (c *closeErrFile) WriteString(s string) (int, error) { return c.content.WriteString(s) }
+func (c *closeErrFile) Close() error                      { return fmt.Errorf("close error") }
+
+func TestFCOSInstall_WriteIgnitionCloseError(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/sda"},
+		Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+
+	origTempFile := newIgnitionTempFile
+	t.Cleanup(func() { newIgnitionTempFile = origTempFile })
+	newIgnitionTempFile = func() (ignitionTempFile, error) {
+		return &closeErrFile{name: "/tmp/knuckle-test-close-err.json"}, nil
+	}
+
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from close failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing ignition file") {
+		t.Errorf("error = %q, want 'writing ignition file'", err.Error())
 	}
 }
