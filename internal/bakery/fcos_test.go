@@ -698,3 +698,25 @@ func TestFCOSMockClient_ImplementsClient(t *testing.T) {
 		t.Errorf("FedoraVersion: got %d, want 44", mock.FedoraVersion)
 	}
 }
+
+func TestFetchCatalogFCOS_AuthTokenSent(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer srv.Close()
+
+	c := NewHTTPClientWithURL(srv.URL)
+	c.HTTP = srv.Client()
+	c.AuthToken = "test-token-abc"
+
+	_, err := c.FetchCatalogFCOS(context.Background(), "amd64", 44)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer test-token-abc" {
+		t.Errorf("Authorization header: got %q, want %q", gotAuth, "Bearer test-token-abc")
+	}
+}
