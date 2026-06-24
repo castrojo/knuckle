@@ -2320,3 +2320,75 @@ func TestPrevious_FCOS_SkipsNvidiaEvenWhenSelected(t *testing.T) {
 		t.Errorf("expected StepSysext after backward skip on FCOS, got %v", w.State.CurrentStep)
 	}
 }
+
+func TestFetchFCOSStreams_Success(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	orig := fetchFCOSStreamVersionFn
+	t.Cleanup(func() { fetchFCOSStreamVersionFn = orig })
+	fetchFCOSStreamVersionFn = func(_ context.Context, s string) (string, error) {
+		return "v" + s, nil
+	}
+
+	if err := w.FetchFCOSStreams(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(w.State.FCOSStreams) != 3 {
+		t.Fatalf("expected 3 streams, got %d", len(w.State.FCOSStreams))
+	}
+	if w.State.FCOSStreams[0].Version != "vstable" {
+		t.Errorf("stream 0 version: got %q, want vstable", w.State.FCOSStreams[0].Version)
+	}
+}
+
+func TestFetchFCOSStreams_ErrorNonFatal(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	orig := fetchFCOSStreamVersionFn
+	t.Cleanup(func() { fetchFCOSStreamVersionFn = orig })
+	fetchFCOSStreamVersionFn = func(_ context.Context, s string) (string, error) {
+		return "", fmt.Errorf("network error")
+	}
+
+	if err := w.FetchFCOSStreams(context.Background()); err != nil {
+		t.Fatalf("FetchFCOSStreams must not return error on version fetch failure, got: %v", err)
+	}
+	if len(w.State.FCOSStreams) != 3 {
+		t.Fatalf("expected 3 stream entries even on error, got %d", len(w.State.FCOSStreams))
+	}
+	for _, info := range w.State.FCOSStreams {
+		if info.Version != "" {
+			t.Errorf("version should be empty on error, got %q for %s", info.Version, info.Stream)
+		}
+	}
+}
+
+func TestFetchFCOSStreamVersion_ReturnsStreamName(t *testing.T) {
+	got, err := fetchFCOSStreamVersion(context.Background(), "stable")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "stable" {
+		t.Errorf("got %q, want stable", got)
+	}
+}
+
+func TestFetchSysexts_FCOSSkipsLookup(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts on FCOS should not error, got: %v", err)
+	}
+	if w.State.Sysexts != nil {
+		t.Errorf("FetchSysexts on FCOS should leave Sysexts nil, got %v", w.State.Sysexts)
+	}
+}
+
+func TestIsNvidiaSelected_FCOSAlwaysFalse(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSFCOS
+	w.State.Sysexts = []model.SysextEntry{{Name: "nvidia-runtime", Selected: true}}
+
+	if w.isNvidiaSelected() {
+		t.Error("isNvidiaSelected should return false for FCOS regardless of sysext selection")
+	}
+}

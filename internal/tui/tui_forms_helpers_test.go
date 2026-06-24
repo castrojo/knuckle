@@ -77,7 +77,8 @@ func TestViewChannelCards_SelectedChannel(t *testing.T) {
 	w := newTestWizard()
 	w.State.Config.Channel = "stable"
 	m := New(w)
-	m.cursor = 0 // points at "stable"
+	m.cursor = 0
+	m.osSubView = false // skip OS picker, test channel cards directly
 	out := m.viewChannelCards()
 	if !strings.Contains(out, "Stable") {
 		t.Errorf("viewChannelCards should show 'Stable': %q", out)
@@ -88,7 +89,8 @@ func TestViewChannelCards_LTSDisplayName(t *testing.T) {
 	w := newTestWizard()
 	w.State.Config.Channel = "lts"
 	m := New(w)
-	m.cursor = 1 // points at "lts" (index 1 in channelList)
+	m.cursor = 1        // points at "lts" (index 1 in channelList)
+	m.osSubView = false // skip OS picker, test channel cards directly
 	out := m.viewChannelCards()
 	if !strings.Contains(out, "LTS") {
 		t.Errorf("viewChannelCards should show 'LTS' for lts channel: %q", out)
@@ -103,6 +105,7 @@ func TestViewChannelCards_WithVersionInfo(t *testing.T) {
 	}
 	m := New(w)
 	m.cursor = 0
+	m.osSubView = false // skip OS picker, test channel cards directly
 	out := m.viewChannelCards()
 	if !strings.Contains(out, "4593.2.0") {
 		t.Errorf("viewChannelCards should show version when channels loaded: %q", out)

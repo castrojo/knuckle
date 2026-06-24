@@ -68,6 +68,10 @@ type Model struct {
 	tailscaleRoutesIn  string
 	showAdvanced       bool
 
+	// osSubView tracks whether the StepWelcome OS picker is shown (true)
+	// or the channel/stream card picker is shown (false).
+	osSubView bool
+
 	// Sysext list (bubbles/list)
 	sysextList      list.Model
 	sysextListReady bool
@@ -444,6 +448,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) maxCursor() int {
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
+		if m.osSubView {
+			return 2 // Flatcar | FCOS
+		}
 		return m.channelCardCount()
 	case model.StepStorage:
 		return len(m.Wizard.State.Disks)
@@ -452,6 +459,9 @@ func (m *Model) maxCursor() int {
 	case model.StepNvidia:
 		return len(model.NvidiaDriverOptions)
 	case model.StepUpdate:
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			return 2 // immediate | disabled
+		}
 		return 3
 	default:
 		return 1
@@ -464,7 +474,17 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 
 	switch step {
 	case model.StepWelcome:
-		// Apply channel selection from card cursor
+		if m.osSubView {
+			// OS picker — cursor 0 = Flatcar, cursor 1 = FCOS
+			osList := []string{model.OSFlatcar, model.OSFCOS}
+			if m.cursor >= 0 && m.cursor < len(osList) {
+				m.Wizard.State.Config.OS = osList[m.cursor]
+			}
+			m.osSubView = false
+			m.cursor = 0
+			return m, nil
+		}
+		// Apply channel/stream selection from card cursor
 		channels := m.channelList()
 		if m.cursor >= 0 && m.cursor < len(channels) {
 			m.Wizard.State.Config.Channel = channels[m.cursor]
@@ -501,9 +521,16 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.Wizard.State.Config.NvidiaDriverVersion = model.NvidiaDriverOptions[m.cursor].ID
 		}
 	case model.StepUpdate:
-		strategies := []string{"reboot", "off", "etcd-lock"}
-		if m.cursor >= 0 && m.cursor < len(strategies) {
-			m.Wizard.State.Config.UpdateStrategy.RebootStrategy = strategies[m.cursor]
+		if m.Wizard.State.Config.OS == model.OSFCOS {
+			strategies := []string{model.FCOSStrategyImmediate, model.FCOSStrategyDisabled}
+			if m.cursor >= 0 && m.cursor < len(strategies) {
+				m.Wizard.State.Config.UpdateStrategy.FCOSUpdateStrategy = strategies[m.cursor]
+			}
+		} else {
+			strategies := []string{"reboot", "off", "etcd-lock"}
+			if m.cursor >= 0 && m.cursor < len(strategies) {
+				m.Wizard.State.Config.UpdateStrategy.RebootStrategy = strategies[m.cursor]
+			}
 		}
 	case model.StepUser:
 		// Collect local keys first so they're always included even without GitHub.
@@ -617,8 +644,14 @@ func (m *Model) applyFields() {
 			switch f.key {
 			case "channel":
 				if f.value != "" {
-					if err := validate.Channel(f.value); err != nil {
-						m.err = err
+					var chanErr error
+					if cfg.OS == model.OSFCOS {
+						chanErr = validate.FCOSStream(f.value)
+					} else {
+						chanErr = validate.Channel(f.value)
+					}
+					if chanErr != nil {
+						m.err = chanErr
 						return
 					}
 					cfg.Channel = f.value
@@ -715,7 +748,9 @@ func (m *Model) initStepFields() {
 	m.fieldIdx = 0
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
-		// Card-based channel selector — no text fields
+		// Show OS picker first; channel cards follow after OS selection.
+		m.osSubView = true
+		m.cursor = 0
 		m.fields = nil
 	case model.StepNvidia:
 		// Position cursor at the currently configured driver version.
@@ -1150,27 +1185,45 @@ func wordWrap(s string, width int) []string {
 
 func (m *Model) viewUpdate() string {
 	var b strings.Builder
-	b.WriteString("Update Strategy\n\nChoose how Flatcar will handle OS updates:\n\n")
+	cfg := m.Wizard.State.Config
 
 	type option struct {
 		name string
 		desc []string
 	}
-	options := []option{
-		{"reboot (Recommended)", []string{
-			"Auto-update and reboot immediately when an update is applied.",
-			"Best for: single nodes, dev environments",
-		}},
-		{"off", []string{
-			"Updates are downloaded but never applied automatically.",
-			"You must run 'update_engine_client -update' manually.",
-			"Best for: manually managed infrastructure",
-		}},
-		{"etcd-lock", []string{
-			"Coordinates reboots with other nodes via etcd distributed lock.",
-			"Only one node reboots at a time in the cluster.",
-			"Best for: multi-node clusters running etcd",
-		}},
+
+	var options []option
+	if cfg.OS == model.OSFCOS {
+		b.WriteString("Update Strategy\n\nChoose how Fedora CoreOS will handle OS updates:\n\n")
+		options = []option{
+			{"immediate (Recommended)", []string{
+				"Zincati auto-updates and reboots as soon as an update is staged.",
+				"Best for: single nodes, dev environments",
+			}},
+			{"disabled", []string{
+				"Zincati is disabled — no automatic updates.",
+				"You must update manually with 'rpm-ostree upgrade'.",
+				"Best for: air-gapped or manually managed infrastructure",
+			}},
+		}
+	} else {
+		b.WriteString("Update Strategy\n\nChoose how Flatcar will handle OS updates:\n\n")
+		options = []option{
+			{"reboot (Recommended)", []string{
+				"Auto-update and reboot immediately when an update is applied.",
+				"Best for: single nodes, dev environments",
+			}},
+			{"off", []string{
+				"Updates are downloaded but never applied automatically.",
+				"You must run 'update_engine_client -update' manually.",
+				"Best for: manually managed infrastructure",
+			}},
+			{"etcd-lock", []string{
+				"Coordinates reboots with other nodes via etcd distributed lock.",
+				"Only one node reboots at a time in the cluster.",
+				"Best for: multi-node clusters running etcd",
+			}},
+		}
 	}
 
 	for i, opt := range options {
@@ -1197,7 +1250,11 @@ func (m *Model) viewInstall() string {
 	var b strings.Builder
 	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 
-	b.WriteString("Installing Flatcar Container Linux...\n\n")
+	osName := "Flatcar Container Linux"
+	if m.Wizard.State.Config.OS == model.OSFCOS {
+		osName = "Fedora CoreOS"
+	}
+	fmt.Fprintf(&b, "Installing %s...\n\n", osName)
 
 	// Completed phases with green checkmarks
 	for _, msg := range m.Wizard.State.ProgressMessages {
@@ -1226,7 +1283,11 @@ func (m *Model) viewDone() string {
 		b.WriteString("\n✅ Installation Complete!\n\n")
 	}
 
-	b.WriteString("Flatcar Container Linux has been installed:\n\n")
+	osName := "Flatcar Container Linux"
+	if cfg.OS == model.OSFCOS {
+		osName = "Fedora CoreOS"
+	}
+	fmt.Fprintf(&b, "%s has been installed:\n\n", osName)
 
 	if cfg.Disk.Model != "" {
 		fmt.Fprintf(&b, "  Disk:     %s (%s)\n", cfg.Disk.Model, cfg.Disk.SizeHuman)
@@ -1256,8 +1317,13 @@ func (m *Model) viewDone() string {
 	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	b.WriteString("\n")
 	b.WriteString(dim.Render("Community & help:") + "\n")
-	b.WriteString("  " + link.Render("https://flatcar.org/discord") + dim.Render("  — Flatcar community on Discord") + "\n")
-	b.WriteString("  " + link.Render("https://www.flatcar.org/docs/") + dim.Render("  — Flatcar documentation") + "\n")
+	if cfg.OS == model.OSFCOS {
+		b.WriteString("  " + link.Render("https://discussion.fedoraproject.org/tag/coreos") + dim.Render("  — Fedora CoreOS community") + "\n")
+		b.WriteString("  " + link.Render("https://docs.fedoraproject.org/en-US/fedora-coreos/") + dim.Render("  — Fedora CoreOS documentation") + "\n")
+	} else {
+		b.WriteString("  " + link.Render("https://flatcar.org/discord") + dim.Render("  — Flatcar community on Discord") + "\n")
+		b.WriteString("  " + link.Render("https://www.flatcar.org/docs/") + dim.Render("  — Flatcar documentation") + "\n")
+	}
 
 	b.WriteString("\n")
 	if cfg.DryRun {

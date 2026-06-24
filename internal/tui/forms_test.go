@@ -19,6 +19,7 @@ func TestViewChannelCardsLongVersionNoPanic(t *testing.T) {
 	}
 	m := New(w)
 	m.cursor = 0
+	m.osSubView = false // skip OS picker, test channel cards
 
 	// This should not panic even with a very long version string
 	// Regression test for #248 (negative padding fix)
@@ -40,6 +41,7 @@ func TestViewChannelCardsSelectsCurrent(t *testing.T) {
 	}
 	m := New(w)
 	m.cursor = 0
+	m.osSubView = false // skip OS picker, test channel cards
 
 	out := m.viewChannelCards()
 	if !strings.Contains(out, "▸") {
