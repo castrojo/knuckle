@@ -4,6 +4,19 @@ End-to-end PR review: preflight → tier classification → code review → vm-e
 
 > Reference docs: [`PR-TEST-MATRIX.md`](../PR-TEST-MATRIX.md), [`CI-AND-TESTING.md`](../CI-AND-TESTING.md)
 
+## When to Use
+
+- Reviewing one or more open PRs in `projectbluefin/knuckle`
+- Running lab smoke tests for a feature branch
+- Triaging a CI failure and deciding pass/fail
+- Deciding whether a PR is ready to merge
+
+## When NOT to Use
+
+- CI pipeline internals (see `ci.md`)
+- ISO build or lab infra setup (see `testlab.md`)
+- Cutting a release (see `release.md`)
+
 ## Pre-Flight (once per session)
 
 ```bash
@@ -162,81 +175,48 @@ done
 git worktree list
 ```
 
+## Red Flags
+
+- Posting more than one comment per PR event — always combine into one
+- Checking PR title to determine tier instead of labels
+- Running `go mod tidy` or `golangci-lint` in parallel — they race on file locks
+- Using `git diff HEAD --stat` instead of `git diff merge-base..pr-HEAD --stat` — stale forks accumulate upstream changes
+- Merging a governance PR from `castrojo/knuckle-1` without checking for stray Go source files
+- Pushing to `clubanderson/knuckle` fork without verifying the branch isn't locked by auto-merge queue
+- Treating lab workflow timeouts as failures — Dakota `build-cd-sync-dakota-latest-*` saturates semaphore; queuing for 60+ min is normal
+
+## Verification
+
+- [ ] `just ci` green locally before merging any branch
+- [ ] Coverage gate passes per-package (see `docs/CI-AND-TESTING.md` for thresholds)
+- [ ] `gofmt -l .` returns empty (spaces before `//` are the most common failure)
+- [ ] No `exec.Command` outside `internal/runner`
+- [ ] Lab workflow reached `Succeeded` (not just submitted or pending)
+- [ ] Only one GitHub comment posted per PR event (or none if only "tests pass")
+- [ ] Dep bump conflicts: `git checkout origin/main -- go.mod go.sum && go mod tidy` not just `go mod tidy`
+
 ## Common Failures
 
 | Failure | Cause | Fix |
 |---|---|---|
 | `open /dev/tty: no such device` (cmd/knuckle tests) | No PTY in non-interactive env | Pre-existing issue #512; rely on GHA CI (authoritative) |
-| `go: updating go.mod: existing contents have changed` | Parallel QA races on go.mod | Run QA sequentially |
+| `go: updating go.mod: existing contents have changed` | Parallel QA races on go.mod | Run QA sequentially — max 1 script at a time |
 | PR stuck `BLOCKED`, no CI runs | First-time contributor | Approve via `gh api ... /actions/runs/<ID>/approve` |
 | `git worktree add` fails for `/tmp/knuckle-qa-wt-<N>` | Stale worktree | `git worktree remove /tmp/knuckle-qa-wt-<N> --force` |
 | `git fetch ... pr<N>-qa` exits 128 | Stale local ref | `git update-ref -d refs/heads/pr<N>-qa` then retry |
+| Coverage gate fails after adding non-demo code to `cmd/knuckle/main.go` | New startup path not exercised | Add injectable seam (e.g. `startupFetchFn`) + subprocess test via `KNUCKLE_TEST_*=1` env var |
+| Fork push "permission denied" | Auto-merge queue locked branch | Use `origin/test/pr-NNN-*` branch instead; writable by agents for lab testing |
+| Lab workflows pending 60+ min | `max-containerdisk-vms:12` full — Dakota builds hold slots for 40-55 min each | Expected; wait for Dakota sync builds to complete |
+| Dep bump PR go.mod conflict | `go mod tidy` alone can't resolve git merge conflicts | `git checkout origin/main -- go.mod go.sum && go mod tidy` then continue rebase |
+| Governance PR contains stray Go source | Hive-agent fork base diverged from main | `git diff --name-only origin/main...<ref> \| grep '\.go$'` — extract only intended file(s) into a clean branch |
 
-## Lessons Learned
+## Common Rationalizations
 
-### Sequential QA only (2026-05-24)
+| Rationalization | Reality |
+|---|---|
+| "I'll check tier by the PR title — it's faster." | Labels are authoritative. Title is freetext. Always check labels. |
+| "I can run two QA scripts in parallel to save time." | Parallel `go mod tidy` races on go.mod/go.sum. Max 1 at a time. |
+| "The stray Go files in this fork PR are probably just noise." | Hive-agent PRs regularly contain 50-150 files from a diverged base. Strip them. |
+| "I'll post a follow-up comment with additional findings." | One comment per event. Edit the existing one instead. |
+| "The lab workflow is stuck — something must be broken." | Check if Dakota builds are saturating the semaphore first. |
 
-Parallel `go mod tidy` races on `go.mod`/`go.sum` ("existing contents have changed since
-last read"). Parallel `golangci-lint` races on its file lock. **Max 1 QA script at a time.**
-The "max 3 concurrent" rule written earlier was wrong.
-
-### Feature injection uses LABELS, never PR title (2026-05-24)
-
-A PR titled "fix tailscale tests" with only `domain:validate` labels is Tier 0, not
-Tier 3. Check `$LABELS`, never `$TITLE`, to decide whether to inject tailscale auth key
-into the QA config.
-
-### Hanthor PRs: check the actual diff (2026-05-26)
-
-Stale branches accumulate all upstream changes — `git diff merge-base..pr-HEAD --stat`
-to isolate the actual change. `size:XXL` triggers the complexity gate; do not ghost-test.
-
-### `vm-e2e.yml` NVIDIA pass config (2026-05-30)
-
-NVIDIA pass config must use `"nvidia_driver_version":"570-open"` (flat string).
-The nested `"nvidia":{"enabled":true,"driver_type":"open"}` is silently ignored by Go JSON.
-
-### Hive-agent governance PRs: strip Go source before merging (2026-06-24)
-
-PRs from diverged hive-agent forks (e.g. `castrojo/knuckle-1`) often contain stray Go
-source changes. Before merging any governance PR (CODEOWNERS, issue templates, docs):
-
-```bash
-git fetch <fork> <branch>:<local-ref>
-git diff --name-only origin/main...<local-ref> | grep "\.go$"  # must be empty
-```
-
-If Go source files appear, extract only the intended file(s) via:
-```bash
-git checkout origin/main -b fix/NNN-clean
-git checkout <local-ref> -- docs/FILE.md  # the intended change only
-git commit && git push origin fix/NNN-clean
-gh pr create ...
-gh pr merge --admin --squash ... NNN-new  # close original after
-```
-
-### Fork branch write permissions (2026-06-24)
-
-`clubanderson/knuckle` fork branches may reject pushes if the branch was used for
-auto-merge queue (GitHub locks the branch temporarily). If push fails with
-"permission denied", check that the fork branch is unlocked and retry with SSH:
-`git push git@github.com:clubanderson/knuckle.git <local>:<remote>`.
-
-The `origin/test/pr-NNN-*` branches in `projectbluefin/knuckle` are always
-writable by agents and serve the same purpose for lab testing.
-
-### Lab semaphore contention with Dakota builds (2026-06-24)
-
-`max-containerdisk-vms: 12` semaphore is shared by ALL workflows — Dakota continuous
-sync builds (`build-cd-sync-dakota-latest-*`) each consume one slot with a 40-55min
-`install-to-disk` step. When 5-8 Dakota builds are running simultaneously, FCOS PR
-lab workflows queue for 1-2 hours. This is expected; no action needed.
-
-### Dep bump PR conflicts: checkout main, then update module (2026-06-24)
-
-When dep bump PRs conflict on go.mod, `go mod tidy` alone is not sufficient. Pattern:
-```bash
-git checkout origin/main -- go.mod go.sum
-go mod tidy
-git add go.mod go.sum && git rebase --continue
-```
