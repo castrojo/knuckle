@@ -1983,3 +1983,27 @@ func TestToInstallConfig_FCOSDefaultOS(t *testing.T) {
 		t.Errorf("OS = %q, want flatcar when os field absent", ic.OS)
 	}
 }
+
+func TestRun_FCOSVersionWarned(t *testing.T) {
+	// Run() should emit a slog warning when OS=fcos and Version is set,
+	// but should not return an error — the version field is silently ignored.
+	cfg := &Config{
+		OS:      "fcos",
+		Channel: "stable",
+		Version: "40.20240101.3.0",
+		Disk:    "/dev/vdb",
+		Network: NetworkConfig{Mode: "dhcp"},
+		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		DryRun:  true,
+	}
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	installer := &mockInstaller{}
+
+	if err := Run(context.Background(), cfg, installer, logger); err != nil {
+		t.Fatalf("Run: unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "version field is ignored") {
+		t.Errorf("expected slog warning about version field, got: %s", buf.String())
+	}
+}
