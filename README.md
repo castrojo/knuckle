@@ -4,9 +4,9 @@
 
 A modern, interactive TUI "installer" for [Flatcar Container Linux](https://www.flatcar.org/), designed for bare-metal deployments. Not a real installer because making one would be dumb. There's no reason to make a "Bluefin Server" if Bluefin just gives you a nice tool to use Flatcar. But also it's just an ignition thing, so let's **UNIFY COREOS AND FLATCAR INSTALLATION** and share one installer and tests.
 
-Knuckle is a charm.sh form that makes a valid ignition file and passes it to the Flatcar installer. We're just making users not have to use ignition, with an ubuntu-server style install UX. 
+Knuckle is a charm.sh form that makes a valid ignition file and passes it to the Flatcar installer. We're just making users not have to use ignition, with an ubuntu-server style install UX.
 
-This is also basically [Azure Container Linux (Home Edition)](https://opensource.microsoft.com/blog/2026/05/18/from-open-source-to-agentic-systems-microsoft-at-open-source-summit-north-america-2026/). 
+This is also basically [Azure Container Linux (Home Edition)](https://opensource.microsoft.com/blog/2026/05/18/from-open-source-to-agentic-systems-microsoft-at-open-source-summit-north-america-2026/).
 - [Download an ISO](https://github.com/projectbluefin/knuckle/releases) for ARM or AMD64 and install it.
 - Follow the installer you'll be left with a pristine upstream install of Flatcar linux
 - This is early and prealpha, all feedback and contributions welcome!
@@ -88,7 +88,7 @@ For unattended installs, see [docs/HEADLESS-CONFIG.md](docs/HEADLESS-CONFIG.md).
 
 ## Why
 
-Another Linux for the home? Flatcar is in the [CNCF](https://cncf.io), which means there's a core operating system in a vendor-neutral Foundation. The kind of tech that will stick around in the long term. And designed to run anything you want. Plop anything from [linuxserver.io](https://www.linuxserver.io/) right on it for an awesome setup. 
+Another Linux for the home? Flatcar is in the [CNCF](https://cncf.io), which means there's a core operating system in a vendor-neutral Foundation. The kind of tech that will stick around in the long term. And designed to run anything you want. Plop anything from [linuxserver.io](https://www.linuxserver.io/) right on it for an awesome setup.
 
 Perfect for home servers, NAS builds, k8s cluster setups, you name it. The [Flatcar Bakery](https://flatcar.github.io/sysext-bakery/) is included, allowing for endless extensibility:
 
