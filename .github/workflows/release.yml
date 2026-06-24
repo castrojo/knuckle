@@ -19,7 +19,7 @@ jobs:
     name: Create draft release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
       - name: Create or verify draft release
@@ -74,7 +74,7 @@ jobs:
           echo "Published release already contains all amd64 assets; skipping amd64 build/upload."
           echo "skip_upload=true" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         if: steps.release-check.outputs.skip_upload != 'true'
         with:
           persist-credentials: false
@@ -233,7 +233,7 @@ jobs:
           echo "Published release already contains all arm64 assets; skipping arm64 build/upload."
           echo "skip_upload=true" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         if: steps.release-check.outputs.skip_upload != 'true'
         with:
           persist-credentials: false
@@ -354,7 +354,7 @@ jobs:
       - release-amd64
       - release-arm64
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
       - name: Check release state (publish)
