@@ -831,171 +831,171 @@ func TestInstallFCOS_GenerateButaneError(t *testing.T) {
 // ── FCOSInstaller tests ───────────────────────────────────────────────────────
 
 func TestFCOSInstaller_CallsCoreoInstaller(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-cfg := &model.InstallConfig{
-OS:      model.OSFCOS,
-Channel: "stable",
-Hostname: "fcos-test",
-Disk:    model.DiskInfo{DevPath: "/dev/sda"},
-Network: model.NetworkConfig{Mode: model.NetworkDHCP},
-Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
-}
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-test",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
 
-err := installer.Install(context.Background(), cfg, func(string) {})
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-// coreos-installer must be called
-var coreosCall *runner.SpyCall
-for i := range spy.Calls {
-if spy.Calls[i].Name == "coreos-installer" {
-coreosCall = &spy.Calls[i]
-break
-}
-}
-if coreosCall == nil {
-t.Fatal("coreos-installer was not called")
-}
+	// coreos-installer must be called
+	var coreosCall *runner.SpyCall
+	for i := range spy.Calls {
+		if spy.Calls[i].Name == "coreos-installer" {
+			coreosCall = &spy.Calls[i]
+			break
+		}
+	}
+	if coreosCall == nil {
+		t.Fatal("coreos-installer was not called")
+	}
 
-argsStr := strings.Join(coreosCall.Args, " ")
+	argsStr := strings.Join(coreosCall.Args, " ")
 
-// Must contain: install, --stream stable, --ignition-file
-for _, want := range []string{"install", "--stream", "stable", "--ignition-file"} {
-if !strings.Contains(argsStr, want) {
-t.Errorf("expected %q in coreos-installer args, got: %s", want, argsStr)
-}
-}
+	// Must contain: install, --stream stable, --ignition-file
+	for _, want := range []string{"install", "--stream", "stable", "--ignition-file"} {
+		if !strings.Contains(argsStr, want) {
+			t.Errorf("expected %q in coreos-installer args, got: %s", want, argsStr)
+		}
+	}
 
-// Must NOT call wipefs or sfdisk
-for _, call := range spy.Calls {
-if call.Name == "wipefs" {
-t.Error("wipefs must not be called by FCOSInstaller")
-}
-if call.Name == "sfdisk" {
-t.Error("sfdisk must not be called by FCOSInstaller")
-}
-if call.Name == "flatcar-install" {
-t.Error("flatcar-install must not be called by FCOSInstaller")
-}
-}
+	// Must NOT call wipefs or sfdisk
+	for _, call := range spy.Calls {
+		if call.Name == "wipefs" {
+			t.Error("wipefs must not be called by FCOSInstaller")
+		}
+		if call.Name == "sfdisk" {
+			t.Error("sfdisk must not be called by FCOSInstaller")
+		}
+		if call.Name == "flatcar-install" {
+			t.Error("flatcar-install must not be called by FCOSInstaller")
+		}
+	}
 }
 
 func TestFCOSInstaller_NilConfig(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-err := installer.Install(context.Background(), nil, func(string) {})
-if err == nil {
-t.Fatal("expected error for nil config")
-}
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	err := installer.Install(context.Background(), nil, func(string) {})
+	if err == nil {
+		t.Fatal("expected error for nil config")
+	}
 }
 
 func TestFCOSInstaller_UsesStreamFromChannel(t *testing.T) {
-for _, stream := range []string{"stable", "testing", "next"} {
-t.Run(stream, func(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-cfg := &model.InstallConfig{
-OS:      model.OSFCOS,
-Channel: stream,
-Hostname: "fcos-node",
-Disk:    model.DiskInfo{DevPath: "/dev/vda"},
-Network: model.NetworkConfig{Mode: model.NetworkDHCP},
-Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
-}
-if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
-t.Fatalf("unexpected error for stream %q: %v", stream, err)
-}
-for _, call := range spy.Calls {
-if call.Name == "coreos-installer" {
-argsStr := strings.Join(call.Args, " ")
-if !strings.Contains(argsStr, "--stream "+stream) {
-t.Errorf("expected --stream %s in args, got: %s", stream, argsStr)
-}
-return
-}
-}
-t.Error("coreos-installer not called")
-})
-}
+	for _, stream := range []string{"stable", "testing", "next"} {
+		t.Run(stream, func(t *testing.T) {
+			spy := runner.NewSpyRunner()
+			installer := NewFCOSInstaller(spy, testLogger())
+			cfg := &model.InstallConfig{
+				OS:       model.OSFCOS,
+				Channel:  stream,
+				Hostname: "fcos-node",
+				Disk:     model.DiskInfo{DevPath: "/dev/vda"},
+				Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+				Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+			}
+			if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
+				t.Fatalf("unexpected error for stream %q: %v", stream, err)
+			}
+			for _, call := range spy.Calls {
+				if call.Name == "coreos-installer" {
+					argsStr := strings.Join(call.Args, " ")
+					if !strings.Contains(argsStr, "--stream "+stream) {
+						t.Errorf("expected --stream %s in args, got: %s", stream, argsStr)
+					}
+					return
+				}
+			}
+			t.Error("coreos-installer not called")
+		})
+	}
 }
 
 func TestFCOSInstaller_IgnitionURL(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-cfg := &model.InstallConfig{
-OS:          model.OSFCOS,
-Channel:     "stable",
-Hostname:    "fcos-node",
-Disk:        model.DiskInfo{DevPath: "/dev/vda"},
-Network:     model.NetworkConfig{Mode: model.NetworkDHCP},
-Users:       []model.UserConfig{{Username: "core"}},
-IgnitionURL: "https://example.com/fcos.ign",
-}
-if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
-for _, call := range spy.Calls {
-if call.Name == "coreos-installer" {
-argsStr := strings.Join(call.Args, " ")
-if !strings.Contains(argsStr, "--ignition-url") {
-t.Errorf("expected --ignition-url in args for IgnitionURL mode, got: %s", argsStr)
-}
-if strings.Contains(argsStr, "--ignition-file") {
-t.Errorf("--ignition-file must not appear when IgnitionURL is set, got: %s", argsStr)
-}
-return
-}
-}
-t.Error("coreos-installer not called")
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:          model.OSFCOS,
+		Channel:     "stable",
+		Hostname:    "fcos-node",
+		Disk:        model.DiskInfo{DevPath: "/dev/vda"},
+		Network:     model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:       []model.UserConfig{{Username: "core"}},
+		IgnitionURL: "https://example.com/fcos.ign",
+	}
+	if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, call := range spy.Calls {
+		if call.Name == "coreos-installer" {
+			argsStr := strings.Join(call.Args, " ")
+			if !strings.Contains(argsStr, "--ignition-url") {
+				t.Errorf("expected --ignition-url in args for IgnitionURL mode, got: %s", argsStr)
+			}
+			if strings.Contains(argsStr, "--ignition-file") {
+				t.Errorf("--ignition-file must not appear when IgnitionURL is set, got: %s", argsStr)
+			}
+			return
+		}
+	}
+	t.Error("coreos-installer not called")
 }
 
 func TestFCOSInstaller_GenerateButaneError(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-cfg := &model.InstallConfig{
-OS:      model.OSFCOS,
-Channel: "stable",
-Hostname: "fcos-err",
-Disk:    model.DiskInfo{DevPath: "/dev/sda"},
-Network: model.NetworkConfig{Mode: model.NetworkDHCP},
-Users:   []model.UserConfig{{Username: "core"}},
-Sysexts: []model.SysextEntry{
-{Name: "bad", URL: "http://insecure.example.com/bad.raw", Selected: true},
-},
-}
-err := installer.Install(context.Background(), cfg, func(string) {})
-if err == nil {
-t.Fatal("expected error from FCOS butane generation, got nil")
-}
-if !strings.Contains(err.Error(), "generating butane config") {
-t.Errorf("expected 'generating butane config' in error, got: %v", err)
-}
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-err",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core"}},
+		Sysexts: []model.SysextEntry{
+			{Name: "bad", URL: "http://insecure.example.com/bad.raw", Selected: true},
+		},
+	}
+	err := installer.Install(context.Background(), cfg, func(string) {})
+	if err == nil {
+		t.Fatal("expected error from FCOS butane generation, got nil")
+	}
+	if !strings.Contains(err.Error(), "generating butane config") {
+		t.Errorf("expected 'generating butane config' in error, got: %v", err)
+	}
 }
 
 func TestFCOSInstaller_PrefersByIDPath(t *testing.T) {
-spy := runner.NewSpyRunner()
-installer := NewFCOSInstaller(spy, testLogger())
-cfg := &model.InstallConfig{
-OS:      model.OSFCOS,
-Channel: "stable",
-Hostname: "fcos-node",
-Disk:    model.DiskInfo{DevPath: "/dev/sda", Path: "/dev/disk/by-id/sda"},
-Network: model.NetworkConfig{Mode: model.NetworkDHCP},
-Users:   []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
-}
-if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
-for _, call := range spy.Calls {
-if call.Name == "coreos-installer" {
-last := call.Args[len(call.Args)-1]
-if last != "/dev/disk/by-id/sda" {
-t.Errorf("expected disk by-id path as last arg, got: %s", last)
-}
-return
-}
-}
-t.Error("coreos-installer not called")
+	spy := runner.NewSpyRunner()
+	installer := NewFCOSInstaller(spy, testLogger())
+	cfg := &model.InstallConfig{
+		OS:       model.OSFCOS,
+		Channel:  "stable",
+		Hostname: "fcos-node",
+		Disk:     model.DiskInfo{DevPath: "/dev/sda", Path: "/dev/disk/by-id/sda"},
+		Network:  model.NetworkConfig{Mode: model.NetworkDHCP},
+		Users:    []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA test"}}},
+	}
+	if err := installer.Install(context.Background(), cfg, func(string) {}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, call := range spy.Calls {
+		if call.Name == "coreos-installer" {
+			last := call.Args[len(call.Args)-1]
+			if last != "/dev/disk/by-id/sda" {
+				t.Errorf("expected disk by-id path as last arg, got: %s", last)
+			}
+			return
+		}
+	}
+	t.Error("coreos-installer not called")
 }
