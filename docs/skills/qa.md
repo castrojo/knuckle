@@ -195,3 +195,48 @@ to isolate the actual change. `size:XXL` triggers the complexity gate; do not gh
 
 NVIDIA pass config must use `"nvidia_driver_version":"570-open"` (flat string).
 The nested `"nvidia":{"enabled":true,"driver_type":"open"}` is silently ignored by Go JSON.
+
+### Hive-agent governance PRs: strip Go source before merging (2026-06-24)
+
+PRs from diverged hive-agent forks (e.g. `castrojo/knuckle-1`) often contain stray Go
+source changes. Before merging any governance PR (CODEOWNERS, issue templates, docs):
+
+```bash
+git fetch <fork> <branch>:<local-ref>
+git diff --name-only origin/main...<local-ref> | grep "\.go$"  # must be empty
+```
+
+If Go source files appear, extract only the intended file(s) via:
+```bash
+git checkout origin/main -b fix/NNN-clean
+git checkout <local-ref> -- docs/FILE.md  # the intended change only
+git commit && git push origin fix/NNN-clean
+gh pr create ...
+gh pr merge --admin --squash ... NNN-new  # close original after
+```
+
+### Fork branch write permissions (2026-06-24)
+
+`clubanderson/knuckle` fork branches may reject pushes if the branch was used for
+auto-merge queue (GitHub locks the branch temporarily). If push fails with
+"permission denied", check that the fork branch is unlocked and retry with SSH:
+`git push git@github.com:clubanderson/knuckle.git <local>:<remote>`.
+
+The `origin/test/pr-NNN-*` branches in `projectbluefin/knuckle` are always
+writable by agents and serve the same purpose for lab testing.
+
+### Lab semaphore contention with Dakota builds (2026-06-24)
+
+`max-containerdisk-vms: 12` semaphore is shared by ALL workflows — Dakota continuous
+sync builds (`build-cd-sync-dakota-latest-*`) each consume one slot with a 40-55min
+`install-to-disk` step. When 5-8 Dakota builds are running simultaneously, FCOS PR
+lab workflows queue for 1-2 hours. This is expected; no action needed.
+
+### Dep bump PR conflicts: checkout main, then update module (2026-06-24)
+
+When dep bump PRs conflict on go.mod, `go mod tidy` alone is not sufficient. Pattern:
+```bash
+git checkout origin/main -- go.mod go.sum
+go mod tidy
+git add go.mod go.sum && git rebase --continue
+```
