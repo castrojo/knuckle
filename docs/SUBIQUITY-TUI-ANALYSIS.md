@@ -1,9 +1,9 @@
 # Subiquity TUI Design Analysis — Patterns for knuckle
 
-> Sourced from: `canonical/subiquity` — `subiquity/ui/views/`, `subiquitycore/ui/`  
-> Analyzed: `form.py`, `utils.py`, `anchors.py`, `frame.py`, `palette.py`, `spinner.py`,  
-> `stretchy.py`, `buttons.py`, `confirmation.py`, `identity.py`, `installprogress.py`,  
-> `snaplist.py`, `filesystem/guided.py`, `views/network.py`, `views/error.py`, `DESIGN.md`  
+> Sourced from: `canonical/subiquity` — `subiquity/ui/views/`, `subiquitycore/ui/`
+> Analyzed: `form.py`, `utils.py`, `anchors.py`, `frame.py`, `palette.py`, `spinner.py`,
+> `stretchy.py`, `buttons.py`, `confirmation.py`, `identity.py`, `installprogress.py`,
+> `snaplist.py`, `filesystem/guided.py`, `views/network.py`, `views/error.py`, `DESIGN.md`
 > Date: 2026-05-19
 
 ---
@@ -600,18 +600,18 @@ Every view should follow this structure:
 │  Step title here                                                    [?] Help  │
 │ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ │
 └─────────────────────────────────────────────────────────────────────────────────┘
-                                                                                   
-  Brief excerpt: one or two sentences explaining what this step is for.           
-                                                                                   
-  ┌ scrollable content area ──────────────────────────────────────────────────┐   
-  │                                                                           │   
-  │  [form fields / disk table / selection list / progress log]              │   
-  │                                                                           │   
-  └───────────────────────────────────────────────────────────────────────────┘   
-                                                                                   
-                          [ Done / Next / Install ]                                
-                          [       Back            ]                                
-                                                                                   
+
+  Brief excerpt: one or two sentences explaining what this step is for.
+
+  ┌ scrollable content area ──────────────────────────────────────────────────┐
+  │                                                                           │
+  │  [form fields / disk table / selection list / progress log]              │
+  │                                                                           │
+  └───────────────────────────────────────────────────────────────────────────┘
+
+                          [ Done / Next / Install ]
+                          [       Back            ]
+
 ```
 
 ### Pattern B: Form field with validation

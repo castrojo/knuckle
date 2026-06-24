@@ -338,7 +338,7 @@ $VM_SSH "cat /tmp/knuckle.log" > $WORKDIR/knuckle.log
 - `$WORKDIR/knuckle.log` (knuckle's internal log from VM)
 
 **Pass criteria:**
-- All unit tests pass; coverage ≥ 70%  
+- All unit tests pass; coverage ≥ 70%
 - Dry-run exits 0
 - Real install exits 0 (knuckle.log shows `flatcar-install` completed)
 - `knuckle.log` contains no `ERROR` lines
@@ -794,11 +794,11 @@ Save as `$WORKDIR/report.md` at the end of each domain test run.
 ```markdown
 # PR #NNN — `<domain>` Test Report
 
-**Date:** YYYY-MM-DD HH:MM UTC  
-**PR:** https://github.com/projectbluefin/knuckle/pull/NNN  
-**Branch:** `<branch-name>`  
-**Commit:** `<git rev-parse HEAD>`  
-**Ghost port:** PPPPP  
+**Date:** YYYY-MM-DD HH:MM UTC
+**PR:** https://github.com/projectbluefin/knuckle/pull/NNN
+**Branch:** `<branch-name>`
+**Commit:** `<git rev-parse HEAD>`
+**Ghost port:** PPPPP
 **Tester:** <agent or human>
 
 ---
