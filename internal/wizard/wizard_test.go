@@ -2271,7 +2271,6 @@ func TestPrevious_TailscaleBoundarySkipsOrVisitsNvidia(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 // TestNext_FCOS_SkipsNvidiaEvenWhenSelected verifies that when OS is FCOS,
 // the nvidia step is unconditionally skipped — even if the nvidia-runtime
 // sysext happens to be in the selection list. Covers wizard.go:130-132.
