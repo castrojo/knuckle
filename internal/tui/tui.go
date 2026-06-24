@@ -219,12 +219,32 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Intercept shift+tab before huh form — always means "go back a step"
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "shift+tab" {
+	// Intercept shift+tab on non-form steps — go back a wizard step.
+	// On form steps, let huh handle shift+tab natively so the user can
+	// navigate backwards through form fields (previous field / previous group).
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "shift+tab" && m.activeForm == nil {
 		if m.Wizard.State.CurrentStep > model.StepWelcome {
 			m.Wizard.Previous()
 			m.err = nil
 			m.cursor = 0
+			m.initStepFields()
+			m.initForm()
+			if m.activeForm != nil {
+				return m, m.activeForm.Init()
+			}
+		}
+		return m, nil
+	}
+
+	// Intercept esc on form steps — go back a wizard step.
+	// On non-form steps esc is handled later in handleKey (with the sysext
+	// filter-clear special case preserved there).
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" && m.activeForm != nil {
+		if m.Wizard.State.CurrentStep > model.StepWelcome {
+			m.Wizard.Previous()
+			m.err = nil
+			m.cursor = 0
+			m.activeForm = nil
 			m.initStepFields()
 			m.initForm()
 			if m.activeForm != nil {
