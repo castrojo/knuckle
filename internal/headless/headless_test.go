@@ -1867,3 +1867,143 @@ func TestRun_ConsistencyCheckFails(t *testing.T) {
 		t.Error("installer should not be called after consistency failure")
 	}
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FCOS-specific headless tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+func TestValidate_FCOSValidConfig(t *testing.T) {
+	cfg := &Config{
+		OS:       "fcos",
+		Channel:  "stable",
+		Hostname: "fcos-node",
+		Disk:     "/dev/vda",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid FCOS config, got error: %v", err)
+	}
+}
+
+func TestValidate_FCOSChannel(t *testing.T) {
+	tests := []struct {
+		name    string
+		channel string
+		wantErr bool
+	}{
+		{"stable ok", "stable", false},
+		{"testing ok", "testing", false},
+		{"next ok", "next", false},
+		{"lts rejected", "lts", true},
+		{"edge rejected", "edge", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{
+				OS:       "fcos",
+				Channel:  tt.channel,
+				Hostname: "fcos-node",
+				Disk:     "/dev/vda",
+				Network:  NetworkConfig{Mode: "dhcp"},
+				Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+			}
+			err := cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error for FCOS channel %q, got nil", tt.channel)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error for FCOS channel %q: %v", tt.channel, err)
+			}
+		})
+	}
+}
+
+func TestValidate_FCOSVersionIgnored(t *testing.T) {
+	cfg := &Config{
+		OS:       "fcos",
+		Channel:  "stable",
+		Version:  "40.20240101.3.0",
+		Hostname: "fcos-node",
+		Disk:     "/dev/vda",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+	// Should not return an error even though version is not a Flatcar version string
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("FCOS version field should be ignored (not validated), got error: %v", err)
+	}
+}
+
+func TestValidate_FCOSArm64LTSNotRejected(t *testing.T) {
+	// FCOS has no lts stream, but the arm64/lts exclusion applies only to Flatcar.
+	// If the channel is invalid for FCOS, it should fail for a different reason.
+	cfg := &Config{
+		OS:       "fcos",
+		Channel:  "stable",
+		Arch:     "arm64",
+		Hostname: "fcos-arm",
+		Disk:     "/dev/vda",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("arm64 + stable should be valid for FCOS, got: %v", err)
+	}
+}
+
+func TestToInstallConfig_FCOSDefaults(t *testing.T) {
+	cfg := &Config{
+		OS:       "fcos",
+		Channel:  "stable",
+		Hostname: "fcos-node",
+		Disk:     "/dev/vda",
+		Network:  NetworkConfig{Mode: "dhcp"},
+		Users:    []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+	ic := cfg.ToInstallConfig()
+	if ic.OS != "fcos" {
+		t.Errorf("OS = %q, want fcos", ic.OS)
+	}
+	if ic.Channel != "stable" {
+		t.Errorf("Channel = %q, want stable", ic.Channel)
+	}
+}
+
+func TestToInstallConfig_FCOSDefaultOS(t *testing.T) {
+	// Absent os field should default to flatcar.
+	cfg := &Config{
+		Channel: "stable",
+		Disk:    "/dev/vda",
+		Network: NetworkConfig{Mode: "dhcp"},
+		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz k"}}},
+	}
+	ic := cfg.ToInstallConfig()
+	if ic.OS != "flatcar" {
+		t.Errorf("OS = %q, want flatcar when os field absent", ic.OS)
+	}
+}
+
+func TestRun_FCOSVersionWarned(t *testing.T) {
+	// Run() should emit a slog warning when OS=fcos and Version is set,
+	// but should not return an error — the version field is silently ignored.
+	cfg := &Config{
+		OS:      "fcos",
+		Channel: "stable",
+		Version: "40.20240101.3.0",
+		Disk:    "/dev/vdb",
+		Network: NetworkConfig{Mode: "dhcp"},
+		Users:   []UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAAC3Nz test@test"}}},
+		DryRun:  true,
+	}
+	var buf strings.Builder
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	installer := &mockInstaller{}
+
+	if err := Run(context.Background(), cfg, installer, logger); err != nil {
+		t.Fatalf("Run: unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "version field is ignored") {
+		t.Errorf("expected slog warning about version field, got: %s", buf.String())
+	}
+}
