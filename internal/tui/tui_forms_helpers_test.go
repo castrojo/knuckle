@@ -89,7 +89,7 @@ func TestViewChannelCards_LTSDisplayName(t *testing.T) {
 	w := newTestWizard()
 	w.State.Config.Channel = "lts"
 	m := New(w)
-	m.cursor = 1 // points at "lts" (index 1 in channelList)
+	m.cursor = 1        // points at "lts" (index 1 in channelList)
 	m.osSubView = false // skip OS picker, test channel cards directly
 	out := m.viewChannelCards()
 	if !strings.Contains(out, "LTS") {
