@@ -18,6 +18,10 @@ func (d *DispatchingInstaller) Install(ctx context.Context, cfg *model.InstallCo
 	switch cfg.OS {
 	case model.OSFCOS:
 		if d.FCOS == nil {
+			if cfg.DryRun {
+				// FCOS installer not wired yet; dry-run validates config only.
+				return nil
+			}
 			return fmt.Errorf("fcos installer not configured")
 		}
 		return d.FCOS.Install(ctx, cfg, progress)
