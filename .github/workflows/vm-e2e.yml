@@ -46,7 +46,7 @@ jobs:
 
       - name: Cache Flatcar base image
         id: cache-flatcar
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .vm/flatcar_base_amd64.img
           key: flatcar-qemu-stable-amd64-${{ steps.flatcar-version.outputs.version }}
@@ -100,7 +100,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Restore Flatcar base image
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .vm/flatcar_base_amd64.img
           key: flatcar-qemu-stable-amd64-${{ needs.prepare.outputs.flatcar-version }}
@@ -232,7 +232,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Restore Flatcar base image
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .vm/flatcar_base_amd64.img
           key: flatcar-qemu-stable-amd64-${{ needs.prepare.outputs.flatcar-version }}
@@ -374,7 +374,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Restore Flatcar base image
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .vm/flatcar_base_amd64.img
           key: flatcar-qemu-stable-amd64-${{ needs.prepare.outputs.flatcar-version }}
@@ -517,7 +517,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Restore Flatcar base image
-        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .vm/flatcar_base_amd64.img
           key: flatcar-qemu-stable-amd64-${{ needs.prepare.outputs.flatcar-version }}
