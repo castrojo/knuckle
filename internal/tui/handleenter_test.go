@@ -251,7 +251,7 @@ func TestMaxCursor_AllSteps(t *testing.T) {
 		disks  int
 		expect int
 	}{
-		{model.StepWelcome, 0, 2}, // 2 OS choices (Flatcar | FCOS) in OS picker
+		{model.StepWelcome, 0, 3}, // 3 OS choices (Flatcar | FCOS | Bluefin Server) in OS picker
 		{model.StepStorage, 3, 3}, // number of disks
 		{model.StepStorage, 0, 0}, // no disks
 		{model.StepSysext, 0, 0},  // empty sysexts
