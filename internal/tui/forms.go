@@ -210,69 +210,113 @@ func (m *Model) buildReviewForm() *huh.Form {
 	if cfg.OS == model.OSFCOS {
 		title = "⚠️  DESTRUCTIVE OPERATION — Install Fedora CoreOS to disk?"
 	}
+
+	dangerTheme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		styles := huh.ThemeDracula(isDark)
+		styles.Focused.Title = styles.Focused.Title.
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
+		styles.Focused.Description = styles.Focused.Description.
+			Foreground(lipgloss.Color("255"))
+		styles.Focused.FocusedButton = styles.Focused.FocusedButton.
+			Bold(true).
+			Foreground(lipgloss.Color("0")).
+			Background(lipgloss.Color("196"))
+		styles.Focused.BlurredButton = styles.Focused.BlurredButton.
+			Foreground(lipgloss.Color("252"))
+		return styles
+	})
+
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(title).
 				Description(m.reviewSummary()).
-				Affirmative("Yes, install").
-				Negative("Go back").
+				Affirmative("Yes — erase disk and install").
+				Negative("No — go back (safe)").
 				Value(&m.Wizard.State.Confirmed),
 		),
-	).WithTheme(huh.ThemeFunc(huh.ThemeDracula)).WithShowHelp(true).WithWidth(80)
+	).WithTheme(dangerTheme).WithShowHelp(true).WithWidth(m.reviewFormWidth())
+}
+
+func (m *Model) reviewFormWidth() int {
+	const (
+		defaultWidth = 80
+		minWidth     = 64
+		maxWidth     = 112
+	)
+	if m.width <= 0 {
+		return defaultWidth
+	}
+	available := m.width - 4
+	if available <= 0 {
+		return defaultWidth
+	}
+	if available < minWidth {
+		return available
+	}
+	if available > maxWidth {
+		return maxWidth
+	}
+	return available
 }
 
 func (m *Model) reviewSummary() string {
 	cfg := &m.Wizard.State.Config
 	var b strings.Builder
-	if cfg.OS != "" {
-		fmt.Fprintf(&b, "OS: %s\n", cfg.OS)
-	}
-	fmt.Fprintf(&b, "Channel: %s", cfg.Channel)
-	if cfg.Version != "" {
-		fmt.Fprintf(&b, " (v%s)", cfg.Version)
-	}
-	fmt.Fprintf(&b, "\nDisk: %s", cfg.Disk.DevPath)
+	b.WriteString("⚠  Confirming will wipe the target disk.\n\n")
+	b.WriteString("Target Disk\n")
+	fmt.Fprintf(&b, "  Disk: %s", cfg.Disk.DevPath)
 	if cfg.Disk.Model != "" {
 		fmt.Fprintf(&b, " (%s, %s)", cfg.Disk.Model, cfg.Disk.SizeHuman)
 	}
-	fmt.Fprintf(&b, "\nNetwork: %s", cfg.Network.Mode)
+	b.WriteString("\n\n")
+	b.WriteString("Install Plan\n")
+	if cfg.OS != "" {
+		fmt.Fprintf(&b, "  OS: %s\n", cfg.OS)
+	}
+	fmt.Fprintf(&b, "  Channel: %s", cfg.Channel)
+	if cfg.Version != "" {
+		fmt.Fprintf(&b, " (v%s)", cfg.Version)
+	}
+	fmt.Fprintf(&b, "\n  Network: %s", cfg.Network.Mode)
 	if cfg.Network.Mode == model.NetworkStatic {
 		fmt.Fprintf(&b, " — %s via %s", cfg.Network.Address, cfg.Network.Gateway)
 	}
-	fmt.Fprintf(&b, "\nHostname: %s", cfg.Hostname)
+	fmt.Fprintf(&b, "\n  Hostname: %s", cfg.Hostname)
 	if len(cfg.Users) > 0 {
-		fmt.Fprintf(&b, "\nUser: %s", cfg.Users[0].Username)
+		fmt.Fprintf(&b, "\n  User: %s", cfg.Users[0].Username)
 	}
 	if len(cfg.SSHKeys) > 0 {
-		fmt.Fprintf(&b, "\nSSH Keys: %d key(s)", len(cfg.SSHKeys))
+		fmt.Fprintf(&b, "\n  SSH Keys: %d key(s)", len(cfg.SSHKeys))
 	}
 	if len(cfg.Sysexts) > 0 {
 		names := make([]string, len(cfg.Sysexts))
 		for i, s := range cfg.Sysexts {
 			names[i] = s.Name
 		}
-		fmt.Fprintf(&b, "\nSysexts: %s", strings.Join(names, ", "))
+		fmt.Fprintf(&b, "\n  Sysexts: %s", strings.Join(names, ", "))
 	}
 	if cfg.Swap.Enabled {
 		size := cfg.Swap.SizeMB
 		if size <= 0 {
 			size = model.DefaultSwapSizeMB
 		}
-		fmt.Fprintf(&b, "\nSwap: %d MiB (/var/swapfile)", size)
+		fmt.Fprintf(&b, "\n  Swap: %d MiB (/var/swapfile)", size)
 	} else {
-		b.WriteString("\nSwap: disabled")
+		b.WriteString("\n  Swap: disabled")
 	}
 	if cfg.Tailscale.AuthKey != "" {
 		mode := cfg.Tailscale.Mode
 		if mode == "" {
 			mode = model.TailscaleModeConnect
 		}
-		fmt.Fprintf(&b, "\nTailscale: auth key set, mode=%s", mode)
+		fmt.Fprintf(&b, "\n  Tailscale: auth key set, mode=%s", mode)
 		if mode == model.TailscaleModeSubnetRouter && cfg.Tailscale.Routes != "" {
 			fmt.Fprintf(&b, " routes=%s", cfg.Tailscale.Routes)
 		}
 	}
+	b.WriteString("\n\nSafety\n  - Press Esc or choose \"No — go back (safe)\" to review changes.")
 	return b.String()
 }
 

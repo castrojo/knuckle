@@ -313,6 +313,40 @@ func TestReviewSummary_TailscaleConnectModeValidator(t *testing.T) {
 	}
 }
 
+func TestReviewSummary_IncludesSafetyCopy(t *testing.T) {
+	w := newTestWizard()
+	w.State.Config = model.InstallConfig{
+		Channel: "stable",
+		Disk:    model.DiskInfo{DevPath: "/dev/vda"},
+		Network: model.NetworkConfig{Mode: model.NetworkDHCP},
+	}
+	m := New(w)
+	summary := m.reviewSummary()
+	if !contains(summary, "Confirming will wipe the target disk") {
+		t.Errorf("reviewSummary should include destructive warning, got:\n%s", summary)
+	}
+	if !contains(summary, "No — go back (safe)") {
+		t.Errorf("reviewSummary should include safe choice copy, got:\n%s", summary)
+	}
+}
+
+func TestReviewFormWidthBounds(t *testing.T) {
+	m := newTestModel()
+	if got := m.reviewFormWidth(); got != 80 {
+		t.Errorf("reviewFormWidth default = %d, want 80", got)
+	}
+
+	m.width = 60
+	if got := m.reviewFormWidth(); got != 56 {
+		t.Errorf("reviewFormWidth narrow = %d, want 56", got)
+	}
+
+	m.width = 200
+	if got := m.reviewFormWidth(); got != 112 {
+		t.Errorf("reviewFormWidth wide = %d, want 112", got)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && findSubstring(s, substr))
 }

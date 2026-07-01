@@ -63,3 +63,10 @@ Multi-step wizard = `huh.Form` with `huh.Group` per step.
 ## Research notes
 
 See `docs/TUI-WIZARD-PATTERNS.md` for concrete examples derived from reading huh source.
+
+## Accessibility pattern: destructive review confirms
+
+- Keep a dedicated `StepReview` theme instead of changing all forms globally.
+- Use `huh.ThemeFunc(func(isDark bool) *huh.Styles { ... })` and start from `huh.ThemeDracula(isDark)`, then override focused title/button contrast for the destructive confirm.
+- Avoid fixed review-dialog widths; use a bounded width derived from `m.width` so summary text wraps cleanly on both narrow and wide terminals.
+- In review summaries, prioritize scan order: explicit wipe warning first, then target disk, then install plan details.
