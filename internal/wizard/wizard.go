@@ -115,6 +115,16 @@ func (w *Wizard) Next() error {
 
 	if w.State.CurrentStep < model.StepDone {
 		w.State.CurrentStep++
+		// BluefinDDI skips Sysext, Nvidia, Tailscale, and Update steps —
+		// those are all Flatcar/FCOS-only concerns.
+		if w.isBluefinDDI() {
+			for w.State.CurrentStep == model.StepSysext ||
+				w.State.CurrentStep == model.StepNvidia ||
+				w.State.CurrentStep == model.StepTailscale ||
+				w.State.CurrentStep == model.StepUpdate {
+				w.State.CurrentStep++
+			}
+		}
 		// StepNvidia is conditional — only visit it when nvidia-runtime is selected.
 		if w.State.CurrentStep == model.StepNvidia && !w.isNvidiaSelected() {
 			w.State.CurrentStep++
@@ -131,6 +141,15 @@ func (w *Wizard) Next() error {
 func (w *Wizard) Previous() {
 	if w.State.CurrentStep > model.StepWelcome {
 		w.State.CurrentStep--
+		// BluefinDDI: skip back over Sysext/Nvidia/Tailscale/Update.
+		if w.isBluefinDDI() {
+			for w.State.CurrentStep == model.StepUpdate ||
+				w.State.CurrentStep == model.StepTailscale ||
+				w.State.CurrentStep == model.StepNvidia ||
+				w.State.CurrentStep == model.StepSysext {
+				w.State.CurrentStep--
+			}
+		}
 		// StepTailscale is conditional — skip back over it when tailscale is not selected.
 		if w.State.CurrentStep == model.StepTailscale && !w.isTailscaleSelected() {
 			w.State.CurrentStep--
@@ -142,11 +161,18 @@ func (w *Wizard) Previous() {
 	}
 }
 
+// isBluefinDDI returns true when the target OS is a Bluefin Server DDI image.
+// All Flatcar-specific steps (Channel, Sysext, Nvidia, Tailscale, Update) are
+// skipped for DDI installs — systemd-repart handles partitioning, no Ignition.
+func (w *Wizard) isBluefinDDI() bool {
+	return w.State.Config.OS == model.OSBluefinDDI
+}
+
 // isNvidiaSelected returns true when the nvidia-runtime sysext is toggled on.
-// FCOS does not use /etc/flatcar/enabled-sysext.conf, so the NVIDIA step
-// is unconditionally skipped for FCOS installs.
+// FCOS and BluefinDDI do not use /etc/flatcar/enabled-sysext.conf, so the
+// NVIDIA step is unconditionally skipped for those OS targets.
 func (w *Wizard) isNvidiaSelected() bool {
-	if w.State.Config.OS == model.OSFCOS {
+	if w.State.Config.OS == model.OSFCOS || w.isBluefinDDI() {
 		return false
 	}
 	for _, s := range w.State.Sysexts {
@@ -211,6 +237,10 @@ func (w *Wizard) ValidateCurrentStep() error {
 }
 
 func (w *Wizard) validateWelcome() error {
+	// BluefinDDI has no channel/stream — skip channel validation entirely.
+	if w.isBluefinDDI() {
+		return nil
+	}
 	if w.State.Config.OS == model.OSFCOS {
 		if err := validate.FCOSStream(w.State.Config.Channel); err != nil {
 			return err
@@ -388,12 +418,9 @@ func (w *Wizard) runSystemChecks() {
 }
 
 // FetchSysexts loads the sysext catalog for the configured architecture.
-// For FCOS, sysexts are not yet supported (no FCOS-specific catalog) — the
-// step is skipped via skipStepFor(). Full FCOS catalog support requires #641.
-// If an NVIDIA GPU was detected during ProbeHardware, nvidia-runtime is
-// auto-selected and the default driver series is pre-configured.
+// For FCOS and BluefinDDI, sysexts are not applicable — the step is skipped.
 func (w *Wizard) FetchSysexts(ctx context.Context) error {
-	if w.State.Config.OS == model.OSFCOS {
+	if w.State.Config.OS == model.OSFCOS || w.isBluefinDDI() {
 		// FCOS sysext catalog support requires #641 (FetchCatalogFCOS).
 		// For now, leave Sysexts empty so the step is a no-op for FCOS.
 		w.State.Sysexts = nil

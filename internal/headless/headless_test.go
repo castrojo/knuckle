@@ -524,6 +524,7 @@ func TestResolveSysexts_Success(t *testing.T) {
 	installCfg := installer.lastCfg
 	if installCfg == nil {
 		t.Fatal("no install config captured")
+		return
 	}
 	if len(installCfg.Sysexts) != 2 {
 		t.Fatalf("expected 2 sysexts, got %d", len(installCfg.Sysexts))
@@ -763,6 +764,7 @@ func TestNvidia_DriverWithNvidiaRuntimeSysext(t *testing.T) {
 	ic := installer.lastCfg
 	if ic == nil {
 		t.Fatal("no install config captured")
+		return
 	}
 
 	// NvidiaDriverVersion propagated
