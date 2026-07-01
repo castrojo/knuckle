@@ -47,6 +47,7 @@ func stubFail(spy *runner.SpyRunner, cmd string) {
 
 func TestBluefinDDIInstaller_DryRun(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota") // no local DDI
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -94,6 +95,7 @@ func TestBluefinDDIInstaller_NoDisk(t *testing.T) {
 
 func TestBluefinDDIInstaller_RepartFailure(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -154,8 +156,8 @@ func (f fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 func TestBluefinDDIInstaller_LocalDDI(t *testing.T) {
 	spy := runner.NewSpyRunner()
-	// blkid finds local DDI device
-	stubOut(spy, "blkid -L bluefin-roota", "/dev/vdc\n")
+	// blkid finds local DDI device by XFS filesystem label
+	stubOut(spy, "blkid -L bluefin-root", "/dev/vdc\n")
 	// systemd-repart with dynamic tmpDir path — no stub needed (defaults to exit 0)
 	lsblkOut := "/dev/sda1 c12a7328-f81f-11d2-ba4b-00a0c93ec93b uuid-esp EFI\n" +
 		"/dev/sda2 4f68bce3-e8cd-4db1-96e7-fbcaf984b709 uuid-root bluefin-server-root-a\n"
@@ -336,6 +338,7 @@ func TestWriteLocalRepartDefs_WriteFileFails_Other(t *testing.T) {
 
 func TestPrepareDDI_NetworkFails(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	spy.StubError("systemctl start systemd-networkd-wait-online.service", os.ErrPermission)
 	i := noopDDIInstaller(spy)
@@ -349,6 +352,7 @@ func TestPrepareDDI_NetworkFails(t *testing.T) {
 
 func TestPrepareDDI_SysupdateFails(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	spy.StubError("/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", os.ErrPermission)
@@ -363,6 +367,7 @@ func TestPrepareDDI_SysupdateFails(t *testing.T) {
 
 func TestInstall_PrepareDDI_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	spy.StubError("/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", os.ErrPermission)
@@ -377,6 +382,7 @@ func TestInstall_PrepareDDI_Error(t *testing.T) {
 
 func TestInstall_DetectPartitions_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -393,6 +399,7 @@ func TestInstall_DetectPartitions_Error(t *testing.T) {
 
 func TestInstall_MkdirESP_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -419,6 +426,7 @@ func TestInstall_MkdirESP_Error(t *testing.T) {
 
 func TestInstall_MountESP_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -437,6 +445,7 @@ func TestInstall_MountESP_Error(t *testing.T) {
 
 func TestInstall_MountRoot_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -456,6 +465,7 @@ func TestInstall_MountRoot_Error(t *testing.T) {
 
 func TestInstall_ProvisionUser_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -480,6 +490,7 @@ func TestInstall_ProvisionUser_Error(t *testing.T) {
 
 func TestInstall_MkdirRoot_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -506,6 +517,7 @@ func TestInstall_MkdirRoot_Error(t *testing.T) {
 
 func TestInstall_Bootctl_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -526,6 +538,7 @@ func TestInstall_Bootctl_Error(t *testing.T) {
 
 func TestInstall_WriteBootEntry_Error(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")
@@ -672,6 +685,7 @@ func TestPrepareDDI_LocalDDI_WriteRepartDefsFails(t *testing.T) {
 
 func TestInstall_UsesDiskPath(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	spy.StubError("systemctl start systemd-networkd-wait-online.service", os.ErrPermission)
 	cfg := &model.InstallConfig{
@@ -689,6 +703,7 @@ func TestInstall_UsesDiskPath(t *testing.T) {
 
 func TestInstall_FirstbootFails_NonFatal(t *testing.T) {
 	spy := runner.NewSpyRunner()
+	stubFail(spy, "blkid -L bluefin-root")
 	stubFail(spy, "blkid -L bluefin-roota")
 	stubOut(spy, "systemctl start systemd-networkd-wait-online.service", "")
 	stubOut(spy, "/usr/lib/systemd/systemd-sysupdate --definitions=/usr/lib/sysupdate.d update", "")

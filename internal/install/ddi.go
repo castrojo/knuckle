@@ -1,7 +1,7 @@
 // Package install — BluefinDDIInstaller provisions a Bluefin Server DDI image.
 //
 // Flow:
-//  1. Detect local DDI source (blkid -L bluefin-roota) OR pull via systemd-sysupdate.
+//  1. Detect local DDI source: embedded installer-media partition, local device, or sysupdate.
 //  2. systemd-repart partitions the target disk and copies the DDI payload.
 //  3. Mount ESP + root; provision user with useradd/chpasswd/authorized_keys.
 //  4. systemd-firstboot sets hostname and timezone on the installed rootfs.
@@ -145,29 +145,53 @@ func (i *BluefinDDIInstaller) Install(ctx context.Context, cfg *model.InstallCon
 }
 
 // prepareDDI returns the repart.d definitions path to use and an optional
-// cleanup function. It prefers a local DDI device (labelled bluefin-roota)
-// for dev/test; otherwise runs systemd-sysupdate to pull from GitHub Releases.
+// cleanup function. Detection order:
+//  1. Embedded DDI on installer media (GPT partition label "bluefin-installer-data")
+//  2. Local DDI device by filesystem label (QEMU show-me-the-future attach)
+//  3. Network download via systemd-sysupdate (production OTA)
 func (i *BluefinDDIInstaller) prepareDDI(ctx context.Context, progress func(string)) (defs string, cleanup func(), err error) {
-	// Check for a locally-attached DDI source (e.g. /dev/vdc in show-me-the-future).
-	result, blkErr := i.Runner.Run(ctx, "blkid", "-L", "bluefin-roota")
-	if blkErr == nil && result != nil && strings.TrimSpace(result.Stdout) != "" {
-		src := strings.TrimSpace(result.Stdout)
-		progress(fmt.Sprintf("Local DDI detected (%s) — skipping network download", src))
-		i.Logger.Info("local DDI source", "device", src)
+	// ── 1. Embedded DDI on offline installer media (USB stick / ISO) ──────
+	// The installer disk has a GPT partition labelled "bluefin-installer-data"
+	// containing the DDI filesystem image as a raw block copy. systemd-repart's
+	// CopyBlocks= can copy directly from the device without mounting it.
+	const installerDataPartlabel = "/dev/disk/by-partlabel/bluefin-installer-data"
+	if _, statErr := os.Stat(installerDataPartlabel); statErr == nil {
+		progress("Embedded DDI detected on installer media")
+		i.Logger.Info("embedded DDI source", "device", installerDataPartlabel)
 
-		// Write a temp repart.d dir with CopyBlocks pointing at the local device.
 		tmpDir, err := i.mkdirTemp("", "bluefin-repart-*")
 		if err != nil {
 			return "", nil, fmt.Errorf("creating temp repart.d: %w", err)
 		}
-		if err := i.writeLocalRepartDefs(tmpDir, src); err != nil {
+		if err := i.writeLocalRepartDefs(tmpDir, installerDataPartlabel); err != nil {
 			_ = os.RemoveAll(tmpDir)
 			return "", nil, err
 		}
 		return tmpDir, func() { _ = os.RemoveAll(tmpDir) }, nil
 	}
 
-	// No local source — pull via sysupdate.
+	// ── 2. Local DDI device (e.g. /dev/vdc in show-me-the-future QEMU) ───
+	// Check by XFS filesystem label "bluefin-root" (12 chars, XFS max).
+	for _, label := range []string{"bluefin-root", "bluefin-roota"} {
+		result, blkErr := i.Runner.Run(ctx, "blkid", "-L", label)
+		if blkErr == nil && result != nil && strings.TrimSpace(result.Stdout) != "" {
+			src := strings.TrimSpace(result.Stdout)
+			progress(fmt.Sprintf("Local DDI detected (%s) — skipping network download", src))
+			i.Logger.Info("local DDI source", "device", src, "label", label)
+
+			tmpDir, err := i.mkdirTemp("", "bluefin-repart-*")
+			if err != nil {
+				return "", nil, fmt.Errorf("creating temp repart.d: %w", err)
+			}
+			if err := i.writeLocalRepartDefs(tmpDir, src); err != nil {
+				_ = os.RemoveAll(tmpDir)
+				return "", nil, err
+			}
+			return tmpDir, func() { _ = os.RemoveAll(tmpDir) }, nil
+		}
+	}
+
+	// ── 3. No local source — pull via sysupdate ──────────────────────────
 	progress("Waiting for network...")
 	if _, err := i.Runner.Run(ctx, "systemctl", "start", "systemd-networkd-wait-online.service"); err != nil {
 		return "", nil, fmt.Errorf("network wait: %w", err)
