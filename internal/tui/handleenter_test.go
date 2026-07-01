@@ -287,3 +287,23 @@ func TestMaxCursor_SysextWithEntries(t *testing.T) {
 		t.Errorf("maxCursor(StepSysext) with 2 entries = %d, want 2", got)
 	}
 }
+
+// --- handleEnter: BluefinDDI OS picker ---
+
+func TestHandleEnter_Welcome_BluefinDDI_SkipsToStorage(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepWelcome
+
+	m := New(w)
+	// cursor 2 = Bluefin Server in the 3-option OS picker
+	m.cursor = 2
+	_, _ = m.handleEnter()
+
+	// BluefinDDI selection should skip channel picker and go straight to Storage
+	if m.Wizard.State.CurrentStep != model.StepStorage {
+		t.Errorf("BluefinDDI selection should jump to StepStorage, got %v", m.Wizard.State.CurrentStep)
+	}
+	if m.Wizard.State.Config.OS != model.OSBluefinDDI {
+		t.Errorf("OS should be OSBluefinDDI, got %q", m.Wizard.State.Config.OS)
+	}
+}
