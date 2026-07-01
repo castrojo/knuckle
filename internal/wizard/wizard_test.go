@@ -554,12 +554,14 @@ func TestRunSystemChecks(t *testing.T) {
 			}
 			if diskCheck == nil {
 				t.Fatal("missing Disk system check")
+				return
 			}
 			if diskCheck.Status != tt.wantDisk {
 				t.Errorf("Disk check: got %q, want %q", diskCheck.Status, tt.wantDisk)
 			}
 			if netCheck == nil {
 				t.Fatal("missing Network system check")
+				return
 			}
 			if netCheck.Status != tt.wantNet {
 				t.Errorf("Network check: got %q, want %q", netCheck.Status, tt.wantNet)
@@ -2126,6 +2128,7 @@ func TestRunSystemChecks_SysextsAvailable(t *testing.T) {
 	}
 	if catalogCheck == nil {
 		t.Fatal("expected Sysext Catalog check")
+		return
 	}
 	if catalogCheck.Status != "ok" {
 		t.Errorf("Sysext Catalog status = %q, want %q", catalogCheck.Status, "ok")

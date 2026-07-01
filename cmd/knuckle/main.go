@@ -12,6 +12,7 @@ import (
 	"github.com/projectbluefin/knuckle/internal/demo"
 	"github.com/projectbluefin/knuckle/internal/headless"
 	"github.com/projectbluefin/knuckle/internal/install"
+	"github.com/projectbluefin/knuckle/internal/model"
 	"github.com/projectbluefin/knuckle/internal/probe"
 	"github.com/projectbluefin/knuckle/internal/runner"
 	"github.com/projectbluefin/knuckle/internal/tui"
@@ -58,6 +59,7 @@ func main() {
 		configFile   string
 		headlessMode bool
 		demoMode     bool
+		targetOS     string
 	)
 	flag.BoolVar(&dryRun, "dry-run", false, "simulate installation without writing to disk")
 	flag.StringVar(&logFile, "log-file", "/tmp/knuckle.log", "path to log file")
@@ -66,6 +68,7 @@ func main() {
 	flag.StringVar(&configFile, "config", "", "path to JSON config file for headless install")
 	flag.BoolVar(&headlessMode, "headless", false, "run without TUI (requires --config)")
 	flag.BoolVar(&demoMode, "demo", false, "run with mock hardware/catalog data for UI demos and recording (no network, no real disks)")
+	flag.StringVar(&targetOS, "os", "", "pre-select target OS and skip the welcome screen (flatcar, fcos, bluefin-ddi)")
 	var flatcarVersion string
 	flag.StringVar(&flatcarVersion, "flatcar-version", "", "pin to specific Flatcar version (e.g. 3510.2.8)")
 	flag.Parse()
@@ -132,8 +135,9 @@ func main() {
 		prober = probe.NewSystemProber(realRunner)
 		bakeryClient = bakery.NewHTTPClient()
 		installer = &install.DispatchingInstaller{
-			Flatcar: install.NewFlatcarInstaller(cmdRunner, logger),
-			FCOS:    install.NewFCOSInstaller(cmdRunner, logger),
+			Flatcar:    install.NewFlatcarInstaller(cmdRunner, logger),
+			FCOS:       install.NewFCOSInstaller(cmdRunner, logger),
+			BluefinDDI: install.NewBluefinDDIInstaller(cmdRunner, logger),
 		}
 	}
 
@@ -142,6 +146,14 @@ func main() {
 	w.State.Config.Channel = channel
 	w.State.Config.DryRun = dryRun || demoMode
 	w.State.Config.Version = flatcarVersion
+
+	// --os pre-selects the target OS and skips the welcome screen entirely,
+	// jumping straight to disk selection. Used by installer.service on the
+	// bluefin-server live image (ExecStart=/opt/knuckle --os bluefin-ddi).
+	if targetOS != "" {
+		w.State.Config.OS = targetOS
+		w.State.CurrentStep = model.StepStorage
+	}
 
 	ctx := context.Background()
 	if demoMode {

@@ -51,8 +51,9 @@ func (s WizardStep) String() string {
 
 // OS target constants for the OS discriminator field.
 const (
-	OSFlatcar = "flatcar"
-	OSFCOS    = "fcos"
+	OSFlatcar    = "flatcar"
+	OSFCOS       = "fcos"
+	OSBluefinDDI = "bluefin-ddi"
 )
 
 // InstallConfig is the complete installation configuration built by the wizard.

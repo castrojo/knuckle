@@ -449,7 +449,7 @@ func (m *Model) maxCursor() int {
 	switch m.Wizard.State.CurrentStep {
 	case model.StepWelcome:
 		if m.osSubView {
-			return 2 // Flatcar | FCOS
+			return 3 // Flatcar | FCOS | Bluefin Server
 		}
 		return m.channelCardCount()
 	case model.StepStorage:
@@ -475,10 +475,19 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 	switch step {
 	case model.StepWelcome:
 		if m.osSubView {
-			// OS picker — cursor 0 = Flatcar, cursor 1 = FCOS
-			osList := []string{model.OSFlatcar, model.OSFCOS}
+			// OS picker — cursor 0 = Flatcar, cursor 1 = FCOS, cursor 2 = Bluefin Server
+			osList := []string{model.OSFlatcar, model.OSFCOS, model.OSBluefinDDI}
 			if m.cursor >= 0 && m.cursor < len(osList) {
 				m.Wizard.State.Config.OS = osList[m.cursor]
+			}
+			// BluefinDDI has no channel — skip straight to Storage.
+			if m.Wizard.State.Config.OS == model.OSBluefinDDI {
+				m.Wizard.GoToStep(model.StepStorage)
+				m.err = nil
+				m.cursor = 0
+				m.initStepFields()
+				m.initForm()
+				return m, nil
 			}
 			m.osSubView = false
 			m.cursor = 0
@@ -1250,9 +1259,14 @@ func (m *Model) viewInstall() string {
 	var b strings.Builder
 	doneStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 
-	osName := "Flatcar Container Linux"
-	if m.Wizard.State.Config.OS == model.OSFCOS {
+	var osName string
+	switch m.Wizard.State.Config.OS {
+	case model.OSFCOS:
 		osName = "Fedora CoreOS"
+	case model.OSBluefinDDI:
+		osName = "Bluefin Server"
+	default:
+		osName = "Flatcar Container Linux"
 	}
 	fmt.Fprintf(&b, "Installing %s...\n\n", osName)
 
@@ -1283,9 +1297,14 @@ func (m *Model) viewDone() string {
 		b.WriteString("\n✅ Installation Complete!\n\n")
 	}
 
-	osName := "Flatcar Container Linux"
-	if cfg.OS == model.OSFCOS {
+	var osName string
+	switch cfg.OS {
+	case model.OSFCOS:
 		osName = "Fedora CoreOS"
+	case model.OSBluefinDDI:
+		osName = "Bluefin Server"
+	default:
+		osName = "Flatcar Container Linux"
 	}
 	fmt.Fprintf(&b, "%s has been installed:\n\n", osName)
 
@@ -1294,7 +1313,7 @@ func (m *Model) viewDone() string {
 	} else if cfg.Disk.DevPath != "" {
 		fmt.Fprintf(&b, "  Disk:     %s\n", cfg.Disk.DevPath)
 	}
-	if cfg.Channel != "" {
+	if cfg.OS != model.OSBluefinDDI && cfg.Channel != "" {
 		fmt.Fprintf(&b, "  Channel:  %s\n", cfg.Channel)
 	}
 	if cfg.Hostname != "" {
@@ -1317,10 +1336,14 @@ func (m *Model) viewDone() string {
 	link := lipgloss.NewStyle().Foreground(lipgloss.Color("75"))
 	b.WriteString("\n")
 	b.WriteString(dim.Render("Community & help:") + "\n")
-	if cfg.OS == model.OSFCOS {
+	switch cfg.OS {
+	case model.OSFCOS:
 		b.WriteString("  " + link.Render("https://discussion.fedoraproject.org/tag/coreos") + dim.Render("  — Fedora CoreOS community") + "\n")
 		b.WriteString("  " + link.Render("https://docs.fedoraproject.org/en-US/fedora-coreos/") + dim.Render("  — Fedora CoreOS documentation") + "\n")
-	} else {
+	case model.OSBluefinDDI:
+		b.WriteString("  " + link.Render("https://projectbluefin.io") + dim.Render("  — Bluefin project") + "\n")
+		b.WriteString("  " + link.Render("https://discord.gg/projectbluefin") + dim.Render("  — Bluefin community on Discord") + "\n")
+	default:
 		b.WriteString("  " + link.Render("https://flatcar.org/discord") + dim.Render("  — Flatcar community on Discord") + "\n")
 		b.WriteString("  " + link.Render("https://www.flatcar.org/docs/") + dim.Render("  — Flatcar documentation") + "\n")
 	}
