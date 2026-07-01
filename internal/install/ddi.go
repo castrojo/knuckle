@@ -30,6 +30,7 @@ type BluefinDDIInstaller struct {
 	writeFile func(name string, data []byte, perm os.FileMode) error
 	readFile  func(name string) ([]byte, error)
 	readDir   func(name string) ([]os.DirEntry, error)
+	mkdirTemp func(dir, pattern string) (string, error)
 }
 
 // NewBluefinDDIInstaller creates a BluefinDDIInstaller with the given runner and logger.
@@ -41,6 +42,7 @@ func NewBluefinDDIInstaller(r runner.Runner, logger *slog.Logger) *BluefinDDIIns
 		writeFile: os.WriteFile,
 		readFile:  os.ReadFile,
 		readDir:   os.ReadDir,
+		mkdirTemp: os.MkdirTemp,
 	}
 }
 
@@ -154,7 +156,7 @@ func (i *BluefinDDIInstaller) prepareDDI(ctx context.Context, progress func(stri
 		i.Logger.Info("local DDI source", "device", src)
 
 		// Write a temp repart.d dir with CopyBlocks pointing at the local device.
-		tmpDir, err := os.MkdirTemp("", "bluefin-repart-*")
+		tmpDir, err := i.mkdirTemp("", "bluefin-repart-*")
 		if err != nil {
 			return "", nil, fmt.Errorf("creating temp repart.d: %w", err)
 		}
