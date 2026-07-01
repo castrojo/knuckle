@@ -35,6 +35,7 @@ func TestFCOSInstall_BasicArgs(t *testing.T) {
 	}
 	if call == nil {
 		t.Fatalf("coreos-installer was not called; got: %v", spy.Calls)
+		return
 	}
 
 	args := call.Args
@@ -136,6 +137,7 @@ func TestFCOSInstall_ExternalURL(t *testing.T) {
 	}
 	if call == nil {
 		t.Fatalf("coreos-installer was not called; got: %v", spy.Calls)
+		return
 	}
 
 	urlIdx := -1

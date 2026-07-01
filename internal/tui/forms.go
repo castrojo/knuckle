@@ -594,6 +594,7 @@ func (m *Model) viewOSPicker() string {
 	options := []osOption{
 		{model.OSFlatcar, "Flatcar Container Linux", "Immutable, container-optimised Linux. Ideal for Kubernetes nodes and edge workloads."},
 		{model.OSFCOS, "Fedora CoreOS", "Fedora's immutable, auto-updating container host. Based on rpm-ostree with Ignition provisioning."},
+		{model.OSBluefinDDI, "Install Bluefin Server", "systemd-native DDI image installer. Partitions, provisions users, and installs the bootloader via systemd-repart."},
 	}
 
 	for i, opt := range options {

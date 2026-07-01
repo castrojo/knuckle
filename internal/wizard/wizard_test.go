@@ -554,12 +554,14 @@ func TestRunSystemChecks(t *testing.T) {
 			}
 			if diskCheck == nil {
 				t.Fatal("missing Disk system check")
+				return
 			}
 			if diskCheck.Status != tt.wantDisk {
 				t.Errorf("Disk check: got %q, want %q", diskCheck.Status, tt.wantDisk)
 			}
 			if netCheck == nil {
 				t.Fatal("missing Network system check")
+				return
 			}
 			if netCheck.Status != tt.wantNet {
 				t.Errorf("Network check: got %q, want %q", netCheck.Status, tt.wantNet)
@@ -2126,6 +2128,7 @@ func TestRunSystemChecks_SysextsAvailable(t *testing.T) {
 	}
 	if catalogCheck == nil {
 		t.Fatal("expected Sysext Catalog check")
+		return
 	}
 	if catalogCheck.Status != "ok" {
 		t.Errorf("Sysext Catalog status = %q, want %q", catalogCheck.Status, "ok")
@@ -2390,5 +2393,59 @@ func TestIsNvidiaSelected_FCOSAlwaysFalse(t *testing.T) {
 
 	if w.isNvidiaSelected() {
 		t.Error("isNvidiaSelected should return false for FCOS regardless of sysext selection")
+	}
+}
+
+func TestBluefinDDI_Next_SkipsMiddleSteps(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSBluefinDDI
+	w.State.CurrentStep = model.StepWelcome
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next() from Welcome error: %v", err)
+	}
+	// DDI: Welcome → Network (not skipped)
+	if w.State.CurrentStep != model.StepNetwork {
+		t.Errorf("after Welcome, DDI should go to Network, got %v", w.State.CurrentStep)
+	}
+	// From User → Review (Sysext/Nvidia/Tailscale/Update are skipped)
+	w.State.CurrentStep = model.StepUser
+	w.State.Config.Users = []model.UserConfig{{Username: "core", SSHKeys: []string{"ssh-ed25519 AAAA k"}}}
+	if err := w.Next(); err != nil {
+		t.Fatalf("Next() from User error: %v", err)
+	}
+	if w.State.CurrentStep != model.StepReview {
+		t.Errorf("after User, DDI should jump to Review, got %v", w.State.CurrentStep)
+	}
+}
+
+func TestBluefinDDI_Previous_SkipsMiddleSteps(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSBluefinDDI
+	// From Review → User (skips Update/Tailscale/Nvidia/Sysext)
+	w.State.CurrentStep = model.StepReview
+	w.Previous()
+	if w.State.CurrentStep != model.StepUser {
+		t.Errorf("Previous() from Review should land on User for DDI, got %v", w.State.CurrentStep)
+	}
+}
+
+func TestBluefinDDI_ValidateWelcome_NilImmediately(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSBluefinDDI
+	w.State.CurrentStep = model.StepWelcome
+	// validateWelcome should return nil without checking channel
+	if err := w.ValidateCurrentStep(); err != nil {
+		t.Errorf("validateWelcome for DDI should return nil, got: %v", err)
+	}
+}
+
+func TestBluefinDDI_FetchSysexts_Skips(t *testing.T) {
+	w, _, _, _ := newTestWizard()
+	w.State.Config.OS = model.OSBluefinDDI
+	if err := w.FetchSysexts(context.Background()); err != nil {
+		t.Fatalf("FetchSysexts on DDI should not error, got: %v", err)
+	}
+	if w.State.Sysexts != nil {
+		t.Errorf("FetchSysexts on DDI should leave Sysexts nil, got %v", w.State.Sysexts)
 	}
 }
