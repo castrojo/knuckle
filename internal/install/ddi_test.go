@@ -466,8 +466,8 @@ func TestInstall_ProvisionUser_Error(t *testing.T) {
 	stubOut(spy, "mount /dev/sda2 /mnt/root", "")
 	spy.StubError("useradd --root /mnt/root --create-home --groups wheel,sudo --shell /bin/bash core", os.ErrPermission)
 	cfg := &model.InstallConfig{
-		OS:   model.OSBluefinDDI,
-		Disk: model.DiskInfo{DevPath: "/dev/sda"},
+		OS:    model.OSBluefinDDI,
+		Disk:  model.DiskInfo{DevPath: "/dev/sda"},
 		Users: []model.UserConfig{{Username: "core"}},
 	}
 	err := noopDDIInstaller(spy).Install(context.Background(), cfg, func(string) {})
