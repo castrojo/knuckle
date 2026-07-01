@@ -542,3 +542,35 @@ func TestViewUpdate_NonSelectedNotHighlighted(t *testing.T) {
 		t.Errorf("expected 'off' to not be highlighted when cursor=0, got:\n%s", view)
 	}
 }
+
+// ── BluefinDDI view paths ─────────────────────────────────────────────────────
+
+func TestViewInstall_BluefinDDI(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepInstall
+	w.State.Config.OS = model.OSBluefinDDI
+	m := New(w)
+	view := m.viewInstall()
+	if !strings.Contains(view, "Bluefin Server") {
+		t.Errorf("viewInstall with BluefinDDI should say 'Bluefin Server', got:\n%s", view)
+	}
+}
+
+func TestViewDone_BluefinDDI(t *testing.T) {
+	w := newTestWizard()
+	w.State.CurrentStep = model.StepDone
+	w.State.Config.OS = model.OSBluefinDDI
+	w.State.Config.Hostname = "my-server"
+	w.State.Config.Disk = model.DiskInfo{DevPath: "/dev/sda"}
+	m := New(w)
+	view := m.viewDone()
+	for _, want := range []string{"Bluefin Server", "projectbluefin.io", "discord.gg/projectbluefin"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("viewDone BluefinDDI should contain %q, got:\n%s", want, view)
+		}
+	}
+	// Channel line should NOT appear for DDI
+	if strings.Contains(view, "Channel:") {
+		t.Errorf("viewDone BluefinDDI should not contain Channel line, got:\n%s", view)
+	}
+}
