@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   skill-drift:
-    uses: projectbluefin/actions/.github/workflows/skill-drift-check.yml@d8f871c0ca7a868339d3c175200a7319492473c7 # v1
+    uses: projectbluefin/actions/.github/workflows/skill-drift-check.yml@8fd476d7ad4023d3bcb56481407913fd6cf73f60 # v1
     with:
       code-paths: '[".github/workflows/**", "cmd/**", "internal/**", "Justfile", "scripts/**"]'
       skill-paths: '["docs/**/*.md", "AGENTS.md"]'
