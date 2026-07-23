@@ -24,6 +24,9 @@ func noopDDIInstaller(spy *runner.SpyRunner) *BluefinDDIInstaller {
 	i.readFile = func(string) ([]byte, error) { return []byte{}, nil }
 	i.readDir = func(string) ([]os.DirEntry, error) { return nil, nil }
 	i.mkdirTemp = func(string, string) (string, error) { return "/tmp/fake-repart-dir", nil }
+	// Default: no embedded installer-media partition, so tests exercise the
+	// blkid / sysupdate paths unless they opt into the embedded-DDI branch.
+	i.statFile = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 	return i
 }
 
@@ -558,6 +561,61 @@ func TestInstall_WriteBootEntry_Error(t *testing.T) {
 	// writeBootEntry failure is non-fatal: Install should return nil
 	if err := i.Install(context.Background(), cfg, func(string) {}); err != nil {
 		t.Errorf("writeBootEntry failure should be non-fatal, got: %v", err)
+	}
+}
+
+// ── prepareDDI: embedded DDI on installer media ───────────────────────────────
+
+func TestPrepareDDI_EmbeddedInstallerMedia(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	i := noopDDIInstaller(spy)
+	i.statFile = func(name string) (os.FileInfo, error) {
+		if name == "/dev/disk/by-partlabel/bluefin-installer-data" {
+			return nil, nil // partition present
+		}
+		return nil, os.ErrNotExist
+	}
+	var progressed []string
+	defs, cleanup, err := i.prepareDDI(context.Background(), func(m string) { progressed = append(progressed, m) })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if defs != "/tmp/fake-repart-dir" {
+		t.Errorf("want embedded repart.d dir, got %q", defs)
+	}
+	if cleanup == nil {
+		t.Error("expected a cleanup func for the temp repart.d dir")
+	} else {
+		cleanup()
+	}
+	if len(progressed) == 0 || !strings.Contains(progressed[0], "Embedded DDI") {
+		t.Errorf("want 'Embedded DDI' progress message, got %v", progressed)
+	}
+	// Detection short-circuits before blkid / sysupdate.
+	if len(spy.Calls) != 0 {
+		t.Errorf("embedded-DDI path must not fall through to blkid/sysupdate, got calls: %v", spy.Calls)
+	}
+}
+
+func TestPrepareDDI_EmbeddedInstallerMedia_MkdirTempFails(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	i := noopDDIInstaller(spy)
+	i.statFile = func(string) (os.FileInfo, error) { return nil, nil }
+	i.mkdirTemp = func(string, string) (string, error) { return "", os.ErrPermission }
+	_, _, err := i.prepareDDI(context.Background(), func(string) {})
+	if err == nil || !strings.Contains(err.Error(), "repart.d") {
+		t.Errorf("want 'repart.d' error, got %v", err)
+	}
+}
+
+func TestPrepareDDI_EmbeddedInstallerMedia_WriteRepartDefsFails(t *testing.T) {
+	spy := runner.NewSpyRunner()
+	i := noopDDIInstaller(spy)
+	i.statFile = func(string) (os.FileInfo, error) { return nil, nil }
+	i.readDir = func(string) ([]os.DirEntry, error) { return nil, os.ErrPermission }
+	_, _, err := i.prepareDDI(context.Background(), func(string) {})
+	if err == nil {
+		t.Error("expected writeLocalRepartDefs error to be propagated")
 	}
 }
 

@@ -31,6 +31,7 @@ type BluefinDDIInstaller struct {
 	readFile  func(name string) ([]byte, error)
 	readDir   func(name string) ([]os.DirEntry, error)
 	mkdirTemp func(dir, pattern string) (string, error)
+	statFile  func(name string) (os.FileInfo, error)
 }
 
 // NewBluefinDDIInstaller creates a BluefinDDIInstaller with the given runner and logger.
@@ -43,6 +44,7 @@ func NewBluefinDDIInstaller(r runner.Runner, logger *slog.Logger) *BluefinDDIIns
 		readFile:  os.ReadFile,
 		readDir:   os.ReadDir,
 		mkdirTemp: os.MkdirTemp,
+		statFile:  os.Stat,
 	}
 }
 
@@ -155,7 +157,7 @@ func (i *BluefinDDIInstaller) prepareDDI(ctx context.Context, progress func(stri
 	// containing the DDI filesystem image as a raw block copy. systemd-repart's
 	// CopyBlocks= can copy directly from the device without mounting it.
 	const installerDataPartlabel = "/dev/disk/by-partlabel/bluefin-installer-data"
-	if _, statErr := os.Stat(installerDataPartlabel); statErr == nil {
+	if _, statErr := i.statFile(installerDataPartlabel); statErr == nil {
 		progress("Embedded DDI detected on installer media")
 		i.Logger.Info("embedded DDI source", "device", installerDataPartlabel)
 
