@@ -122,15 +122,6 @@ Issue lifecycle automation (added 2026-06-03):
 | `/wontfix` | Close as won't fix with label |
 | Stale scan | Detects and cleans up stale claims |
 
-### `.github/workflows/skill-drift.yml`
-
-Skill drift detection (added 2026-06-03): fails when code paths change without
-corresponding updates to `docs/*.md` or `AGENTS.md`.
-
-| Code paths watched | Doc paths watched |
-| --- | --- |
-| `.github/workflows`, `cmd`, `internal`, `Justfile`, `scripts` | `docs/*.md`, `AGENTS.md` |
-
 ### `.github/workflows/security.yml`
 
 | Job                 | When                          | What                                          |
