@@ -3,7 +3,7 @@ module github.com/projectbluefin/knuckle
 go 1.26.6
 
 require (
-	charm.land/bubbles/v2 v2.1.1
+	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.5
@@ -40,7 +40,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
