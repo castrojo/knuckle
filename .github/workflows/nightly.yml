@@ -21,7 +21,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.6"
           check-latest: true
 
       - name: extended flaky detection (10 iterations)
@@ -57,7 +57,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.6"
           check-latest: true
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
@@ -97,7 +97,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.6"
 
       - name: install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -116,7 +116,7 @@ jobs:
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.6"
           check-latest: true
 
       - name: run integration tests
