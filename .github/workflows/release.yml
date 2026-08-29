@@ -91,7 +91,7 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2
         if: steps.release-check.outputs.skip_upload != 'true'
 
-      - uses: anchore/sbom-action/download-syft@aa80c8c5bd439a416a62804f2151ab38c671a638 # v0.24.1
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         if: steps.release-check.outputs.skip_upload != 'true'
 
       - name: Build binary
@@ -250,7 +250,7 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2
         if: steps.release-check.outputs.skip_upload != 'true'
 
-      - uses: anchore/sbom-action/download-syft@aa80c8c5bd439a416a62804f2151ab38c671a638 # v0.24.1
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         if: steps.release-check.outputs.skip_upload != 'true'
 
       - name: Build binary
