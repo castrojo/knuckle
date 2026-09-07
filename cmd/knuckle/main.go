@@ -169,6 +169,9 @@ func main() {
 	} else {
 		startupFetchFn(ctx, w, logger)
 	}
+	if err := prepareSerialTerminal(ctx, cmdRunner); err != nil {
+		logger.Warn("serial terminal preparation failed", "error", err)
+	}
 
 	// Run the TUI — wire reboot through the runner so dry-run/spy work correctly
 	var rebootFn func(context.Context) error
