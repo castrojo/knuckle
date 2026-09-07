@@ -60,6 +60,18 @@ Multi-step wizard = `huh.Form` with `huh.Group` per step.
 - Do not assume bubbletea message types — read the source via Context7
 - Do not use `github.com/charmbracelet/` import paths — they are the old module location
 
+## Hardware serial consoles
+
+Bubble Tea sizes its renderer from the output TTY. A physical serial console
+can report `0x0` rows and columns because serial links do not negotiate PTY
+geometry. Before starting Bubble Tea, the CLI should check the output size and
+the active console, then repair only an active serial console with a fixed
+geometry (`stty -F /dev/console rows 40 cols 80`). Forty rows leave enough
+vertical space for the initial installer view while retaining a conventional
+80-column serial width. Route that command through
+`internal/runner`; do not invoke `exec.Command` from the TUI package. Non-serial
+consoles and already-sized terminals must remain untouched.
+
 ## Research notes
 
 See `docs/TUI-WIZARD-PATTERNS.md` for concrete examples derived from reading huh source.
