@@ -123,3 +123,55 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: go test -race -count=1 -v -tags=integration ./...
+
+  notify-failure:
+    name: notify on failure
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [nightly-test, nightly-coverage, nightly-vuln, nightly-integration]
+    if: failure()
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: file or update nightly failure issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const title = "[nightly] Workflow failure";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The nightly workflow failed on \`${context.sha.slice(0, 7)}\`.`,
+              ``,
+              `**Run:** ${runUrl}`,
+              `**Commit:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`,
+              ``,
+              `Check the failing run linked above for the specific job(s) and output.`,
+            ].join("\n");
+
+            // Dedupe: reuse an already-open nightly-failure issue instead of
+            // filing a new one every day the nightly stays red.
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "ci",
+            });
+            const openIssue = existing.find((issue) => issue.title === title);
+
+            if (openIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: openIssue.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["ci"],
+              });
+            }
