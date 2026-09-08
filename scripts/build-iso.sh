@@ -9,13 +9,18 @@
 #   Ubuntu:  sudo apt-get install -y xorriso mtools cpio systemd-boot-efi
 #   Fedora:  sudo dnf install -y xorriso mtools cpio systemd-boot-unsigned
 #
-# Usage: ./scripts/build-iso.sh [--channel stable|beta|alpha|lts|edge] [--arch amd64|arm64] [--binary /path/to/knuckle]
+# Usage: ./scripts/build-iso.sh [--channel stable|beta|alpha|lts|edge] [--arch amd64|arm64] [--binary /path/to/knuckle] [--require-verification]
 set -euo pipefail
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
 CHANNEL="stable"
 ARCH="amd64"
 BINARY_OVERRIDE=""
+# When 1, missing DIGESTS / .DIGESTS.asc is a hard error instead of a skipped
+# verification. Release builds set this so ISOs can never ship unverified
+# upstream artifacts; local dev keeps the soft default (CDN may not publish
+# per-file digests for every channel).
+REQUIRE_VERIFICATION="${REQUIRE_PXE_VERIFICATION:-0}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -25,6 +30,7 @@ while [[ $# -gt 0 ]]; do
         --arch)      ARCH="$2"; shift 2 ;;
         --binary=*)  BINARY_OVERRIDE="${1#--binary=}"; shift ;;
         --binary)    BINARY_OVERRIDE="$2"; shift 2 ;;
+        --require-verification) REQUIRE_VERIFICATION="1"; shift ;;
         stable|beta|alpha|lts|edge) CHANNEL="$1"; shift ;;
         *) echo "Unknown argument: $1" >&2; exit 1 ;;
     esac
@@ -115,7 +121,9 @@ fi
 # Usage: verify_pxe_file <local_file> <upstream_base_url> <upstream_filename>
 # Fetches <url>.DIGESTS and <url>.DIGESTS.asc, verifies the GPG signature against
 # the embedded Flatcar release key, then confirms the SHA512 of the local file.
-# Exits non-zero on GPG or SHA512 mismatch. Skips silently if DIGESTS unreachable.
+# Exits non-zero on GPG or SHA512 mismatch. Skips verification if DIGESTS is
+# unreachable — unless REQUIRE_VERIFICATION=1 (--require-verification), which
+# makes any missing/unverifiable metadata a hard error (used by release builds).
 FLATCAR_KEY="$ROOT_DIR/internal/bakery/keys/flatcar-signing.asc"
 verify_pxe_file() {
     local local_file="$1"
@@ -132,6 +140,10 @@ verify_pxe_file() {
     # Fetch DIGESTS (soft-fail if unavailable — CDN may not publish per-file digests)
     if ! curl -fsSL --max-time 30 -o "$digests_file" "$digests_url" 2>/dev/null; then
         rm -rf "$tmp_dir"
+        if [[ "$REQUIRE_VERIFICATION" == "1" ]]; then
+            echo "error: DIGESTS not available for $upstream_name and --require-verification is set" >&2
+            exit 1
+        fi
         echo "  ⚠ DIGESTS not available for $upstream_name — skipping verification" >&2
         return 0
     fi
@@ -156,6 +168,11 @@ verify_pxe_file() {
         # Use the verified (signature-checked) content for the SHA512 lookup.
         digests_file="$verified_digests"
     else
+        if [[ "$REQUIRE_VERIFICATION" == "1" ]]; then
+            rm -rf "$tmp_dir"
+            echo "error: .DIGESTS.asc unavailable for $upstream_name and --require-verification is set — refusing to trust unsigned DIGESTS" >&2
+            exit 1
+        fi
         echo "  ⚠ .DIGESTS.asc unavailable — GPG check skipped for $upstream_name" >&2
     fi
 
