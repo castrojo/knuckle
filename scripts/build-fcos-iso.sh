@@ -11,8 +11,8 @@
 # prevents the default FCOS autologin getty from competing with the TUI.
 #
 # Requirements: coreos-installer, jq (optional — for ignition pretty-print)
-#   Install: curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
-#              -o /usr/local/bin/coreos-installer && chmod +x /usr/local/bin/coreos-installer
+#   Install (Fedora): sudo dnf install -y coreos-installer   (or: just tools-fcos)
+#   Non-Fedora: run the digest-pinned quay.io/coreos/coreos-installer:release container
 #
 # Usage: ./scripts/build-fcos-iso.sh [--stream stable|testing|next] [--arch amd64|arm64] [--binary /path/to/knuckle] [--ssh-key "ssh-ed25519 ..."]
 set -euo pipefail
@@ -57,8 +57,7 @@ esac
 # ── Dependency check ─────────────────────────────────────────────────────────
 if ! command -v coreos-installer &>/dev/null; then
     echo "error: coreos-installer not found" >&2
-    echo "  Install: curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \\" >&2
-    echo "             -o /usr/local/bin/coreos-installer && chmod +x /usr/local/bin/coreos-installer" >&2
+    echo "  Install (Fedora): sudo dnf install -y coreos-installer" >&2
     echo "  Or run:  just tools-fcos" >&2
     exit 1
 fi

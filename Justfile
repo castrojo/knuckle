@@ -845,7 +845,10 @@ iso *CHANNEL='stable':
 check-fcos-tools:
     @which coreos-installer || (echo "coreos-installer not found — run: just tools-fcos" && exit 1)
 
-# Install coreos-installer static binary to /usr/local/bin (idempotent)
+# Install coreos-installer via the Fedora package (GPG-verified, idempotent).
+# Upstream no longer publishes prebuilt release binaries (v0.23.0+ ship only a
+# vendor tarball), so the previous `releases/latest/download` URL 404s — and
+# without --fail curl wrote the 404 page into /usr/local/bin as an executable.
 tools-fcos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -853,10 +856,14 @@ tools-fcos:
         echo "coreos-installer already installed: $(coreos-installer --version)"
         exit 0
     fi
-    echo "Installing coreos-installer..."
-    curl -L https://github.com/coreos/coreos-installer/releases/latest/download/coreos-installer_amd64 \
-        -o /usr/local/bin/coreos-installer
-    chmod +x /usr/local/bin/coreos-installer
+    if ! command -v dnf &>/dev/null; then
+        echo "error: dnf not found — install coreos-installer via your distro's" >&2
+        echo "  package manager, or run the digest-pinned container:" >&2
+        echo "  quay.io/coreos/coreos-installer:release" >&2
+        exit 1
+    fi
+    echo "Installing coreos-installer via dnf..."
+    sudo dnf install -y coreos-installer
     coreos-installer --version
     echo "tools-fcos ok"
 
